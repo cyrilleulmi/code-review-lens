@@ -16,6 +16,7 @@ final class Coverage {
 
     static final String DIRECT = "direct";
     static final String INDIRECT = "indirect";
+    static final String EXISTING = "existing";
     static final String NONE = "none";
 
     /**
@@ -34,9 +35,14 @@ final class Coverage {
     private static final Pattern ACCESSOR_BODY = Pattern.compile(
             "(?:return\\s+(?:[\\w$]+\\.)?[\\w$]+|(?:[\\w$]+\\.)?[\\w$]+\\s*=\\s*[\\w$]+)\\s*;?");
 
-    private static final Map<String, Integer> STATUS_ORDER = Map.of(NONE, 0, INDIRECT, 1, DIRECT, 2);
+    /**
+     * What needs the reviewer's attention first: nothing reaches the code; only reached through other changed code
+     * (no test was written or adapted for it); only existing tests reach it (it runs under a test, but none was written
+     * or adapted for this change - whether the old expectations still hold is the question); a changed test calls it.
+     */
+    private static final Map<String, Integer> STATUS_ORDER = Map.of(NONE, 0, INDIRECT, 1, EXISTING, 2, DIRECT, 3);
 
-    /** Untested first, then only indirectly tested, then tested; within each the highest risk first (stable). */
+    /** Untested first, then only indirectly tested, then only by existing tests, then tested; within each by risk (stable). */
     static final Comparator<CodeCoverage> ORDER = Comparator
             .comparingInt((CodeCoverage c) -> STATUS_ORDER.getOrDefault(c.status(), 3))
             .thenComparing(Comparator.comparingInt(CodeCoverage::risk).reversed());

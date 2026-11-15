@@ -92,7 +92,8 @@ public final class RepositorySnapshot {
                 false, "repository", "", repo.defaultBranch(), null, repo.headSha(),
                 repo.headDate(), repo.headDate(), lines, 0, files.size(), null);
         Snapshot snapshot = new Snapshot(Model.SCHEMA_VERSION, Instant.now().toString(), info, files);
-        return new Result(snapshot, sources, new RepoStructure(new ArrayList<>(dirs), entries.size() > MAX_FILES, contracts, operations));
+        return new Result(snapshot, sources, new RepoStructure(new ArrayList<>(dirs), entries.size() > MAX_FILES, contracts, operations,
+                new ArrayList<>(entries.keySet())));
     }
 
     /** Text lines without the final line break. */

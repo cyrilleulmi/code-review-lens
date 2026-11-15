@@ -268,7 +268,7 @@ class LayeredSpringAngularTest {
         Set<String> dirs = new TreeSet<>(List.of(BASE + "application/model", BASE + "adapter/api", BASE + "adapter/mapping",
                 BASE + "common", "deploy/infra/modules"));
         RepoStructure structure = new RepoStructure(List.copyOf(dirs), false, List.of("api/openapi.yaml"),
-                OpenApi.operations("api/openapi.yaml", SPEC));
+                OpenApi.operations("api/openapi.yaml", SPEC), List.of());
         Analysis a = new Analyzer(defaultRules()).analyze(new Snapshot(1, "now", info(), diff), files, structure);
 
         // layered (onion) split with adapters, not ports & adapters

@@ -21,7 +21,9 @@ Alles, was SmartCodeReview lokal weiss, liegt als **lesbare Dateien** in einem V
         ├── snapshot.json     PR-Metadaten + Diff (eingefroren)
         ├── sources/<pfad>    Quelltext der neuen Version (nur analysierte Dateien)
         ├── sources-base/<pfad>  Alte Version (Basis-Commit) geänderter Testdateien, unter dem alten Pfad (Spec-Diff)
-        ├── structure.json    Ordner des Repos am PR-Stand (für die Architektur-Erkennung, Cache)
+        ├── sources-related/<pfad>  Bestehende, unveränderte Testdateien (PR-Stand), die den geänderten Code wohl testen
+        ├── related.json      Welche bestehenden Testdateien ausgewählt wurden und warum (Bestehende Tests)
+        ├── structure.json    Ordner und Dateipfade des Repos am PR-Stand (Architektur, bestehende Tests; Cache)
         ├── analysis.json     Segmente, Kategorien, Flüsse, Komponenten (abgeleitet, jederzeit neu berechenbar)
         ├── review.json       ◀ DEINE MARKIERUNGEN (die einzige Datei mit «echtem» Zustand)
         ├── comments.json     Letzter Abruf der GitHub-Kommentare (Cache)
@@ -105,6 +107,22 @@ Alle Dateien sind UTF-8, eingerückt und werden **atomar** geschrieben (temporä
 * `flows[].edges[].kind`: `call` oder `http` (dann `via` = `PUT /api/players/{}`).
 * `components[]` (`id`, `name`, `paths`, `area`, `segmentIds`) und `componentEdges[]` (`from`, `to`, `calls`, `http`): das Komponentendiagramm.
 * `tests[]`: pro geändertem Testfall die getesteten Komponenten (`how`: `name` = Namenskonvention, `call` = direkt aufgerufen) und die erreichten Segmente (`direct`, sonst `via` = das Segment, über das es erreicht wird; `line` = Aufrufstelle im Test). `testedBy` ist die Rückrichtung.
+* `existingTests[]`: Testfälle **bestehender, unveränderter** Testdateien, die geänderten Code erreichen (`id` `e1`, `e2` …, `path`, `name`, `line`, `reason`, `covers` wie bei `tests[]`, `profile`). Sie sind keine Segmente – nichts zu markieren. `coverage[].existingTests` verweist auf ihre Ids. `relatedTests` beschreibt die Auswahl (siehe unten).
+
+## `related.json`
+
+Welche bestehenden Testdateien zum PR geladen wurden (Abschnitt 5f in [05-analyse.md](05-analyse.md)); dasselbe steht in `analysis.json` → `relatedTests`. Wird bei jeder Analyse neu geschrieben; die Dateien selbst liegen unter `sources-related/<pfad>` (Stand: Head des PRs). Beim erneuten Laden des PRs werden beide gelöscht und neu bestimmt. Beim ganzen Repository (Nummer 0) gibt es beides nicht.
+
+```json
+{
+  "limit": 30, "candidates": 2, "truncated": false, "listIncomplete": false,
+  "files": [{ "path": "frontend/src/app/auth/current-user.service.spec.ts", "reason": "mirror",
+              "sources": ["frontend/src/app/auth/current-user.service.ts"], "loaded": true }]
+}
+```
+
+* `reason`: `mirror` (nach der geänderten Datei benannt, im gespiegelten Testordner oder daneben), `name` (gleicher Name anderswo, der nächstgelegene), `prefix` (Name beginnt mit dem der geänderten Datei, im gespiegelten Testordner).
+* `truncated`: Es passten mehr als `limit` Dateien (`candidates`); `listIncomplete`: Der Code-Host hat die Dateiliste gekürzt. `loaded: false`: Die Datei konnte nicht geladen werden (wird bei der nächsten Analyse erneut versucht).
 
 `analysis.json` ist **abgeleitet**: löschen oder `POST …/reanalyse` berechnet sie neu. Sie wird auch automatisch neu berechnet, wenn sich `rules.json` oder die Analyzer-Version ändert (`rulesHash`).
 

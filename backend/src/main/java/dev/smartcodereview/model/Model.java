@@ -258,16 +258,52 @@ public final class Model {
     }
 
     /**
-     * Test coverage seen from the code (static, only changed tests and changed code): one entry per testable
-     * changed function - a function/method/component outside tests whose main category needs tests (rules:
-     * needsTests). status: "direct" (a changed test calls it, also via test helpers), "indirect" (only reached via
-     * other changed code), "none". directTests / indirectTests: ids of the test segments. branches: decision points
+     * Test coverage seen from the code (static, changed tests plus the existing tests loaded for the change): one
+     * entry per testable changed function - a function/method/component outside tests whose main category needs tests
+     * (rules: needsTests). status: "direct" (a changed test calls it, also via test helpers), "indirect" (only reached
+     * via other changed code), "existing" (no changed test reaches it, but an existing, unchanged test does - directly
+     * or indirectly), "none". directTests / indirectTests: ids of the test segments. branches: decision points
      * in the whole function (if, case, catch, for, while, &&, ||, ternary ?). changedLines: non-blank changed
-     * lines. risk = changedLines × (1 + branches), for sorting.
+     * lines. risk = changedLines × (1 + branches), for sorting. existingTests: ids of the existing tests
+     * (Analysis.existingTests) that reach it, directly or indirectly - also when the status is direct/indirect (old
+     * tests that run through the change and may need adapting); null in analyses of older versions.
      */
     @RegisterForReflection
     public record CodeCoverage(String segmentId, String status, List<String> directTests, List<String> indirectTests,
-                               int branches, int changedLines, int risk) {
+                               int branches, int changedLines, int risk, List<String> existingTests) {
+    }
+
+    /**
+     * An existing test file loaded because it most likely tests changed code (Bestehende Tests, see
+     * analysis/RelatedTests). reason: "mirror" (test file named after a changed file, in the mirrored test directory
+     * or next to it), "name" (same name elsewhere in the repository), "prefix" (in the mirrored test directory, its name
+     * starts with the name of the changed file, e.g. PlayerResourceSecurityTest). sources: the changed files it was
+     * selected for. loaded: its content at the PR head could be fetched (sources-related/).
+     */
+    @RegisterForReflection
+    public record RelatedTestFile(String path, String reason, List<String> sources, boolean loaded) {
+    }
+
+    /**
+     * The existing test files selected for a change (related.json, Analysis.relatedTests). limit: at most this many
+     * are loaded (rules "relatedTests.limit"); candidates: how many qualified; truncated: the limit cut the selection.
+     * listIncomplete: the repository's file list was cut by the code host, a matching test may be missing. files: in
+     * selection order (see RelatedTests).
+     */
+    @RegisterForReflection
+    public record RelatedTests(int limit, int candidates, boolean truncated, boolean listIncomplete,
+                               List<RelatedTestFile> files) {
+    }
+
+    /**
+     * A test case of an existing, unchanged test file (RelatedTests) that reaches changed code. Not a segment: nothing
+     * to review or mark. id: "e1", "e2", … (referenced by CodeCoverage.existingTests). line: start line in the file at
+     * the PR head. reason: why its file was loaded (RelatedTestFile.reason). covers: the changed code it reaches, as for
+     * changed tests (direct, or indirect via other changed code; line = call site in the test). profile: Test-Steckbrief.
+     */
+    @RegisterForReflection
+    public record ExistingTest(String id, String path, String name, int line, String reason, List<TestCoverage> covers,
+                               TestProfile profile) {
     }
 
     /**
@@ -355,25 +391,30 @@ public final class Model {
      * first); null in analyses of older versions. specs: the test names of every changed test file as old/new outline
      * (Spec-Diff), in path order; null in analyses of older versions. caseMatrices: similar and parameterised tests of
      * the changed test files as tables input → expected (Fallmatrix), by path and line; null in analyses of older
-     * versions.
+     * versions. existingTests: test cases of existing, unchanged test files that reach changed code (Bestehende
+     * Tests), by path and line; relatedTests: which existing test files were selected and loaded for that (null for a
+     * whole repository and in analyses of older versions).
      */
     @RegisterForReflection
     public record Analysis(int schemaVersion, String generatedAt, String headSha, String rulesHash,
                            List<Segment> segments, List<Category> categories, List<Flow> flows,
                            List<TestInfo> tests, ArchitectureInfo architecture,
                            List<Component> components, List<ComponentEdge> componentEdges,
-                           List<CodeCoverage> coverage, List<SpecFile> specs, List<CaseMatrix> caseMatrices) {
+                           List<CodeCoverage> coverage, List<SpecFile> specs, List<CaseMatrix> caseMatrices,
+                           List<ExistingTest> existingTests, RelatedTests relatedTests) {
     }
 
     /**
      * Directories of the repository at the PR head (to recognise its architecture), plus the API contract files
      * found there (OpenAPI/Swagger) and the operations declared in them. operations null = read by an older version.
+     * files: paths of all files (blobs) of the repository, to find existing tests of changed code; null = read by an
+     * older version. truncated: the code host cut the listing (directories and files may be incomplete).
      */
     @RegisterForReflection
     public record RepoStructure(List<String> directories, boolean truncated, List<String> contracts,
-                                List<ApiOperation> operations) {
+                                List<ApiOperation> operations, List<String> files) {
         public RepoStructure(List<String> directories, boolean truncated) {
-            this(directories, truncated, List.of(), List.of());
+            this(directories, truncated, List.of(), List.of(), List.of());
         }
     }
 

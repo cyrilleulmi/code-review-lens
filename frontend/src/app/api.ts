@@ -293,11 +293,12 @@ export interface TestProfile {
   casesSource: string | null;
 }
 
-export type CoverageStatus = 'direct' | 'indirect' | 'none';
+export type CoverageStatus = 'direct' | 'indirect' | 'existing' | 'none';
 
 /**
  * Coverage of a testable changed function, seen from the code (Model.CodeCoverage), found statically:
- * direct = a changed test calls it, indirect = only reached via other changed code, none = no changed test reaches it.
+ * direct = a changed test calls it, indirect = only reached via other changed code, existing = no changed test reaches
+ * it but an existing, unchanged test does, none = no test reaches it.
  */
 export interface CodeCoverage {
   segmentId: string;
@@ -310,6 +311,49 @@ export interface CodeCoverage {
   changedLines: number;
   /** changedLines × (1 + branches), for sorting */
   risk: number;
+  /** ids of existing tests (Analysis.existingTests) reaching it, also for direct/indirect (absent in older analyses) */
+  existingTests?: string[] | null;
+}
+
+/** Why an existing test file was loaded: named after the changed file (mirrored/same directory), elsewhere, or by prefix. */
+export type RelatedReason = 'mirror' | 'name' | 'prefix';
+
+/** An existing, unchanged test file loaded for the change (Model.RelatedTestFile). */
+export interface RelatedTestFile {
+  path: string;
+  reason: RelatedReason;
+  /** the changed files it was selected for */
+  sources: string[];
+  /** its content at the PR head could be loaded */
+  loaded: boolean;
+}
+
+/** The existing test files selected for the change (Model.RelatedTests, related.json). */
+export interface RelatedTests {
+  /** at most this many files are loaded */
+  limit: number;
+  /** how many qualified */
+  candidates: number;
+  /** the limit cut the selection */
+  truncated: boolean;
+  /** the repository's file list was cut by the code host */
+  listIncomplete: boolean;
+  files: RelatedTestFile[];
+}
+
+/**
+ * A test case of an existing, unchanged test file that reaches changed code (Model.ExistingTest). Not a segment: it
+ * is not part of the diff, so it cannot be opened in the file view.
+ */
+export interface ExistingTest {
+  /** e1, e2, … (CodeCoverage.existingTests) */
+  id: string;
+  path: string;
+  name: string;
+  line: number;
+  reason: RelatedReason;
+  covers: TestCoverage[];
+  profile: TestProfile | null;
 }
 
 export type SpecStatus = 'added' | 'removed' | 'changed' | 'renamed' | 'unchanged';
@@ -404,12 +448,16 @@ export interface Analysis {
   architecture: ArchitectureInfo | null;
   components: Component[];
   componentEdges: ComponentEdge[];
-  /** testable changed functions: none first, then indirect, then direct, each by risk (absent in older analyses) */
+  /** testable changed functions: none, indirect, existing, direct, each by risk (absent in older analyses) */
   coverage?: CodeCoverage[] | null;
   /** Spec-Diff: test names of every changed test file, in path order (absent in older analyses) */
   specs?: SpecFile[] | null;
   /** Fallmatrix: similar and parameterised tests as tables input → expected, by path and line (absent in older analyses) */
   caseMatrices?: CaseMatrix[] | null;
+  /** Bestehende Tests: test cases of existing, unchanged test files that reach changed code (absent in older analyses) */
+  existingTests?: ExistingTest[] | null;
+  /** the existing test files selected and loaded for that; null for a whole repository and older analyses */
+  relatedTests?: RelatedTests | null;
 }
 
 export type CaseMatrixKind = 'similar' | 'parameterized';

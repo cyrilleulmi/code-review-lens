@@ -124,14 +124,18 @@ export class CodeBlock {
   protected readonly coverage = computed(() => {
     const c = this.store.coverage().get(this.segment().id);
     if (!c) return null;
+    const existing = c.existingTests?.length ?? 0;
     const label = c.status === 'none' ? 'ohne Test' : c.status === 'indirect' ? 'nur indirekt getestet'
+      : c.status === 'existing' ? 'durch bestehende Tests'
       : c.directTests.length === 1 ? '1 Test' : `${c.directTests.length} Tests`;
-    const tests = c.status === 'none' ? 'Kein geänderter Test erreicht diese Funktion'
+    const tests = c.status === 'none' ? 'Kein Test erreicht diese Funktion'
       : c.status === 'indirect' ? `Nur über anderen geänderten Code erreicht (${c.indirectTests.length} ${c.indirectTests.length === 1 ? 'Test' : 'Tests'})`
+      : c.status === 'existing' ? `Kein geänderter Test, aber ${existing} ${existing === 1 ? 'bestehender Test erreicht' : 'bestehende Tests erreichen'} sie`
       : `${c.directTests.length} ${c.directTests.length === 1 ? 'Test ruft' : 'Tests rufen'} die Funktion direkt auf`
         + (c.indirectTests.length ? `, ${c.indirectTests.length} indirekt` : '');
+    const old = c.status !== 'existing' && existing ? ` · dazu ${existing} ${existing === 1 ? 'bestehender Test' : 'bestehende Tests'}` : '';
     const branches = `${c.branches} ${c.branches === 1 ? 'Verzweigung' : 'Verzweigungen'}`;
-    return { status: c.status, label, title: `${tests} · ${branches} · statisch ermittelt – Klick: Abdeckung zeigen` };
+    return { status: c.status, label, title: `${tests}${old} · ${branches} · statisch ermittelt – Klick: Abdeckung zeigen` };
   });
 
   /** Test case whose expectations changed or that is switched off (Spec-Diff): header badge; null otherwise. */

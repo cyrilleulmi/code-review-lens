@@ -345,21 +345,25 @@ public class GitLabProvider implements ReviewProvider {
     public Model.RepoStructure directories(PrRef ref, String sha) {
         List<String> dirs = new ArrayList<>();
         List<String> contracts = new ArrayList<>();
+        List<String> files = new ArrayList<>();
         for (int page = 1; page <= MAX_TREE_PAGES; page++) {
             JsonNode items = getJson(projectPath(ref) + "/repository/tree?recursive=true&per_page=100&ref=" + sha + "&page=" + page);
             items.forEach(n -> {
                 String path = n.path("path").asText();
                 if ("tree".equals(n.path("type").asText())) {
                     dirs.add(path);
-                } else if ("blob".equals(n.path("type").asText()) && OpenApi.isContract(path)) {
-                    contracts.add(path);
+                } else if ("blob".equals(n.path("type").asText())) {
+                    files.add(path);
+                    if (OpenApi.isContract(path)) {
+                        contracts.add(path);
+                    }
                 }
             });
             if (items.size() < 100) {
-                return new Model.RepoStructure(dirs, false, contracts, null);
+                return new Model.RepoStructure(dirs, false, contracts, null, files);
             }
         }
-        return new Model.RepoStructure(dirs, true, contracts, null);
+        return new Model.RepoStructure(dirs, true, contracts, null, files);
     }
 
     @Override

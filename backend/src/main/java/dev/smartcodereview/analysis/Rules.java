@@ -94,6 +94,19 @@ public final class Rules {
     public record CaseMatrixRules(List<Pattern> expectedNames, List<Pattern> nameFields) {
     }
 
+    /**
+     * Bestehende Tests (see {@link RelatedTests}), rules section "relatedTests". limit: at most this many existing test
+     * files are loaded per pull request. mirrors: where the tests of a source directory live - the first occurrence of
+     * the path segment(s) `from` in the directory is replaced by `to` (src/main/ -> src/test/); the directory itself
+     * always counts. A rules file without the section or without one of its keys uses the built-in value for that key.
+     */
+    public record RelatedTestRules(int limit, List<Mirror> mirrors) {
+    }
+
+    /** A source directory prefix and the test directory prefix that mirrors it (rules "relatedTests.mirrors"). */
+    public record Mirror(String from, String to) {
+    }
+
     /** Lines that never make a difference: blank, braces/brackets only, comments. */
     private static final Pattern TRIVIAL = Pattern.compile(
             "^\\s*$|^\\s*[{}()\\[\\];,]*\\s*$|^\\s*(//|/\\*|\\*|\\*/|#).*$|^\\s*\\}\\s*(else\\b.*)?\\{?\\s*$");
@@ -121,11 +134,13 @@ public final class Rules {
     public final TestProfileRules testProfile;
     /** Fallmatrix: which table columns are expectations and which hold case names (see {@link CaseMatrixRules}). */
     public final CaseMatrixRules caseMatrix;
+    /** Bestehende Tests: how many existing test files are loaded and where tests live (see {@link RelatedTestRules}). */
+    public final RelatedTestRules relatedTests;
     public final String hash;
 
     private Rules(List<CategoryDef> categories, List<Rule> rules, List<Rule> aspects, List<Rule> concerns,
                   List<Pattern> assertions, List<Pattern> weakAssertions, List<Pattern> disabledTests,
-                  TestProfileRules testProfile, CaseMatrixRules caseMatrix, String hash) {
+                  TestProfileRules testProfile, CaseMatrixRules caseMatrix, RelatedTestRules relatedTests, String hash) {
         this.categories = categories;
         this.rules = rules;
         this.aspects = aspects;
@@ -135,6 +150,7 @@ public final class Rules {
         this.disabledTests = disabledTests;
         this.testProfile = testProfile;
         this.caseMatrix = caseMatrix;
+        this.relatedTests = relatedTests;
         this.hash = hash;
     }
 
@@ -147,7 +163,19 @@ public final class Rules {
         }
         return new Rules(categories, rules(root.path("rules")), rules(root.path("aspects")), rules(root.path("concerns")),
                 section(root, "assertions"), section(root, "weakAssertions"), section(root, "disabledTests"),
-                testProfile(root.path("testProfile")), caseMatrix(root.path("caseMatrix")), hash);
+                testProfile(root.path("testProfile")), caseMatrix(root.path("caseMatrix")),
+                relatedTests(root.path("relatedTests")), hash);
+    }
+
+    /** The "relatedTests" section; every missing key is taken from the built-in rules. */
+    private static RelatedTestRules relatedTests(JsonNode node) {
+        JsonNode builtIn = defaults().path("relatedTests");
+        java.util.function.Function<String, JsonNode> key = k -> node.has(k) ? node.get(k) : builtIn.path(k);
+        List<Mirror> mirrors = new ArrayList<>();
+        for (JsonNode m : key.apply("mirrors")) {
+            mirrors.add(new Mirror(m.path("from").asText(), m.path("to").asText()));
+        }
+        return new RelatedTestRules(Math.max(0, key.apply("limit").asInt(30)), mirrors);
     }
 
     /** The "caseMatrix" section; every missing key is taken from the built-in rules. */

@@ -466,5 +466,16 @@
     "nameFields": [
       "(?i)^(name|desc|description|title|scenario|testName|caseName)$"
     ]
+  },
+  "relatedTests": {
+    "$comment": "Bestehende Tests (docs/05-analyse.md, 5f). For every changed source file existing, unchanged test files of the repository are loaded and linked to the changed code: named after it (X.spec.ts, XTest.java, XTests.java, XIT.java, x_test.go, ...) in the mirrored test directory or next to it ('mirror'), else the nearest file of that name elsewhere ('name'), plus test files in the mirrored directory whose name starts with it (PlayerResourceSecurityTest, 'prefix'). limit: at most this many files per pull request (mirror before name before prefix, then by path). mirrors: the first occurrence of 'from' (whole path segments) in the directory of a changed file is replaced by 'to' to get its test directory; the directory itself always counts. A rules file without this section, or without one of its keys, uses the built-in value for that key.",
+    "limit": 30,
+    "mirrors": [
+      {"from": "src/main/", "to": "src/test/"},
+      {"from": "main/", "to": "test/"},
+      {"from": "src/", "to": "test/"},
+      {"from": "src/", "to": "tests/"},
+      {"from": "lib/", "to": "test/"}
+    ]
   }
 }

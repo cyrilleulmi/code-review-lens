@@ -134,7 +134,7 @@
   background: color-mix(in srgb, var(--warn) 12%, transparent);
 }
 
-/* coverage of a testable changed function (static): untested, only indirectly tested, tested */
+/* coverage of a testable changed function (static): untested, only indirectly tested, only by existing tests, tested */
 .cov {
   display: inline-flex;
   align-items: center;
@@ -162,6 +162,12 @@
 
 .cov.cov-indirect {
   border-style: dashed;
+}
+
+/* reached only by existing, unchanged tests: neutral and dashed, like their chips in the coverage view */
+.cov.cov-existing {
+  border-style: dashed;
+  color: var(--fg-muted);
 }
 
 .cov.cov-direct {

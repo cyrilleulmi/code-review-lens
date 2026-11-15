@@ -81,6 +81,11 @@ public class DataStore {
         return prDir(ref).resolve("sources-base");
     }
 
+    /** Existing, unchanged test files (at the PR head) loaded for the changed code (Bestehende Tests), by path. */
+    public Path relatedSourcesDir(PrRef ref) {
+        return prDir(ref).resolve("sources-related");
+    }
+
     /** Deletes a directory with everything in it (no-op if it does not exist). */
     public void deleteTree(Path dir) {
         if (!Files.isDirectory(dir)) {

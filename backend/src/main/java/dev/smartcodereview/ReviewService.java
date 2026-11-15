@@ -25,6 +25,8 @@ import dev.smartcodereview.model.Model.NewComment;
 import dev.smartcodereview.model.Model.PrRef;
 import dev.smartcodereview.model.Model.Progress;
 import dev.smartcodereview.model.Model.PullRequestSummary;
+import dev.smartcodereview.model.Model.RelatedTestFile;
+import dev.smartcodereview.model.Model.RelatedTests;
 import dev.smartcodereview.model.Model.ReviewBundle;
 import dev.smartcodereview.model.Model.RepoStructure;
 import dev.smartcodereview.model.Model.ReviewState;
@@ -202,10 +204,18 @@ public class ReviewService {
             store.readText(DataStore.resolveInside(sourcesDir, f.path())).ifPresent(s -> sources.put(f.path(), s));
         }
         Map<String, String> baseSources = baseSources(ref, snapshot);
+        RepoStructure structure = structure(ref, snapshot);
+        RelatedTests related = relatedTests(ref, snapshot, structure);
+        Map<String, String> relatedSources = new HashMap<>();
+        if (related != null) {
+            Path dir = store.relatedSourcesDir(ref);
+            related.files().stream().filter(RelatedTestFile::loaded).forEach(f ->
+                    store.readText(DataStore.resolveInside(dir, f.path())).ifPresent(s -> relatedSources.put(f.path(), s)));
+        }
         long t0 = System.currentTimeMillis();
-        Analysis analysis = new Analyzer(rules()).analyze(snapshot, sources, structure(ref, snapshot), baseSources);
-        Log.infof("Analysed %s in %d ms: %d segments, %d flows", ref.key(), System.currentTimeMillis() - t0,
-                analysis.segments().size(), analysis.flows().size());
+        Analysis analysis = new Analyzer(rules()).analyze(snapshot, sources, structure, baseSources, related, relatedSources);
+        Log.infof("Analysed %s in %d ms: %d segments, %d flows, %d existing tests", ref.key(), System.currentTimeMillis() - t0,
+                analysis.segments().size(), analysis.flows().size(), analysis.existingTests().size());
         store.write(analysisFile(ref), analysis);
         return analysis;
     }
@@ -243,16 +253,51 @@ public class ReviewService {
         return snapshot.files().stream().filter(f -> Specs.needsBase(rules, f)).toList();
     }
 
+    /**
+     * Bestehende Tests: the existing test files most likely testing the changed code ({@link
+     * dev.smartcodereview.analysis.RelatedTests}), selected from the repository's file list and loaded at the PR head
+     * into sources-related/ - at the first analysis after loading the PR, and for older snapshots at their next
+     * analysis; a file that cannot be loaded is logged and skipped (tried again at the next analysis). The selection is
+     * written to related.json. null for a whole repository (all files are part of it already).
+     */
+    private RelatedTests relatedTests(PrRef ref, Snapshot snapshot, RepoStructure structure) {
+        if (ref.number() == 0) {
+            return null;
+        }
+        Rules rules = rules();
+        dev.smartcodereview.analysis.RelatedTests.Selection selection = dev.smartcodereview.analysis.RelatedTests
+                .select(rules, snapshot.files(), structure.files() == null ? List.of() : structure.files());
+        Path dir = store.relatedSourcesDir(ref);
+        List<String> missing = selection.files().stream().map(RelatedTestFile::path)
+                .filter(p -> !Files.exists(DataStore.resolveInside(dir, p))).toList();
+        if (!missing.isEmpty()) {
+            try {
+                fetchFiles(ref, missing, snapshot.pr().headSha(), dir);
+            } catch (ProviderException e) {
+                Log.warnf("Could not fetch existing test files of %s: %s", ref.key(), e.getMessage());
+            }
+        }
+        List<RelatedTestFile> files = selection.files().stream()
+                .map(f -> new RelatedTestFile(f.path(), f.reason(), f.sources(), Files.exists(DataStore.resolveInside(dir, f.path()))))
+                .toList();
+        RelatedTests related = new RelatedTests(rules.relatedTests.limit(), selection.candidates(), selection.truncated(),
+                structure.truncated(), files);
+        store.write(prDirFile(ref, "related.json"), related);
+        return related;
+    }
+
     /** At most this many API contracts are read per repository. */
     private static final int MAX_CONTRACTS = 10;
 
     /**
-     * Repository directories and API contract operations at the PR head (architecture detection, links through
-     * generated API clients); fetched once, empty if unavailable.
+     * Repository directories, file paths and API contract operations at the PR head (architecture detection, links
+     * through generated API clients, existing tests); fetched once (again when read by an older version), empty if
+     * unavailable.
      */
     private RepoStructure structure(PrRef ref, Snapshot snapshot) {
         Path file = prDirFile(ref, "structure.json");
-        return store.read(file, RepoStructure.class).filter(s -> s.operations() != null).orElseGet(() -> {
+        return store.read(file, RepoStructure.class)
+                .filter(s -> s.operations() != null && (s.files() != null || ref.number() == 0)).orElseGet(() -> {
             try {
                 ReviewProvider provider = provider(ref.provider());
                 String sha = snapshot.pr().headSha();
@@ -266,7 +311,8 @@ public class ReviewService {
                         Log.warnf("API contract %s not readable: %s", path, e.getMessage());
                     }
                 }
-                s = new RepoStructure(s.directories(), s.truncated(), contracts, operations);
+                s = new RepoStructure(s.directories(), s.truncated(), contracts, operations,
+                        s.files() == null ? List.of() : s.files());
                 store.write(file, s);
                 return s;
             } catch (ProviderException e) {
@@ -289,6 +335,12 @@ public class ReviewService {
         List<DiffFile> wanted = wantedSources(snapshot, rules());
         fetchSources(ref, snapshot, wanted);
         store.deleteTree(store.baseSourcesDir(ref)); // the base may have moved (rebase, new target branch)
+        store.deleteTree(store.relatedSourcesDir(ref)); // existing tests are re-selected and loaded for the new head
+        try {
+            Files.deleteIfExists(prDirFile(ref, "related.json"));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
         fetchBaseSources(ref, snapshot, wantedBaseSources(ref, snapshot, rules()));
         store.write(snapshotFile(ref), snapshot);
         Log.infof("Fetched %s: %d files, %d sources", ref.key(), snapshot.files().size(), wanted.size());

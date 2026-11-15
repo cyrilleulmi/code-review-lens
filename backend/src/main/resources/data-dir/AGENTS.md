@@ -16,6 +16,10 @@ reviews/<provider>/<owner>/<repo>/<number>/      provider: github | gitlab; nest
   sources/<path>       new version of each analysed file
   sources-base/<path>  old version (at the PR's base commit) of each changed test file, under its OLD path
                        (renamed files); only for the Spec-Diff (`specs[]`); none for number 0
+  sources-related/<path>  existing, unchanged test files (at the PR head) that most likely test the changed code,
+                       selected by name; only for `existingTests[]`; none for number 0
+  related.json         which existing test files were selected and why (same as `analysis.json` → `relatedTests`)
+  structure.json       cache: repository directories, file paths (`files`) and API contract `operations` at the head
   analysis.json        derived: segments, categories, flows (safe to delete; recomputed)
   review.json          THE ONLY REAL STATE: which changed lines are marked "ok" (per place)
   comments.json        cache of the last comment fetch (GitHub or GitLab)
@@ -48,15 +52,26 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    classes/suites; "HTTP" = mocked backend), `level` (unit | integration | e2e) with `levelBy` (path | code) and
    `levelReason`, `parameterized` / `cases` (rows of @ParameterizedTest sources, it.each tables, Go table tests;
    null = unknown) / `casesSource`. Read error and edge tests first; tests without assertions check nothing.
-   `coverage[]` is the view from the code (static; only changed tests and changed code): one entry per testable
+   `coverage[]` is the view from the code (static; changed tests plus the existing tests loaded for the change, see
+   `existingTests[]` below): one entry per testable
    changed function (function/method/component outside tests whose category has `needsTests`, default true;
    false for quick wins, tests, styles, config, API contracts; trivial getters/setters whose body is only
    `return x;` / `this.x = x;` are always left out). `status`: `direct` (a changed test
-   calls it), `indirect` (only reached via other changed code), `none` (no changed test reaches it);
-   `directTests` / `indirectTests` = test segment ids; `branches` = decision points in the whole function
+   calls it), `indirect` (only reached via other changed code), `existing` (no changed test reaches it, an existing
+   unchanged test does), `none` (no test reaches it); `directTests` / `indirectTests` = test segment ids;
+   `existingTests` = ids of `existingTests[]` reaching it (also for direct/indirect: old tests running through the
+   change that may need adapting); `branches` = decision points in the whole function
    (if, case, catch, for, while, &&, ||, ternary ?); `changedLines` = non-blank, non-brace changed lines;
-   `risk` = changedLines × (1 + branches). Sorted: `none`, `indirect`, `direct`, each by risk descending.
-   Missing (null) in analyses of older versions.
+   `risk` = changedLines × (1 + branches). Sorted: `none`, `indirect`, `existing`, `direct`, each by risk
+   descending. Missing (null) in analyses of older versions.
+   `existingTests[]` (Bestehende Tests; null in older analyses, empty for number 0) = test cases of existing,
+   unchanged test files that reach changed code, linked like changed tests (name reference + import evidence,
+   helpers transparent, no HTTP): `id` (e1, …), `path`, `name`, `line` (in the file at the PR head), `reason`,
+   `covers[]`, `profile`. They are NOT segments: nothing to mark, not in the diff. `relatedTests` = the selection:
+   `limit`, `candidates`, `truncated` (the limit cut it), `listIncomplete` (the host cut the file list), `files[]`
+   with `path`, `reason` (mirror = named after the changed file, in the mirrored test directory or next to it |
+   name = same name elsewhere, nearest | prefix = name starts with the changed file's name), `sources` (the changed
+   files it was selected for), `loaded`. Rules section `relatedTests` (`limit`, `mirrors`).
    `specs[]` (Spec-Diff) = per changed test file (`path`, `previousPath`, file `status`) the test names as an
    outline, old against new version: `entries[]` with `name`, `suites` (enclosing suites, outermost first; JUnit:
    test class and @Nested classes), `kind` (suite | test), `status` (added | removed | changed | renamed |
@@ -87,7 +102,7 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    frontend into a backend endpoint (literal URLs, or generated OpenAPI clients matched by operationId; `via`
    then ends with `(operationId)`). Flow titles start with the trigger when known (`JMS-Listener: …`, `PUT /x: …`).
    Cross-cutting categories: `api-contract`, `security`, `messaging`, `transactions`, `persistence`, `runtime`.
-   `reviews/…/structure.json` holds the repository directories and the API contract `operations`.
+   `reviews/…/structure.json` holds the repository directories, file paths and the API contract `operations`.
 7. `components[]` / `componentEdges[]`: changed files grouped into components and the calls between them.
 
 ## Marking lines as ok

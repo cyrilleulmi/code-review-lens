@@ -50,7 +50,7 @@ export class Overview {
     const list = this.store.bundle()!.analysis.coverage ?? [];
     if (list.length === 0) return null;
     const n = (status: string) => list.filter((c) => c.status === status).length;
-    return { total: list.length, direct: n('direct'), indirect: n('indirect'), none: n('none') };
+    return { total: list.length, direct: n('direct'), indirect: n('indirect'), existing: n('existing'), none: n('none') };
   });
 
   protected toggle(id: string, event: Event): void {

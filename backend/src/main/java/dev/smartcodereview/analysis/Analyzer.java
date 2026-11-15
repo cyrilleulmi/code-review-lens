@@ -16,12 +16,14 @@ import dev.smartcodereview.model.Model.ComponentEdge;
 import dev.smartcodereview.model.Model.DiffFile;
 import dev.smartcodereview.model.Model.DiffLine;
 import dev.smartcodereview.model.Model.DisplayLine;
+import dev.smartcodereview.model.Model.ExistingTest;
 import dev.smartcodereview.model.Model.Flow;
 import dev.smartcodereview.model.Model.FlowEdge;
 import dev.smartcodereview.model.Model.FlowStep;
 import dev.smartcodereview.model.Model.Group;
 import dev.smartcodereview.model.Model.Hunk;
 import dev.smartcodereview.model.Model.LineRef;
+import dev.smartcodereview.model.Model.RelatedTestFile;
 import dev.smartcodereview.model.Model.RepoStructure;
 import dev.smartcodereview.model.Model.Segment;
 import dev.smartcodereview.model.Model.Snapshot;
@@ -58,7 +60,9 @@ import java.util.stream.Collectors;
  *       points is part of both flows.</li>
  *   <li>Changed test cases are linked to the changed code they reach through the same call graph; seen from the
  *       code, every testable changed function gets a coverage status (direct, indirect, none) and a branch count.
- *       Every changed test case gets a profile (<em>Test-Steckbrief</em>, {@link TestProfiles}).</li>
+ *       Every changed test case gets a profile (<em>Test-Steckbrief</em>, {@link TestProfiles}). Existing, unchanged
+ *       test files loaded for the change ({@link RelatedTests}) are linked the same way (<em>Bestehende Tests</em>,
+ *       coverage status "existing"); they are no segments.</li>
  *   <li>Frontend REST calls are matched to backend endpoints (http edges), so a flow can run from a component
  *       through the API client into the backend.</li>
  *   <li>Ports &amp; adapters projects get a layer per segment (domain, use case, application, adapter); frontend
@@ -91,7 +95,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 20;
+    public static final int VERSION = 21;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -204,6 +208,16 @@ public final class Analyzer {
      */
     public Analysis analyze(Snapshot snapshot, Map<String, String> sources, RepoStructure structure,
                             Map<String, String> baseSources) {
+        return analyze(snapshot, sources, structure, baseSources, null, Map.of());
+    }
+
+    /**
+     * related: the existing test files selected for the change ({@link RelatedTests}; null = none looked for, e.g. a
+     * whole repository); relatedSources: their content at the PR head by path (missing = could not be loaded). Their
+     * test cases are linked to the changed code (Analysis.existingTests) but are no segments.
+     */
+    public Analysis analyze(Snapshot snapshot, Map<String, String> sources, RepoStructure structure,
+                            Map<String, String> baseSources, Model.RelatedTests related, Map<String, String> relatedSources) {
         Collection<String> directories = structure == null ? null : structure.directories();
         List<ApiOperation> operations = structure == null || structure.operations() == null ? List.of() : structure.operations();
         List<Work> works = new ArrayList<>();
@@ -280,7 +294,9 @@ public final class Analyzer {
                 }
             }
         }
-        List<TestInfo> tests = tests(works, edges, snapshot.files(), new TestProfiles(rules));
+        TestProfiles profiles = new TestProfiles(rules);
+        List<TestInfo> tests = tests(works, edges, snapshot.files(), profiles);
+        List<ExistingTest> existingTests = existingTests(works, edges, related, relatedSources, profiles);
         Map<String, List<String>> testedBy = new HashMap<>();
         for (TestInfo t : tests) {
             t.covers().forEach(c -> testedBy.computeIfAbsent(c.segmentId(), k -> new ArrayList<>()).add(t.segmentId()));
@@ -299,9 +315,10 @@ public final class Analyzer {
         Specs.SegmentLookup lookup = segmentLookup(works);
         return new Analysis(Model.SCHEMA_VERSION, Instant.now().toString(), snapshot.pr().headSha(), fingerprint(rules),
                 segments, categories, flows, tests, architecture, components, componentEdges(edges, componentOf),
-                coverage(works, tests),
+                coverage(works, tests, existingTests),
                 repository ? List.of() : specs(snapshot.files(), sources, baseSources == null ? Map.of() : baseSources, lookup),
-                repository ? List.of() : new CaseMatrices(rules).all(snapshot.files(), sources, lookup));
+                repository ? List.of() : new CaseMatrices(rules).all(snapshot.files(), sources, lookup),
+                existingTests, related);
     }
 
     /** The segment of a changed symbol (path + symbol of the new version), null for unchanged symbols. */
@@ -528,10 +545,7 @@ public final class Analyzer {
     // ------------------------------------------------------------------ call graph
 
     private List<FlowEdge> findEdges(List<Work> works) {
-        List<Work> callees = works.stream()
-                .filter(w -> "symbol".equals(w.kind) && (w.symbol.isCallable() || "const".equals(w.symbol.kind()))
-                        && !w.symbol.isTestBlock() && w.symbol.name().length() >= 3 && !NOT_CALLED.contains(w.symbol.name()))
-                .toList();
+        List<Work> callees = callees(works);
         List<FlowEdge> edges = new ArrayList<>();
         Map<Work, List<Integer>> searchLines = new HashMap<>();
         for (Work a : works) {
@@ -1068,7 +1082,7 @@ public final class Analyzer {
     // ------------------------------------------------------------------ tests
 
     /** Test file name -> name of the unit under test: PlayerResourceTest.java -> PlayerResource, a.service.spec.ts -> a.service. */
-    private static final Pattern TEST_FILE = Pattern.compile(
+    static final Pattern TEST_FILE = Pattern.compile(
             "^(?:test_(.+)\\.py|(.+?)(?:\\.(?:spec|test|e2e-spec|e2e)\\.[A-Za-z]+|_test\\.[A-Za-z]+|(?:Tests?|IT|Spec)\\.(?:java|kt|cs|groovy)))$");
 
     /**
@@ -1079,42 +1093,14 @@ public final class Analyzer {
     private static List<TestInfo> tests(List<Work> works, List<FlowEdge> edges, List<DiffFile> files, TestProfiles profiles) {
         Map<String, Work> byId = new HashMap<>();
         works.forEach(w -> byId.put(w.id, w));
-        Map<String, List<FlowEdge>> outgoing = new HashMap<>();
-        for (FlowEdge e : edges) {
-            if (!"http".equals(e.kind())) { // unit tests mock HTTP, they do not reach the backend
-                outgoing.computeIfAbsent(e.from(), k -> new ArrayList<>()).add(e);
-            }
-        }
-        outgoing.values().forEach(l -> l.sort(Comparator.comparing(e -> e.line() == null ? 0 : e.line())));
+        Map<String, List<FlowEdge>> outgoing = testGraph(edges);
 
         List<TestInfo> result = new ArrayList<>();
         for (Work t : works) {
             if (!isTestCase(t)) {
                 continue;
             }
-            Map<String, TestCoverage> covers = new LinkedHashMap<>();
-            record Hop(String id, String via, Integer line, int depth) {
-            }
-            Deque<Hop> queue = new ArrayDeque<>();
-            outgoing.getOrDefault(t.id, List.of()).forEach(e -> queue.add(new Hop(e.to(), null, e.line(), 1)));
-            Set<String> seen = new HashSet<>(Set.of(t.id));
-            while (!queue.isEmpty()) {
-                Hop h = queue.poll();
-                Work w = byId.get(h.id());
-                if (w == null || !seen.add(h.id()) || isTestCase(w)) {
-                    continue;
-                }
-                String via = h.via();
-                if (!isTest(w)) { // a test helper/fixture is transparent
-                    covers.put(w.id, new TestCoverage(w.id, h.via() == null, h.via(), h.line()));
-                    via = w.id;
-                }
-                if (h.depth() < MAX_TEST_DEPTH) {
-                    for (FlowEdge e : outgoing.getOrDefault(w.id, List.of())) {
-                        queue.add(new Hop(e.to(), via, h.line(), h.depth() + 1));
-                    }
-                }
-            }
+            Map<String, TestCoverage> covers = reach(t.id, outgoing, byId);
             List<TestSubject> subjects = subjects(t, covers.values(), byId, files);
             String unit = unitOf(t.file.path());
             result.add(new TestInfo(t.id, t.symbol.displayName(), t.file.path(), subjects, List.copyOf(covers.values()),
@@ -1124,16 +1110,170 @@ public final class Analyzer {
         return result;
     }
 
+    /** The call graph tests follow: by caller, in call order, without http edges (unit tests mock HTTP). */
+    private static Map<String, List<FlowEdge>> testGraph(List<FlowEdge> edges) {
+        Map<String, List<FlowEdge>> outgoing = new HashMap<>();
+        for (FlowEdge e : edges) {
+            if (!"http".equals(e.kind())) {
+                outgoing.computeIfAbsent(e.from(), k -> new ArrayList<>()).add(e);
+            }
+        }
+        outgoing.values().forEach(l -> l.sort(Comparator.comparing(e -> e.line() == null ? 0 : e.line())));
+        return outgoing;
+    }
+
+    /**
+     * The changed code a test case reaches (breadth first, up to MAX_TEST_DEPTH calls): direct when called by the test
+     * or its helpers (test helpers and fixtures are transparent), else indirect via the changed segment it came through.
+     * line: the call site in the test that leads there.
+     */
+    private static Map<String, TestCoverage> reach(String testId, Map<String, List<FlowEdge>> outgoing, Map<String, Work> byId) {
+        record Hop(String id, String via, Integer line, int depth) {
+        }
+        Map<String, TestCoverage> covers = new LinkedHashMap<>();
+        Deque<Hop> queue = new ArrayDeque<>();
+        outgoing.getOrDefault(testId, List.of()).forEach(e -> queue.add(new Hop(e.to(), null, e.line(), 1)));
+        Set<String> seen = new HashSet<>(Set.of(testId));
+        while (!queue.isEmpty()) {
+            Hop h = queue.poll();
+            Work w = byId.get(h.id());
+            if (w == null || !seen.add(h.id()) || isTestCase(w)) {
+                continue;
+            }
+            String via = h.via();
+            if (!isTest(w)) { // a test helper/fixture is transparent
+                covers.put(w.id, new TestCoverage(w.id, h.via() == null, h.via(), h.line()));
+                via = w.id;
+            }
+            if (h.depth() < MAX_TEST_DEPTH) {
+                for (FlowEdge e : outgoing.getOrDefault(w.id, List.of())) {
+                    queue.add(new Hop(e.to(), via, h.line(), h.depth() + 1));
+                }
+            }
+        }
+        return covers;
+    }
+
+    /** Changed code that can be called: functions, methods, components and constants with a specific enough name. */
+    private static List<Work> callees(List<Work> works) {
+        return works.stream()
+                .filter(w -> "symbol".equals(w.kind) && (w.symbol.isCallable() || "const".equals(w.symbol.kind()))
+                        && !w.symbol.isTestBlock() && w.symbol.name().length() >= 3 && !NOT_CALLED.contains(w.symbol.name()))
+                .toList();
+    }
+
+    /**
+     * Bestehende Tests: the test cases of existing, unchanged test files (selected by {@link RelatedTests}, loaded by
+     * the caller) linked to the changed code like changed tests - the same name references with import evidence, the
+     * same call graph (no http edges), the same depth. Their helper functions are transparent like test helpers. They
+     * are no segments; only test cases that reach changed code are returned, by path and line, with ids e1, e2, ….
+     */
+    private static List<ExistingTest> existingTests(List<Work> works, List<FlowEdge> edges, Model.RelatedTests related,
+                                                    Map<String, String> relatedSources, TestProfiles profiles) {
+        if (related == null || related.files() == null || relatedSources == null || relatedSources.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Work> byId = new HashMap<>();
+        works.forEach(w -> byId.put(w.id, w));
+        Map<String, List<FlowEdge>> graph = new HashMap<>(testGraph(edges));
+        List<Work> callees = callees(works);
+        record Found(Work test, String reason, Map<String, TestCoverage> covers) {
+        }
+        List<Found> found = new ArrayList<>();
+        for (RelatedTestFile f : related.files()) {
+            String source = relatedSources.get(f.path());
+            if (source == null) {
+                continue;
+            }
+            FileCtx ctx = new FileCtx();
+            ctx.diff = new DiffFile(f.path(), null, "unchanged", 0, 0, Languages.of(f.path()), false, List.of());
+            ctx.source = source;
+            ctx.text = CodeText.of(source);
+            ctx.symbols = SymbolExtractor.extract(ctx.text, f.path());
+            indexImports(ctx);
+            List<Work> nodes = new ArrayList<>();
+            for (Symbol s : ctx.symbols) {
+                boolean testCase = "test".equals(s.kind());
+                boolean helper = s.isCallable() && !s.isTestBlock() && s.name().length() >= 3 && !NOT_CALLED.contains(s.name());
+                if (testCase || helper) {
+                    Work n = new Work();
+                    n.id = "related:" + f.path() + ":" + s.startLine() + ":" + s.name();
+                    n.kind = "symbol";
+                    n.file = ctx.diff;
+                    n.ctx = ctx;
+                    n.symbol = s;
+                    n.category = "tests";
+                    nodes.add(n);
+                    byId.put(n.id, n);
+                }
+            }
+            List<Work> helpers = nodes.stream().filter(n -> !n.symbol.isTestBlock()).toList();
+            for (Work a : nodes) {
+                List<Integer> lines = searchLinesOf(a, nodes);
+                List<FlowEdge> out = new ArrayList<>();
+                for (Work b : helpers) { // helpers of the same file need no import
+                    if (a == b || (b.symbol.contains(a.symbol.startLine()) && b.symbol.span() >= a.symbol.span())) {
+                        continue;
+                    }
+                    Integer line = firstReference(a, b, lines);
+                    if (line != null) {
+                        out.add(new FlowEdge(a.id, b.id, line, b.symbol.name(), "call"));
+                    }
+                }
+                for (Work b : callees) {
+                    if (!importsFrom(ctx, b)) {
+                        continue;
+                    }
+                    Integer line = firstReference(a, b, lines);
+                    if (line != null) {
+                        out.add(new FlowEdge(a.id, b.id, line, b.symbol.name(), "call"));
+                    }
+                }
+                out.sort(Comparator.comparing(e -> e.line() == null ? 0 : e.line()));
+                graph.put(a.id, out);
+            }
+            for (Work t : nodes) {
+                if (t.symbol.kind().equals("test")) {
+                    Map<String, TestCoverage> covers = reach(t.id, graph, byId);
+                    if (!covers.isEmpty()) {
+                        found.add(new Found(t, f.reason(), covers));
+                    }
+                }
+            }
+        }
+        found.sort(Comparator.comparing((Found x) -> x.test().file.path()).thenComparingInt(x -> x.test().symbol.startLine()));
+        List<ExistingTest> result = new ArrayList<>();
+        for (Found x : found) {
+            Work t = x.test();
+            List<String> targets = targets(x.covers().values(), List.of(), byId);
+            String unit = unitOf(t.file.path());
+            if (targets.isEmpty() && unit != null) {
+                targets = List.of(unit);
+            }
+            result.add(new ExistingTest("e" + (result.size() + 1), t.file.path(), t.symbol.displayName(), t.symbol.startLine(),
+                    x.reason(), List.copyOf(x.covers().values()),
+                    profiles.profile(t.file.path(), t.ctx.text, t.ctx.symbols, t.symbol, targets, unit)));
+        }
+        return result;
+    }
+
     /**
      * Coverage from the code's side: for every testable changed function, which changed tests reach it directly or
-     * only via other changed code, how many branches it has and how much of it changed (see Model.CodeCoverage).
+     * only via other changed code, which existing tests reach it, how many branches it has and how much of it changed
+     * (see Model.CodeCoverage).
      */
-    private List<CodeCoverage> coverage(List<Work> works, List<TestInfo> tests) {
+    private List<CodeCoverage> coverage(List<Work> works, List<TestInfo> tests, List<ExistingTest> existingTests) {
         Map<String, List<String>> direct = new HashMap<>();
         Map<String, List<String>> indirect = new HashMap<>();
+        Map<String, List<String>> existing = new HashMap<>();
         for (TestInfo t : tests) {
             for (TestCoverage c : t.covers()) {
                 (c.direct() ? direct : indirect).computeIfAbsent(c.segmentId(), k -> new ArrayList<>()).add(t.segmentId());
+            }
+        }
+        for (ExistingTest t : existingTests) {
+            for (TestCoverage c : t.covers()) {
+                existing.computeIfAbsent(c.segmentId(), k -> new ArrayList<>()).add(t.id());
             }
         }
         List<CodeCoverage> result = new ArrayList<>();
@@ -1144,14 +1284,17 @@ public final class Analyzer {
             }
             List<String> d = direct.getOrDefault(w.id, List.of());
             List<String> i = indirect.getOrDefault(w.id, List.of());
-            String status = !d.isEmpty() ? Coverage.DIRECT : !i.isEmpty() ? Coverage.INDIRECT : Coverage.NONE;
+            List<String> e = existing.getOrDefault(w.id, List.of());
+            String status = !d.isEmpty() ? Coverage.DIRECT : !i.isEmpty() ? Coverage.INDIRECT
+                    : !e.isEmpty() ? Coverage.EXISTING : Coverage.NONE;
             List<String> code = w.ctx.text.code;
             List<String> body = code.subList(Math.min(w.symbol.startLine() - 1, code.size()), Math.min(w.symbol.endLine(), code.size()));
             if (Coverage.isTrivialAccessor(body)) {
                 continue; // getters and setters: nothing a test would have to prove
             }
             int branches = Coverage.branches(body);
-            result.add(new CodeCoverage(w.id, status, List.copyOf(d), List.copyOf(i), branches, changed, Coverage.risk(changed, branches)));
+            result.add(new CodeCoverage(w.id, status, List.copyOf(d), List.copyOf(i), branches, changed, Coverage.risk(changed, branches),
+                    List.copyOf(e)));
         }
         result.sort(Coverage.ORDER);
         return result;
@@ -1197,7 +1340,7 @@ public final class Analyzer {
     }
 
     /** The unit under test from the test file name (PlayerResourceTest.java -> PlayerResource), or null. */
-    private static String unitOf(String path) {
+    static String unitOf(String path) {
         Matcher m = TEST_FILE.matcher(fileName(path));
         return !m.matches() ? null : m.group(1) != null ? m.group(1) : m.group(2);
     }
