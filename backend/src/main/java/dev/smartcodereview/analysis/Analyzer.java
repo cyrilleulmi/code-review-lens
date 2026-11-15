@@ -77,7 +77,9 @@ import java.util.stream.Collectors;
  *       coverage status "existing"); they are no segments. Per testable function, its error outcomes, boundaries and
  *       effects are compared with what the reaching tests check (<em>Fall- und Effekt-Abgleich</em>, {@link CaseChecks}).
  *       Rules of the form "if X changes, expect a test of form Y" are checked per changed segment
- *       (<em>Erwartungs-Regeln</em>, {@link TestRules}).</li>
+ *       (<em>Erwartungs-Regeln</em>, {@link TestRules}). A test that sends a real HTTP request to a changed endpoint
+ *       reaches it directly and, from there, what it calls (<em>HTTP-Tests</em>, {@link HttpTests}); requests a test
+ *       with a mocked backend expects are shown on the REST edges of the flows.</li>
  *   <li>Frontend REST calls are matched to backend endpoints (http edges), so a flow can run from a component
  *       through the API client into the backend.</li>
  *   <li>Ports &amp; adapters projects get a layer per segment (domain, use case, application, adapter); frontend
@@ -112,7 +114,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 26;
+    public static final int VERSION = 27;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -317,6 +319,7 @@ public final class Analyzer {
         TestRules testRules = new TestRules(rules);
         Map<String, TestRules.TestFacts> testFacts = new LinkedHashMap<>();
         Map<String, List<TestRules.EndpointAt>> endpoints = endpoints(works, operations);
+        HttpLinks http = new HttpLinks(new HttpTests(rules), endpoints, classPaths(works), new HashMap<>());
         List<MockWarning> mockWarnings = new ArrayList<>();
         // the whole repository has no base: every test would be "added", a huge outline without information; the
         // case matrices would list every similar test of the repository - both only make sense for a change
@@ -330,10 +333,9 @@ public final class Analyzer {
                     .forEach(e -> newTests.add(e.segmentId()));
         }
         List<TestInfo> tests = tests(works, edges, snapshot.files(), profiles, mockWarnings, caseChecks, testEvidence,
-                testRules, testFacts, new TestSmells(rules), newTests);
-        List<TestRules.EndpointAt> changedEndpoints = endpoints.values().stream().flatMap(List::stream).toList();
+                testFacts, new TestSmells(rules), newTests, http);
         List<ExistingTest> existingTests = existingTests(works, edges, related, relatedSources, profiles, mockWarnings,
-                caseChecks, testEvidence, testRules, testFacts, changedEndpoints);
+                caseChecks, testEvidence, testFacts, http);
         mockWarnings.sort(Comparator.comparing(MockWarning::path).thenComparing(w -> w.line() == null ? 0 : w.line())
                 .thenComparing(MockWarning::member));
         Map<String, List<String>> testedBy = new HashMap<>();
@@ -361,7 +363,7 @@ public final class Analyzer {
                 coverage,
                 specList,
                 withBoundaries(matrices, tests, boundaries),
-                existingTests, related, List.copyOf(mockWarnings), MockBoundaries.flowCoverage(flows, tests, existingTests),
+                existingTests, related, List.copyOf(mockWarnings), MockBoundaries.flowCoverage(flows, tests, existingTests, http.expectations(), endpoints),
                 ruleChecks,
                 // the whole repository: every setup piece would be "new" and affect only new tests - nothing to warn about
                 repository ? List.of() : setupImpacts(works, specList, related, relatedSources));
@@ -1250,14 +1252,110 @@ public final class Analyzer {
             "^(?:test_(.+)\\.py|(.+?)(?:\\.(?:spec|test|e2e-spec|e2e)\\.[A-Za-z]+|_test\\.[A-Za-z]+|(?:Tests?|IT|Spec)\\.(?:java|kt|cs|groovy)))$");
 
     /**
+     * HTTP-Tests ({@link HttpTests}): the finder, the changed endpoints by segment id (in segment order), the class-level
+     * paths of the changed classes by simple name (for @TestHTTPEndpoint) and, filled by the test walk, the requests
+     * each test expects (by test id: segment id of a changed test, "e1" … of an existing one).
+     */
+    private record HttpLinks(HttpTests tests, Map<String, List<TestRules.EndpointAt>> endpoints, Map<String, String> classPaths,
+                             Map<String, List<HttpTests.Expectation>> expectations) {
+    }
+
+    /**
+     * What a test does over HTTP: edges test -> changed endpoint (kind http, via = the endpoint, line = where the test
+     * sends the request or calls the helper that does), the requests behind them, and the requests it expects.
+     */
+    private record HttpReach(List<FlowEdge> edges, List<HttpTests.Request> hits, List<HttpTests.Expectation> expectations) {
+    }
+
+    /**
+     * The HTTP reach of one test: every real request (not with a mocked HTTP backend) goes to the changed endpoints it
+     * matches - the most exact ones ({@link Http#exactness}) when several do.
+     */
+    private static HttpReach httpReach(String testId, CodeText text, List<Symbol> symbols, Symbol test, String surroundings,
+                                       List<String> mocks, HttpLinks links) {
+        HttpTests.Found found = links.tests().find(text, symbols, test, surroundings, links.classPaths());
+        if (found.requests().isEmpty() || mocks.contains(TestProfiles.HTTP) || links.endpoints().isEmpty()) {
+            return new HttpReach(List.of(), List.of(), found.expectations());
+        }
+        List<FlowEdge> edges = new ArrayList<>();
+        List<HttpTests.Request> hits = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (HttpTests.Request r : found.requests()) {
+            int best = -1;
+            List<Map.Entry<String, TestRules.EndpointAt>> matches = new ArrayList<>();
+            for (Map.Entry<String, List<TestRules.EndpointAt>> e : links.endpoints().entrySet()) {
+                for (TestRules.EndpointAt at : e.getValue()) {
+                    if (!Http.matches(r.call(), at.endpoint())) {
+                        continue;
+                    }
+                    int exactness = Http.exactness(r.call(), at.endpoint());
+                    if (exactness > best) {
+                        best = exactness;
+                        matches.clear();
+                    }
+                    if (exactness == best) {
+                        matches.add(Map.entry(e.getKey(), at));
+                    }
+                }
+            }
+            if (!matches.isEmpty()) {
+                hits.add(r);
+            }
+            for (Map.Entry<String, TestRules.EndpointAt> m : matches) {
+                String label = m.getValue().endpoint().label();
+                if (seen.add(m.getKey() + " " + label)) {
+                    edges.add(new FlowEdge(testId, m.getKey(), r.call().line(), label, "http"));
+                }
+            }
+        }
+        return new HttpReach(List.copyOf(edges), List.copyOf(hits), found.expectations());
+    }
+
+    /** The class-level endpoint paths (JAX-RS @Path, Spring @RequestMapping) of the changed classes, by simple name. */
+    private static Map<String, String> classPaths(List<Work> works) {
+        Map<String, String> result = new HashMap<>();
+        Set<FileCtx> files = new LinkedHashSet<>();
+        works.stream().filter(w -> w.ctx != null && !isTest(w)).forEach(w -> files.add(w.ctx));
+        for (FileCtx ctx : files) {
+            for (Symbol s : ctx.symbols) {
+                if ("class".equals(s.kind())) {
+                    String base = Http.classBase(head(ctx.text.lines, s));
+                    if (base != null) {
+                        result.putIfAbsent(s.name(), base);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * The names whose call arguments are a test's inputs (Fall- und Effekt-Abgleich): the code it calls directly and
+     * the same-file helpers that send its requests to changed endpoints (`putJerseyNumber(23)`).
+     */
+    private static List<String> inputTargets(List<String> targets, HttpReach http) {
+        Set<String> names = new LinkedHashSet<>(targets);
+        http.hits().stream().map(HttpTests.Request::helper).filter(Objects::nonNull).forEach(names::add);
+        return List.copyOf(names);
+    }
+
+    /** The case evidence of a test, with the literals of the requests its helpers send to changed endpoints. */
+    private static CaseChecks.Evidence evidence(CaseChecks caseChecks, String id, CodeText text, List<Symbol> symbols, Symbol test,
+                                                List<String> targets, HttpReach http) {
+        CaseChecks.Evidence e = caseChecks.evidence(id, text, symbols, test, inputTargets(targets, http));
+        http.hits().stream().map(HttpTests.Request::inputs).distinct().forEach(inputs -> CaseChecks.addNumbers(e, inputs));
+        return e;
+    }
+
+    /**
      * For every changed test case: the changed code it reaches through calls (directly, via test helpers, or
-     * indirectly via other changed code), the components it is about (naming convention + called code) and its
-     * profile (Test-Steckbrief, {@link TestProfiles}).
+     * indirectly via other changed code) and over HTTP (HTTP-Tests), the components it is about (naming convention +
+     * called code) and its profile (Test-Steckbrief, {@link TestProfiles}).
      */
     private static List<TestInfo> tests(List<Work> works, List<FlowEdge> edges, List<DiffFile> files, TestProfiles profiles,
                                         List<MockWarning> warnings, CaseChecks caseChecks, Map<String, CaseChecks.Evidence> evidence,
-                                        TestRules testRules, Map<String, TestRules.TestFacts> facts,
-                                        TestSmells smells, Set<String> newTests) {
+                                        Map<String, TestRules.TestFacts> facts, TestSmells smells, Set<String> newTests,
+                                        HttpLinks links) {
         Map<String, Work> byId = new HashMap<>();
         works.forEach(w -> byId.put(w.id, w));
         Map<String, List<FlowEdge>> outgoing = testGraph(edges);
@@ -1270,7 +1368,11 @@ public final class Analyzer {
             String unit = unitOf(t.file.path());
             String surroundings = TestProfiles.surroundingsOf(t.ctx.text, t.ctx.symbols, t.symbol);
             List<String> mocks = profiles.mocks(surroundings, unit);
-            Map<String, TestCoverage> covers = reach(t.id, outgoing, byId, mocks);
+            HttpReach http = httpReach(t.id, t.ctx.text, t.ctx.symbols, t.symbol, surroundings, mocks, links);
+            if (!http.expectations().isEmpty()) {
+                links.expectations().put(t.id, http.expectations());
+            }
+            Map<String, TestCoverage> covers = reach(t.id, outgoing, http.edges(), byId, mocks);
             warnings.addAll(mockWarnings(t.id, t.symbol.displayName(), t.file.path(), mocks, surroundings, works, profiles));
             List<TestSubject> subjects = subjects(t, covers.values(), byId, files);
             List<String> targets = targets(covers.values(), subjects, byId);
@@ -1292,14 +1394,18 @@ public final class Analyzer {
                     realKeys, mockedMembers, newTests.contains(t.id)));
             result.add(new TestInfo(t.id, t.symbol.displayName(), t.file.path(), subjects, List.copyOf(covers.values()), profile,
                     testSmells));
-            CaseChecks.Evidence e = caseChecks.evidence(t.id, t.ctx.text, t.ctx.symbols, t.symbol, targets);
+            CaseChecks.Evidence e = evidence(caseChecks, t.id, t.ctx.text, t.ctx.symbols, t.symbol, targets, http);
             evidence.put(t.id, e);
-            facts.put(t.id, testFacts(t.id, t.ctx.text, t.ctx.symbols, t.symbol, e, profile, testRules));
+            facts.put(t.id, testFacts(t.id, t.ctx.text, t.ctx.symbols, t.symbol, e, profile, http, covers));
         }
         return result;
     }
 
-    /** The call graph tests follow: by caller, in call order, without http edges (unit tests mock HTTP). */
+    /**
+     * The call graph tests follow: by caller, in call order, without the http edges between client and endpoint (a
+     * client's request runs against a mocked backend in its tests); a test's own requests are added per test
+     * ({@link #httpReach}).
+     */
     private static Map<String, List<FlowEdge>> testGraph(List<FlowEdge> edges) {
         Map<String, List<FlowEdge>> outgoing = new HashMap<>();
         for (FlowEdge e : edges) {
@@ -1313,18 +1419,25 @@ public final class Analyzer {
 
     /**
      * The changed code a test case reaches (breadth first, up to MAX_TEST_DEPTH calls): direct when called by the test
-     * or its helpers (test helpers and fixtures are transparent), else indirect via the changed segment it came through.
-     * line: the call site in the test that leads there. Code of a collaborator in mocks (TestProfile.mocks) is reached
-     * only as a mock: it is recorded as mocked and the walk does not continue into what it calls (Mock-Grenze).
+     * or its helpers (test helpers and fixtures are transparent) or hit by one of its HTTP requests (httpEdges, see
+     * {@link #httpReach}), else indirect via the changed segment it came through. line: the call site in the test that
+     * leads there. Code of a collaborator in mocks (TestProfile.mocks) is reached only as a mock: it is recorded as
+     * mocked and the walk does not continue into what it calls (Mock-Grenze).
      */
-    private static Map<String, TestCoverage> reach(String testId, Map<String, List<FlowEdge>> outgoing, Map<String, Work> byId,
-                                                   List<String> mocks) {
+    private static Map<String, TestCoverage> reach(String testId, Map<String, List<FlowEdge>> outgoing, List<FlowEdge> httpEdges,
+                                                   Map<String, Work> byId, List<String> mocks) {
         Set<String> mockKeys = MockBoundaries.keys(mocks);
-        record Hop(String id, String via, Integer line, int depth) {
+        record Hop(String id, String via, Integer line, int depth, boolean http, String endpoint) {
         }
         Map<String, TestCoverage> covers = new LinkedHashMap<>();
         Deque<Hop> queue = new ArrayDeque<>();
-        outgoing.getOrDefault(testId, List.of()).forEach(e -> queue.add(new Hop(e.to(), null, e.line(), 1)));
+        List<FlowEdge> first = new ArrayList<>(outgoing.getOrDefault(testId, List.of()));
+        first.addAll(httpEdges);
+        first.sort(Comparator.comparing(e -> e.line() == null ? 0 : e.line()));
+        for (FlowEdge e : first) {
+            boolean http = "http".equals(e.kind());
+            queue.add(new Hop(e.to(), null, e.line(), 1, http, http ? e.via() : null));
+        }
         Set<String> seen = new HashSet<>(Set.of(testId));
         while (!queue.isEmpty()) {
             Hop h = queue.poll();
@@ -1335,7 +1448,8 @@ public final class Analyzer {
             String via = h.via();
             if (!isTest(w)) { // a test helper/fixture is transparent
                 boolean mocked = !mockKeys.isEmpty() && ownerKeys(w).stream().anyMatch(mockKeys::contains);
-                covers.put(w.id, new TestCoverage(w.id, h.via() == null, h.via(), h.line(), mocked));
+                covers.put(w.id, new TestCoverage(w.id, h.via() == null, h.via(), h.line(), mocked, h.http(),
+                        h.via() == null ? h.endpoint() : null));
                 if (mocked) {
                     continue; // the test runs the mock, neither this code nor what it calls
                 }
@@ -1343,7 +1457,7 @@ public final class Analyzer {
             }
             if (h.depth() < MAX_TEST_DEPTH) {
                 for (FlowEdge e : outgoing.getOrDefault(w.id, List.of())) {
-                    queue.add(new Hop(e.to(), via, h.line(), h.depth() + 1));
+                    queue.add(new Hop(e.to(), via, h.line(), h.depth() + 1, h.http(), h.endpoint()));
                 }
             }
         }
@@ -1395,16 +1509,15 @@ public final class Analyzer {
     /**
      * Bestehende Tests: the test cases of existing, unchanged test files (selected by {@link RelatedTests}, loaded by
      * the caller) linked to the changed code like changed tests - the same name references with import evidence, the
-     * same call graph (no http edges), the same depth. Their helper functions are transparent like test helpers. They
-     * are no segments; only test cases that reach changed code are returned - or that send an HTTP request to a changed
-     * endpoint (Erwartungs-Regeln, {@link TestRules}; covers then empty) -, by path and line, with ids e1, e2, ….
+     * same call graph, the same HTTP reach (HTTP-Tests), the same depth. Their helper functions are transparent like
+     * test helpers. They are no segments; only test cases that reach changed code are returned, by path and line, with
+     * ids e1, e2, ….
      */
     private static List<ExistingTest> existingTests(List<Work> works, List<FlowEdge> edges, Model.RelatedTests related,
                                                     Map<String, String> relatedSources, TestProfiles profiles,
                                                     List<MockWarning> warnings, CaseChecks caseChecks,
-                                                    Map<String, CaseChecks.Evidence> evidence, TestRules testRules,
-                                                    Map<String, TestRules.TestFacts> facts,
-                                                    List<TestRules.EndpointAt> changedEndpoints) {
+                                                    Map<String, CaseChecks.Evidence> evidence,
+                                                    Map<String, TestRules.TestFacts> facts, HttpLinks links) {
         if (related == null || related.files() == null || relatedSources == null || relatedSources.isEmpty()) {
             return List.of();
         }
@@ -1412,7 +1525,8 @@ public final class Analyzer {
         works.forEach(w -> byId.put(w.id, w));
         Map<String, List<FlowEdge>> graph = new HashMap<>(testGraph(edges));
         List<Work> callees = callees(works);
-        record Found(Work test, String reason, Map<String, TestCoverage> covers, List<String> mocks, String surroundings) {
+        record Found(Work test, String reason, Map<String, TestCoverage> covers, List<String> mocks, String surroundings,
+                     HttpReach http) {
         }
         List<Found> found = new ArrayList<>();
         for (RelatedTestFile f : related.files()) {
@@ -1471,9 +1585,10 @@ public final class Analyzer {
                 if (t.symbol.kind().equals("test")) {
                     String surroundings = TestProfiles.surroundingsOf(ctx.text, ctx.symbols, t.symbol);
                     List<String> mocks = profiles.mocks(surroundings, unitOf(f.path()));
-                    Map<String, TestCoverage> covers = reach(t.id, graph, byId, mocks);
-                    if (!covers.isEmpty() || callsEndpoint(ctx, t.symbol, mocks, profiles, testRules, changedEndpoints)) {
-                        found.add(new Found(t, f.reason(), covers, mocks, surroundings));
+                    HttpReach http = httpReach(t.id, ctx.text, ctx.symbols, t.symbol, surroundings, mocks, links);
+                    Map<String, TestCoverage> covers = reach(t.id, graph, http.edges(), byId, mocks);
+                    if (!covers.isEmpty()) {
+                        found.add(new Found(t, f.reason(), covers, mocks, surroundings, http));
                     }
                 }
             }
@@ -1491,39 +1606,33 @@ public final class Analyzer {
             TestProfile profile = profiles.profile(t.file.path(), t.ctx.text, t.ctx.symbols, t.symbol, targets, unit);
             result.add(new ExistingTest(id, t.file.path(), t.symbol.displayName(), t.symbol.startLine(),
                     x.reason(), List.copyOf(x.covers().values()), profile));
-            CaseChecks.Evidence e = caseChecks.evidence(id, t.ctx.text, t.ctx.symbols, t.symbol, targets);
+            CaseChecks.Evidence e = evidence(caseChecks, id, t.ctx.text, t.ctx.symbols, t.symbol, targets, x.http());
             evidence.put(id, e);
-            facts.put(id, testFacts(id, t.ctx.text, t.ctx.symbols, t.symbol, e, profile, testRules));
+            facts.put(id, testFacts(id, t.ctx.text, t.ctx.symbols, t.symbol, e, profile, x.http(), x.covers()));
+            if (!x.http().expectations().isEmpty()) {
+                links.expectations().put(id, x.http().expectations());
+            }
             warnings.addAll(mockWarnings(id, t.symbol.displayName(), t.file.path(), x.mocks(), x.surroundings(), works, profiles));
         }
         return result;
     }
 
     /**
-     * Does an existing test that reaches no changed code send an HTTP request to a changed endpoint (with a real HTTP
-     * backend)? Such a test still counts for the Erwartungs-Regeln that expect a test over HTTP.
-     */
-    private static boolean callsEndpoint(FileCtx ctx, Symbol test, List<String> mocks, TestProfiles profiles, TestRules testRules,
-                                         List<TestRules.EndpointAt> endpoints) {
-        if (endpoints.isEmpty() || mocks.contains(TestProfiles.HTTP)) {
-            return false;
-        }
-        TestProfiles.TestText t = profiles.read(ctx.text, ctx.symbols, test, List.of());
-        String own = t.head() + "\n" + t.body();
-        TestRules.TestFacts facts = new TestRules.TestFacts(null, own, List.of(), null, null, false,
-                testRules.requests(own + "\n" + helperCode(ctx.text, ctx.symbols, test, own)));
-        return TestRules.calls(facts, endpoints);
-    }
-
-    /**
      * What a test shows for the Erwartungs-Regeln: its code with the same-file helpers it calls, its assertions (from
-     * the case evidence), scenario, level and whether it mocks the HTTP backend (from its profile), its HTTP requests.
+     * the case evidence), scenario and level (from its profile), the endpoints it reaches directly over HTTP for real.
      */
     private static TestRules.TestFacts testFacts(String id, CodeText text, List<Symbol> symbols, Symbol test,
-                                                 CaseChecks.Evidence evidence, TestProfile profile, TestRules testRules) {
+                                                 CaseChecks.Evidence evidence, TestProfile profile, HttpReach http,
+                                                 Map<String, TestCoverage> covers) {
         String code = evidence.text() + "\n" + helperCode(text, symbols, test, evidence.text());
-        return new TestRules.TestFacts(id, code, evidence.assertions(), profile.scenario(), profile.level(),
-                profile.mocks().contains(TestProfiles.HTTP), testRules.requests(code));
+        Map<String, Set<String>> endpoints = new HashMap<>();
+        for (FlowEdge e : http.edges()) {
+            TestCoverage c = covers.get(e.to());
+            if (c != null && c.http() && c.direct() && !c.mocked()) {
+                endpoints.computeIfAbsent(e.to(), k -> new LinkedHashSet<>()).add(e.via());
+            }
+        }
+        return new TestRules.TestFacts(id, code, evidence.assertions(), profile.scenario(), profile.level(), endpoints);
     }
 
     /**
@@ -1562,7 +1671,7 @@ public final class Analyzer {
     private static Map<String, List<TestRules.EndpointAt>> endpoints(List<Work> works, List<ApiOperation> operations) {
         Map<String, List<ApiOperation>> byOperationId = new HashMap<>();
         operations.forEach(o -> byOperationId.computeIfAbsent(o.operationId(), k -> new ArrayList<>()).add(o));
-        Map<String, List<TestRules.EndpointAt>> result = new HashMap<>();
+        Map<String, List<TestRules.EndpointAt>> result = new LinkedHashMap<>();
         for (Work w : works) {
             if (w.ctx == null || isTest(w)) {
                 continue;
@@ -1732,7 +1841,7 @@ public final class Analyzer {
                 continue;
             }
             String name = w.symbol != null && w.symbol.container() != null ? w.symbol.container() : fileName(w.file.path());
-            subjects.put(w.file.path(), new TestSubject(name, w.file.path(), true, "call"));
+            subjects.put(w.file.path(), new TestSubject(name, w.file.path(), true, c.http() ? "http" : "call"));
         }
         return List.copyOf(subjects.values());
     }

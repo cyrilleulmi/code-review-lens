@@ -54,6 +54,10 @@
     <span class="edge-key" title="Beide Seiten haben Tests, aber kein Test läuft durch den Aufruf (typisch: der REST-Aufruf zwischen Frontend und Backend)">
       <svg width="22" height="8"><path d="M1 4 H21" class="k-separate" /></svg>{{ edgeLabels.separate }}</span>
     <span class="edge-key" title="Nur eine Seite oder keine hat Tests"><svg width="22" height="8"><path d="M1 4 H21" class="k-faint" /></svg>ungetestet</span>
+    @if (hasBothSides()) {
+      <span class="edge-key" title="REST-Aufruf: ein Frontend-Test erwartet die Anfrage (HttpTestingController, cy.intercept …) und ein Backend-Test schickt sie über HTTP an den Endpunkt – der Vertrag ist von beiden Seiten geprüft, auch wenn kein Test ganz hindurchläuft">
+        <span class="both-mark">{{ bothSidesLabel }}</span> REST-Vertrag</span>
+    }
     <span class="hint">statisch: Aufrufe aus Tests, gemockte Klassen zählen nicht</span>
   </div>
 }
@@ -78,7 +82,9 @@
       @if (e.http) {
         <text class="http-label" [attr.x]="e.lx" [attr.y]="e.ly" text-anchor="middle" [style.fill]="'var(--edge-' + e.c + ')'">HTTP</text>
       }
-      @if (e.run === 'separate') {
+      @if (e.both) {
+        <text class="run-label both" [attr.x]="e.lx" [attr.y]="e.ly + (e.http ? 22 : 12)" text-anchor="middle">{{ bothSidesLabel }}<title>{{ e.title }}</title></text>
+      } @else if (e.run === 'separate') {
         <text class="run-label" [attr.x]="e.lx" [attr.y]="e.ly + (e.http ? 22 : 12)" text-anchor="middle">einzeln<title>{{ e.title }}</title></text>
       }
     }

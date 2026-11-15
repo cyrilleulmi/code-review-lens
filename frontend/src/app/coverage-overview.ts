@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, output, signal } 
 import { CaseFinding, CodeCoverage, CoverageStatus, ExistingTest, Segment } from './api';
 import { compactLine, findingDetail, findingsSummary, openFindings } from './case-checks';
 import { ExistingChip, basisText, basisWarnings, existingChip } from './existing-tests';
+import { HTTP_TAG, httpCover, httpTitle } from './http-tests';
 import { Icon, SymbolBadge } from './icon';
 import { ReviewStore } from './review.store';
 import { SpecLineTarget } from './spec-overview';
@@ -10,6 +11,8 @@ interface TestChip {
   id: string;
   name: string;
   direct: boolean;
+  /** HTTP-Tests: the reach starts with a real request of the test; tooltip part, null otherwise */
+  http: string | null;
 }
 
 interface CoverageRow {
@@ -102,13 +105,19 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
                   <span class="tests">
                     @for (t of r.tests; track t.id) {
                       <button type="button" class="test" [class.indirect]="!t.direct" (click)="$event.stopPropagation(); testClick.emit(t.id)"
-                              [title]="(t.direct ? 'Ruft die Funktion direkt auf' : 'Erreicht sie über anderen geänderten Code') + ' – zum Test springen'">
+                              [title]="(t.direct ? 'Ruft die Funktion direkt auf' : 'Erreicht sie über anderen geänderten Code') + (t.http ? ' · ' + t.http : '') + ' – zum Test springen'">
                         <app-symbol-badge kind="test" /> <span class="tname">{{ t.name }}</span>
+                        @if (t.http) {
+                          <span class="http-tag">{{ httpTag }}</span>
+                        }
                       </button>
                     }
                     @for (e of r.existing; track e.id) {
                       <span class="test existing" [title]="e.title" (click)="$event.stopPropagation()">
                         <app-symbol-badge kind="test" /> <span class="tname">{{ e.name }}</span> <span class="tline">{{ e.where }}</span>
+                        @if (e.http) {
+                          <span class="http-tag">{{ httpTag }}</span>
+                        }
                       </span>
                     }
                     @for (m of r.mocked; track m.id) {
@@ -196,6 +205,7 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
     .test.mocked { border-style: dashed; border-color: color-mix(in srgb, var(--run-mocked) 55%, transparent); color: var(--fg-muted); }
     .test.mocked:disabled { cursor: default; }
     .mock-tag { color: var(--run-mocked); font-size: 10px; font-weight: 600; }
+    .http-tag { color: var(--accent-fg); font-size: 10px; font-weight: 600; }
     .basis { padding: 6px 12px; border-bottom: 1px solid var(--border); color: var(--fg-dim); font-size: 11.5px; }
     .basis p { display: flex; align-items: center; gap: 6px; margin: 0; }
     .basis p + p { margin-top: 3px; }
@@ -228,6 +238,7 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
 })
 export class CoverageOverview {
   protected readonly store = inject(ReviewStore);
+  protected readonly httpTag = HTTP_TAG;
   /** A test chip was clicked (test segment id). */
   readonly testClick = output<string>();
   /** A finding was clicked: its line in the changed function. */
@@ -247,6 +258,10 @@ export class CoverageOverview {
     const tests = this.store.tests();
     const testName = (id: string) => tests.get(id)?.name ?? segs.get(id)?.symbol ?? id;
     const existing = new Map<string, ExistingTest>((this.analysis()?.existingTests ?? []).map((t) => [t.id, t]));
+    const viaHttp = (test: string, segmentId: string) => {
+      const c = httpCover(tests.get(test)?.covers, segmentId);
+      return c ? httpTitle(c) : null;
+    };
     return (this.analysis()?.coverage ?? [])
       .filter((c) => segs.has(c.segmentId))
       .map((c): CoverageRow => {
@@ -255,8 +270,8 @@ export class CoverageOverview {
           segment: segs.get(c.segmentId)!,
           coverage: c,
           tests: [
-            ...c.directTests.map((id) => ({ id, name: testName(id), direct: true })),
-            ...c.indirectTests.map((id) => ({ id, name: testName(id), direct: false })),
+            ...c.directTests.map((id) => ({ id, name: testName(id), direct: true, http: viaHttp(id, c.segmentId) })),
+            ...c.indirectTests.map((id) => ({ id, name: testName(id), direct: false, http: viaHttp(id, c.segmentId) })),
           ],
           existing: (c.existingTests ?? []).filter((id) => existing.has(id)).map((id) => existingChip(existing.get(id)!, c.segmentId)),
           mocked: (c.mockedTests ?? []).map((id) => ({ id, name: this.store.testName()(id), changed: tests.has(id) })),

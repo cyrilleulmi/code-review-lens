@@ -529,6 +529,14 @@
     border-style: dashed;
   }
 
+  /* reached over a real HTTP request of the test (HTTP-Tests) */
+  .http-tag {
+    margin-left: 4px;
+    color: var(--accent-fg);
+    font-size: 10px;
+    font-weight: 600;
+  }
+
   /* reached only as a mock (Mock-Grenzen): the real code does not run in this test */
   &.mocked {
     border-color: color-mix(in srgb, var(--run-mocked) 55%, transparent);

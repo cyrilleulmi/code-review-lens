@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -21,17 +20,14 @@ import java.util.regex.Pattern;
  *       checked against every rule; all given conditions must hold (a changed line matches, the code matches, a concern
  *       applies, it is a changed or new HTTP endpoint, its kind, its path). A rule applies at most once per segment.</li>
  *   <li><b>Tests that count</b>: the changed and existing tests that reach the segment for real - directly or via
- *       other changed code, not only a mock of it (Mock-Grenzen). For a class, also the tests that reach its changed
- *       members. For an endpoint also every changed or loaded existing test that sends a request to it
- *       ({@link #requests}, rules "testHttpCalls"; method and path compared with {@link Http#matches}), even when the
- *       call graph does not link the two (it does not follow HTTP from tests); tests with a mocked HTTP backend
- *       (HttpTestingController, MockWebServer, …: "HTTP" in the Test-Steckbrief's mocks) never count that way.</li>
+ *       other changed code, also over HTTP (a request of the test to a changed endpoint, {@link HttpTests}), not only a
+ *       mock of it (Mock-Grenzen). For a class, also the tests that reach its changed members.</li>
  *   <li><b>Expectation</b> ({@link Rules.TestRuleExpect}): one of those tests must show everything the rule expects
- *       (an assertion, code, scenario, level, an HTTP request to the triggering endpoint).</li>
+ *       (an assertion, code, scenario, level, a request to the triggering endpoint: it reaches it directly over HTTP).</li>
  * </ol>
  * Limits: only static evidence. A test reaching the code through something the call graph does not see (reflection,
- * a framework calling a listener, a request with a computed URL or a base path set elsewhere) does not count; a type
- * (DTO, entity) is reached only through its changed members.
+ * a framework calling a listener, a request with a computed URL or a base path set in another file) does not count; a
+ * type (DTO, entity) is reached only through its changed members.
  */
 public final class TestRules {
 
@@ -57,64 +53,20 @@ public final class TestRules {
 
     /**
      * What a test shows. code: its head and body plus the same-file helpers it calls (comments blanked, strings kept);
-     * assertions: its assertion statements; scenario / level: from its Test-Steckbrief; httpMocked: it replaces the
-     * HTTP backend; requests: the HTTP requests in its code.
+     * assertions: its assertion statements; scenario / level: from its Test-Steckbrief; http: the endpoints it reaches
+     * directly over HTTP ("PUT /api/x/{}") by segment id (TestCoverage.endpoint).
      */
     public record TestFacts(String id, String code, List<String> assertions, String scenario, String level,
-                            boolean httpMocked, List<Http.Call> requests) {
+                            Map<String, Set<String>> http) {
     }
 
     private record Trigger(int line, String code, String what) {
     }
 
     private final List<Rules.TestRule> rules;
-    private final List<Pattern> httpCalls;
 
     public TestRules(Rules rules) {
         this.rules = rules.testRules;
-        this.httpCalls = rules.testHttpCalls;
-    }
-
-    /**
-     * The HTTP requests in a piece of test code (rules "testHttpCalls"): method (GET when the pattern has none) and the
-     * normalised path of the literal URL; a URL that is not a path (no leading "/", no host) is left out. line: 0.
-     */
-    public List<Http.Call> requests(String code) {
-        List<Http.Call> result = new ArrayList<>();
-        Set<String> seen = new LinkedHashSet<>();
-        for (Pattern p : httpCalls) {
-            Matcher m = p.matcher(code);
-            boolean hasMethod = p.pattern().contains("(?<method>");
-            while (m.find()) {
-                String url = m.group("url");
-                if (url == null) {
-                    continue;
-                }
-                String u = url.strip();
-                boolean concatenated = u.endsWith("+");
-                if (concatenated) {
-                    u = u.substring(0, u.length() - 1).strip();
-                }
-                if (u.length() >= 2 && "\"'`".indexOf(u.charAt(0)) >= 0 && u.charAt(u.length() - 1) == u.charAt(0)) {
-                    u = u.substring(1, u.length() - 1);
-                }
-                String path = Http.normaliseUrl(u, concatenated);
-                if (path == null) {
-                    continue;
-                }
-                String method = hasMethod && m.group("method") != null ? m.group("method").toUpperCase(Locale.ROOT) : "GET";
-                if (seen.add(method + " " + path)) {
-                    result.add(new Http.Call(method, path, 0));
-                }
-            }
-        }
-        return result;
-    }
-
-    /** Does a test send a request to one of the endpoints (and is its HTTP backend real)? */
-    static boolean calls(TestFacts test, List<EndpointAt> endpoints) {
-        return !test.httpMocked() && test.requests().stream()
-                .anyMatch(c -> endpoints.stream().anyMatch(e -> Http.matches(c, e.endpoint())));
     }
 
     /**
@@ -135,8 +87,8 @@ public final class TestRules {
                 List<EndpointAt> endpoints = rule.when().newEndpoint()
                         ? target.endpoints().stream().filter(EndpointAt::added).toList() : target.endpoints();
                 Set<String> candidates = new LinkedHashSet<>(target.reaching());
-                tests.values().stream().filter(t -> calls(t, target.endpoints())).forEach(t -> candidates.add(t.id()));
-                List<String> metBy = candidates.stream().map(tests::get).filter(t -> t != null && shows(rule.expect(), t, endpoints))
+                List<String> metBy = candidates.stream().map(tests::get)
+                        .filter(t -> t != null && shows(rule.expect(), t, target.segmentId(), endpoints))
                         .map(TestFacts::id).toList();
                 result.add(new Ordered(ti, new RuleCheck(rule.id(), rule.label(), target.segmentId(), trigger.line(), trigger.code(),
                         shorten(trigger.what()), !metBy.isEmpty(), metBy, List.copyOf(candidates), rule.hint())));
@@ -147,8 +99,9 @@ public final class TestRules {
     }
 
     /** Does a test show everything the rule expects? */
-    private static boolean shows(Rules.TestRuleExpect expect, TestFacts t, List<EndpointAt> endpoints) {
-        if (expect.http() && !calls(t, endpoints)) {
+    private static boolean shows(Rules.TestRuleExpect expect, TestFacts t, String segmentId, List<EndpointAt> endpoints) {
+        if (expect.http() && endpoints.stream()
+                .noneMatch(e -> t.http().getOrDefault(segmentId, Set.of()).contains(e.endpoint().label()))) {
             return false;
         }
         if (!expect.assertion().isEmpty()

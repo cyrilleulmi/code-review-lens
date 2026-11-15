@@ -45,7 +45,11 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    A segment at several places needs one ok per place.
 5. `tests[]` → per changed test case: `subjects` (components under test) and `covers` (reached segments,
    `direct` or `via` another segment, `line` = call site in the test, `mocked` = the segment belongs to a collaborator
-   the test mocks: only the mock runs, the walk stops there). `segments[].testedBy` is the reverse (without mocked).
+   the test mocks: only the mock runs, the walk stops there; `http` = the way starts with a real HTTP request of the
+   test (HTTP-Tests: RestAssured, MockMvc, supertest, Playwright `request.put`, `cy.request` … to a changed endpoint,
+   also through same-file helpers and base paths like `@TestHTTPEndpoint`; never with a mocked HTTP backend), then
+   the endpoint is `direct` with `endpoint` = its request, e.g. PUT /api/players/{}, and what it calls is indirect).
+   `subjects[].how` = name | call | http. `segments[].testedBy` is the reverse (without mocked).
    `smells[]` (Test-Smells, pattern-based, rules section `testSmells`; absent in older analyses, empty for none) = signs
    that the test is worth less than it looks: `kind` (no-assertion | weak-only = only existence/truthiness checks |
    focused = fit/it.only, CI would skip all other tests | sleep = fixed wait, not with fake timers | mocks-subject =
@@ -53,7 +57,7 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    `line` + `code` (where it shows, null for the whole test). A smell is worth a review comment: the test proves less
    than its name says.
    `profile` (Test-Steckbrief, pattern-based, rules section `testProfile`; null in older analyses): `targets`
-   (names of the changed code it calls directly, else the unit from the file name), `scenario` (error = expects a
+   (names of the changed code it calls directly or reaches directly over HTTP, else the unit from the file name), `scenario` (error = expects a
    failure | edge = null/empty/limit values in the inputs of the code under test: arguments of calls to the targets and of HTTP requests, parameter sources - not fixtures or expected values | normal) with `scenarioBy` (code | name) and `scenarioReason` (the
    matched text), `assertions` (count in the test body) and `assertionKinds` ({equality, exception, interaction,
    existence, http, snapshot, other: count}), `mocks` (replaced collaborators in the test, its setup and enclosing
@@ -84,7 +88,7 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    ids). An unchecked exception/boundary/effect is a case no test proves: worth a review comment.
    `existingTests[]` (Bestehende Tests; null in older analyses, empty for number 0) = test cases of existing,
    unchanged test files that reach changed code, linked like changed tests (name reference + import evidence,
-   helpers transparent, no HTTP): `id` (e1, …), `path`, `name`, `line` (in the file at the PR head), `reason`,
+   helpers transparent, HTTP requests to changed endpoints): `id` (e1, …), `path`, `name`, `line` (in the file at the PR head), `reason`,
    `covers[]`, `profile`. They are NOT segments: nothing to mark, not in the diff. `relatedTests` = the selection:
    `limit`, `candidates`, `truncated` (the limit cut it), `listIncomplete` (the host cut the file list), `files[]`
    with `path`, `reason` (mirror = named after the changed file, in the mirrored test directory or next to it |
@@ -96,19 +100,22 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    `collaborator`. Such a test pins the OLD behaviour of that function: check it first. `flowCoverage[]` = per flow
    (`flowId`, same order as `flows`) `steps[]` (`segmentId`, `status` tested | mocked | none, `tests`, `mockedBy`)
    and `edges[]` (`from`, `to`, `status` tested = one test crosses the call | separate = both ends tested, no
-   single test crosses it, e.g. the REST hop | partial = one end tested | none, `tests` = crossing tests).
+   single test crosses it, e.g. the REST hop | partial = one end tested | none, `tests` = crossing tests; for a REST
+   edge both sides of the contract: `clientTests` = tests that really reach the calling end and expect a request
+   fitting the endpoint - HttpTestingController.expectOne, cy.intercept, page.route, nock, msw, WireMock - and
+   `serverTests` = tests that send an HTTP request to the endpoint; both non-empty = checked from both sides, even
+   though no single test crosses it; empty for call edges and in older analyses).
    `caseMatrices[].boundaries[]` (null in older analyses) = boundaries in the code the matrix's tests reach:
    `segmentId`, `subject`, `label` (e.g. 1…99), `values` (all boundary values), `missing` (not an input of this matrix).
    `ruleChecks[]` (Erwartungs-Regeln; null in older analyses, empty for number 0) = rules "if X changes, expect a
    test of form Y" (rules section `testRules`) that apply to a changed segment: `ruleId`, `label` (German),
    `segmentId`, `line` + `code` (the trigger line), `trigger` (matched text or endpoint, e.g. DELETE
-   /api/players/{}/jersey-number), `met`, `metBy` (test ids), `tests` (the tests considered: reaching it for real, for
-   an endpoint also those sending it an HTTP request - not with a mocked HTTP backend), `hint` (German text for the
+   /api/players/{}/jersey-number), `met`, `metBy` (test ids), `tests` (the tests considered: reaching it for real,
+   also over HTTP - not with a mocked HTTP backend), `hint` (German text for the
    missing test). Built in: auth-denied (changed authorisation needs a 401/403 test), endpoint-http (new endpoint
    needs a test over HTTP), validation-boundary (changed validation needs an error/edge test),
    transaction-integration (changed @Transactional needs an integration test), listener-test (changed message
-   listener needs a test that calls it). An unmet check is a missing test: worth a review comment. An existing test
-   that only calls a changed endpoint over HTTP is in `existingTests` with empty `covers`.
+   listener needs a test that calls it). An unmet check is a missing test: worth a review comment.
    `setupImpacts[]` (Wirkung von Setup und Testdaten; null in older analyses, empty for number 0) = changed setup
    blocks, fixtures and test helpers with the tests they affect, also tests NOT in the diff: `segmentId`, `kind`
    (setup = beforeEach & co. or a JUnit @BeforeEach/@AfterAll/... method, affects every test of its suite/class incl.

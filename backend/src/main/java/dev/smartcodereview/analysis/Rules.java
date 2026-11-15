@@ -123,6 +123,19 @@ public final class Rules {
      * notCode: globs of files in a code language that are no source code to be tested (build scripts, generated code,
      * tool configuration). A rules file without the section or without one of its keys uses the built-in value.
      */
+    /**
+     * HTTP-Tests (see {@link HttpTests}), rules section "testHttpLinks". bases: regexes for a base path in the test's
+     * surroundings, with the named group "base" (a literal path) or "endpointClass" (a class whose class-level @Path /
+     * @RequestMapping is the base, Quarkus @TestHTTPEndpoint); the first match wins. expectations: regexes for a request
+     * a test with a mocked HTTP backend expects (HttpTestingController.expectOne, cy.intercept, page.route, nock, msw,
+     * WireMock, MockRestServiceServer), with the named group "url" and optionally "method" (missing = any method).
+     * expectationMethods: regex templates with {var} (the variable holding the expected request) and the named group
+     * "method", for the method checked later (`expect(req.request.method).toBe('PUT')`). A rules file without the section
+     * or without one of its keys uses the built-in value.
+     */
+    public record HttpTestRules(List<Pattern> bases, List<Pattern> expectations, List<String> expectationMethods) {
+    }
+
     public record CommitCheckRules(List<Pattern> fixTitles, List<Pattern> testAdjustTitles, List<Pattern> notCode) {
         public boolean isFix(String title) {
             return title != null && fixTitles.stream().anyMatch(p -> p.matcher(title).find()) && !isTestAdjust(title);
@@ -191,8 +204,8 @@ public final class Rules {
      * What one test must show to meet an Erwartungs-Regel; every given key must hold for the same test, within a key
      * one entry suffices. assertion: a regex on one of its assertion statements; code: a regex on its code (head, body
      * and the same-file helpers it calls); scenario: its Test-Steckbrief scenario (error, edge, normal); level: its
-     * level (unit, integration, e2e); http: it sends an HTTP request to the triggering endpoint (rules
-     * "testHttpCalls", not with a mocked HTTP backend). Nothing given: a test that reaches the segment for real suffices.
+     * level (unit, integration, e2e); http: it reaches the triggering endpoint over HTTP (a request found by the rules
+     * "testHttpCalls", not with a mocked HTTP backend, see {@link HttpTests}). Nothing given: a test that reaches the segment for real suffices.
      */
     public record TestRuleExpect(List<Pattern> assertion, List<Pattern> code, List<String> scenario, List<String> level,
                                  boolean http) {
@@ -248,10 +261,12 @@ public final class Rules {
      */
     public final List<TestRule> testRules;
     /**
-     * HTTP requests in test code (Erwartungs-Regeln, expect "http"): regexes with the named group "url" (a string literal,
+     * HTTP requests in test code (HTTP-Tests, {@link HttpTests}): regexes with the named group "url" (a string literal,
      * optionally followed by "+" for a concatenated value) and optionally "method" (GET, post, …; missing = GET).
      */
     public final List<Pattern> testHttpCalls;
+    /** HTTP-Tests: base paths and the requests tests with a mocked backend expect (see {@link HttpTestRules}). */
+    public final HttpTestRules testHttpLinks;
     /** Test-Smells by kind (see {@link SmellRule}), in the order of the built-in rules. */
     public final Map<String, SmellRule> testSmells;
     /** Wirkung von Setup und Testdaten: test-support paths (see {@link SetupImpactRules}). */
@@ -264,8 +279,8 @@ public final class Rules {
                   List<Pattern> assertions, List<Pattern> weakAssertions, List<Pattern> disabledTests,
                   TestProfileRules testProfile, CaseMatrixRules caseMatrix, RelatedTestRules relatedTests,
                   CaseCheckRules caseCheck, List<TestRule> testRules, List<Pattern> testHttpCalls,
-                  Map<String, SmellRule> testSmells, SetupImpactRules setupImpact, CommitCheckRules commitChecks,
-                  String hash) {
+                  HttpTestRules testHttpLinks, Map<String, SmellRule> testSmells, SetupImpactRules setupImpact,
+                  CommitCheckRules commitChecks, String hash) {
         this.categories = categories;
         this.rules = rules;
         this.aspects = aspects;
@@ -279,6 +294,7 @@ public final class Rules {
         this.caseCheck = caseCheck;
         this.testRules = testRules;
         this.testHttpCalls = testHttpCalls;
+        this.testHttpLinks = testHttpLinks;
         this.testSmells = testSmells;
         this.setupImpact = setupImpact;
         this.commitChecks = commitChecks;
@@ -296,7 +312,7 @@ public final class Rules {
                 section(root, "assertions"), section(root, "weakAssertions"), section(root, "disabledTests"),
                 testProfile(root.path("testProfile")), caseMatrix(root.path("caseMatrix")),
                 relatedTests(root.path("relatedTests")), caseCheck(root.path("caseCheck")), testRules(root.path("testRules")),
-                section(root, "testHttpCalls"), testSmells(root.path("testSmells")),
+                section(root, "testHttpCalls"), testHttpLinks(root.path("testHttpLinks")), testSmells(root.path("testSmells")),
                 setupImpact(root.path("setupImpact")), commitChecks(root.path("commitChecks")), hash);
     }
 
@@ -306,6 +322,14 @@ public final class Rules {
         java.util.function.Function<String, JsonNode> key = k -> node.has(k) ? node.get(k) : builtIn.path(k);
         return new CommitCheckRules(patterns(key.apply("fixTitles"), false), patterns(key.apply("testAdjustTitles"), false),
                 patterns(key.apply("notCode"), true));
+    }
+
+    /** The "testHttpLinks" section; every missing key is taken from the built-in rules. */
+    private static HttpTestRules testHttpLinks(JsonNode node) {
+        JsonNode builtIn = defaults().path("testHttpLinks");
+        java.util.function.Function<String, JsonNode> key = k -> node.has(k) ? node.get(k) : builtIn.path(k);
+        return new HttpTestRules(patterns(key.apply("bases"), false), patterns(key.apply("expectations"), false),
+                strings(key.apply("expectationMethods")));
     }
 
     /** The "setupImpact" section; every missing key is taken from the built-in rules. */

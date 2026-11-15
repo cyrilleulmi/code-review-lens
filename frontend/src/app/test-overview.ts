@@ -20,18 +20,23 @@ import {
   sortRows,
 } from './test-profile';
 import { smellDetail, smellText } from './test-smells';
+import { httpTitle, reachText, targetLabels } from './http-tests';
 
 interface CoverRow {
   segment: Segment;
   direct: boolean;
-  line: number | null;
-  via: string | null;
+  /** how the test reaches it: «direkt · Testzeile 7», «direkt über HTTP: PUT /api/x/{} · Testzeile 7», «über update» */
+  how: string;
+  /** HTTP-Tests: tooltip part of a reach over a real request, null otherwise */
+  httpTitle: string | null;
   done: boolean;
 }
 
 interface TableRow extends ProfileRow {
   /** profile parts by key, for the tooltips of the cells */
   parts: Partial<Record<ProfilePart['key'], ProfilePart>>;
+  /** the targets, an endpoint reached over HTTP with its request («update (PUT /api/players/{})») */
+  targets: string[];
 }
 
 type ViewMode = 'list' | 'table';
@@ -40,7 +45,7 @@ const VIEW_KEY = 'scr.testOverview.view';
 
 const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[] = [
   { id: 'name', label: 'Test', tip: 'Suite › Testname' },
-  { id: 'targets', label: 'Prüft', tip: 'Geänderter Code, den der Test direkt aufruft (sonst die Komponente aus dem Dateinamen)' },
+  { id: 'targets', label: 'Prüft', tip: 'Geänderter Code, den der Test direkt aufruft oder per HTTP anfragt (sonst die Komponente aus dem Dateinamen)' },
   { id: 'scenario', label: 'Fall', tip: 'Fehlerfall, Grenzfall oder Normalfall – aus Testcode und Testname' },
   { id: 'level', label: 'Ebene', tip: 'Unit, Integration oder E2E – aus Annotationen, Aufrufen und Pfad' },
   { id: 'assertions', label: 'Assertions', num: true, tip: 'Anzahl Assertions im Testrumpf und ihre Art' },
@@ -112,7 +117,7 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
                 @let p = r.profile;
                 <tr tabindex="0" (click)="testClick.emit(r.id)" (keydown.enter)="testClick.emit(r.id)">
                   <td class="tname" [title]="r.name + ' – zum Test springen'">{{ r.name }}</td>
-                  <td class="code" [title]="p.targets.join(', ')">{{ p.targets.join(', ') || '–' }}</td>
+                  <td class="code" [title]="r.targets.join(', ')">{{ r.targets.join(', ') || '–' }}</td>
                   <td><span [class]="'scenario sc-' + p.scenario" [title]="r.parts.scenario?.tip ?? ''">{{ scenarioLabels[p.scenario] }}</span></td>
                   <td [title]="r.parts.level?.tip ?? ''">{{ levelLabels[p.level] }}</td>
                   <td class="num" [title]="r.parts.assertions?.tip ?? ''">
@@ -164,7 +169,7 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
             <div class="vals">
               @for (s of t.subjects; track s.name) {
                 <button type="button" class="subject" [disabled]="!s.path" (click)="s.path && openFile(s.path)"
-                        [title]="(s.how === 'name' ? 'Aus dem Namen der Testdatei' : 'Der Test ruft geänderten Code darin auf') + (s.path ? ' · ' + s.path : '')">
+                        [title]="(s.how === 'name' ? 'Aus dem Namen der Testdatei' : s.how === 'http' ? 'Der Test schickt eine HTTP-Anfrage an einen geänderten Endpunkt darin' : 'Der Test ruft geänderten Code darin auf') + (s.path ? ' · ' + s.path : '')">
                   <app-icon [name]="s.path ? 'file' : 'info'" [size]="12" /> {{ s.name }}
                   @if (!s.inPr) {
                     <em>nicht im PR geändert</em>
@@ -178,11 +183,11 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
             <div class="vals">
               @for (c of t.covers; track c.segment.id) {
                 <button type="button" class="cover" [class.indirect]="!c.direct" [class.done]="c.done" (click)="store.reveal(c.segment.id)"
-                        [title]="c.segment.path + ' – zum Code springen'">
+                        [title]="c.segment.path + (c.httpTitle ? ' · ' + c.httpTitle : '') + ' – zum Code springen'">
                   <app-symbol-badge [kind]="c.segment.symbolKind" />
                   <span class="sym">{{ c.segment.symbol ?? fileOf(c.segment.path) }}</span>
                   <span class="where">{{ fileOf(c.segment.path) }}:{{ range(c.segment) }}</span>
-                  <span class="how">{{ c.direct ? 'direkt' + (c.line ? ' · Testzeile ' + c.line : '') : 'über ' + c.via }}</span>
+                  <span class="how">{{ c.how }}</span>
                   @if (c.done) {
                     <app-icon name="check" [size]="12" class="ok" />
                   }
@@ -304,7 +309,9 @@ export class TestOverview {
             const segment = segs.get(c.segmentId)!;
             const via = c.via ? segs.get(c.via) : null;
             const p = this.store.progressOf([{ segmentId: segment.id, place: null }]);
-            return { segment, direct: c.direct, line: c.line, via: via ? shortName(via) : null, done: p.total > 0 && p.ok === p.total };
+            const how = reachText({ direct: c.direct, line: c.line, via: via ? shortName(via) : null, http: c.http, endpoint: c.endpoint });
+            const http = c.http && !c.mocked ? httpTitle(c) : null;
+            return { segment, direct: c.direct, how, httpTitle: http, done: p.total > 0 && p.ok === p.total };
           }),
       }));
   });
@@ -312,6 +319,7 @@ export class TestOverview {
   /** Tests with a profile (analyses of older versions have none). */
   protected readonly tableRows = computed((): TableRow[] => {
     const tests = this.store.tests();
+    const segs = this.store.segments();
     return this.testIds()
       .map((id) => tests.get(id))
       .filter((t) => !!t?.profile)
@@ -319,6 +327,7 @@ export class TestOverview {
         id: t!.segmentId,
         name: t!.name,
         profile: t!.profile!,
+        targets: targetLabels(t!.profile!, t!.covers, (id) => segs.get(id)?.symbol?.split(/[.›]/).pop()?.trim()),
         smells: t!.smells ?? [],
         parts: Object.fromEntries(profileParts(t!.profile!).map((p) => [p.key, p])),
       }));

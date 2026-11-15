@@ -1,4 +1,5 @@
 import { ExistingTest, RelatedReason, RelatedTests } from './api';
+import { httpCover, httpTitle } from './http-tests';
 
 /** Why an existing test file was loaded, in words (tooltip). */
 export function reasonLabel(reason: RelatedReason): string {
@@ -47,17 +48,22 @@ export interface ExistingChip {
   name: string;
   where: string;
   title: string;
+  /** HTTP-Tests: it reaches the function over a real HTTP request */
+  http: boolean;
 }
 
 export function existingChip(test: ExistingTest, segmentId: string): ExistingChip {
   const file = test.path.substring(test.path.lastIndexOf('/') + 1);
   const direct = test.covers.find((c) => c.segmentId === segmentId)?.direct ?? false;
+  const http = httpCover(test.covers, segmentId);
   return {
     id: test.id,
     name: test.name,
     where: `${file}:${test.line}`,
     title: `Bestehender Test, nicht im PR: ${test.path}:${test.line}`
       + ` · ${direct ? 'ruft die Funktion direkt auf' : 'erreicht sie über anderen geänderten Code'}`
+      + (http ? ` · ${httpTitle(http)}` : '')
       + ` · geladen wegen: ${reasonLabel(test.reason)}`,
+    http: !!http,
   };
 }

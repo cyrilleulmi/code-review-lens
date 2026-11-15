@@ -45,7 +45,7 @@ Mögliche zukünftige Funktionen, grob nach Nutzen geordnet. Verbesserungen am B
 | F-12 | **Architektur-Regeln prüfen** | Regeln wie «Domäne importiert keinen Adapter» oder «Controller ruft kein Repository direkt»; Verstösse als eigene Kategorie. Besonders wertvoll im Repository-Modus. | ★★★ | M |
 | F-13 | **Unveränderte Zwischenstationen** | Bei A → X → B mit unverändertem X: X als graue «Durchreiche» im Flow zeigen, damit Flüsse nicht zerfallen (Annahme B3). Braucht Quelltexte auch ungeänderter Dateien (z. B. aus dem Archiv, siehe V-42). | ★★ | M |
 | F-14 | **Echter Parser** | TypeScript-Compiler-API in einem Node-Sidecar oder tree-sitter (JNI/WASM), wo die Heuristik an Grenzen stösst (B1). | ★★ | L |
-| F-15 | **Laufzeit-Coverage** | `lcov.info` / JaCoCo-XML aus der CI einlesen und pro Zeile «von Tests ausgeführt» zeigen; HTTP-Aufrufe in Tests (`given().put("/api/…")`) über die REST-Pfade mit Endpunkten verbinden. | ★★ | M |
+| F-15 | **Laufzeit-Coverage** | `lcov.info` / JaCoCo-XML aus der CI einlesen und pro Zeile «von Tests ausgeführt» zeigen. (Umgesetzt: HTTP-Aufrufe in Tests wie `given().put("/api/…")` werden statisch über die REST-Pfade mit den Endpunkten verbunden, HTTP-Tests, FR-ANA-26.) | ★★ | M |
 | F-16 | **REST-Verbindung erweitern** | URLs aus Konstanten und Environment-Dateien auflösen, GraphQL-Operationen, WebSockets. | ★★ | M |
 | F-17 | **Weitere Sprachen** | Python (Funktionen, pytest), Rust, PHP, Ruby: Symbole, Testfälle, Aufrufe. | ★★ | M pro Sprache |
 

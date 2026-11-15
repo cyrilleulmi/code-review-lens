@@ -180,6 +180,14 @@ public final class TestProfiles {
         return inputs(t.body(), t.bodyCode(), targets, false);
     }
 
+    /**
+     * The whole argument lists of the HTTP requests ("inputCalls") in a piece of code, one per line - e.g. a same-file
+     * helper that sends a test's request (HTTP-Tests, {@link HttpTests}). visible and code are aligned (see TestText).
+     */
+    public String requestInputs(String visible, String code) {
+        return inputs(visible, code, List.of(), false);
+    }
+
     private String inputs(String body, String code, List<String> targets, boolean collapse) {
         List<Pattern> calls = new ArrayList<>(rules.inputCalls());
         for (String t : targets) {

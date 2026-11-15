@@ -456,4 +456,15 @@
   fill: var(--fg-muted);
   font: 500 9px var(--font-ui);
   cursor: help;
+
+  /* REST edge checked from both sides (HTTP-Tests) */
+  &.both {
+    fill: var(--run-tested);
+  }
+}
+
+.both-mark {
+  color: var(--run-tested);
+  font-size: 10px;
+  font-weight: 600;
 }

@@ -15,6 +15,7 @@ import { CodeBlock, flashLine } from './code-block';
 import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
+import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
 import { ReviewStore } from './review.store';
 
 interface Node {
@@ -84,6 +85,9 @@ export class FlowView {
   /** Mock-Grenzen: what the tests really execute, per step (segment id) and per edge ("from>to"). */
   protected readonly runs = computed(() => flowRuns(this.store.flowCoverage().get(this.flow().id)));
   protected readonly hasRuns = computed(() => this.runs().steps.size > 0);
+  /** A REST edge of this flow is checked from both sides (HTTP-Tests): the legend explains the label. */
+  protected readonly hasBothSides = computed(() => [...this.runs().edges.values()].some(bothSides));
+  protected readonly bothSidesLabel = BOTH_SIDES_LABEL;
   protected readonly stepLabels = STEP_LABELS;
   protected readonly edgeLabels = EDGE_LABELS;
   protected readonly runLegend: StepRunStatus[] = ['tested', 'mocked', 'none'];
@@ -156,8 +160,12 @@ export class FlowView {
           : `M ${x1} ${y1} C ${x1 + COL_GAP / 2} ${y1}, ${x2 - COL_GAP / 2} ${y2}, ${x2 - 4} ${y2}`;
         const http = e.kind === 'http';
         const run = this.runs().edges.get(e.from + '>' + e.to);
-        const title = (http ? 'HTTP ' + e.via : e.via) + (run ? '\n' + edgeTitle(run, this.store.testName()) : '');
-        return { d, from: e.from, to: e.to, back, http, via: e.via, c, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 4, run: run?.status ?? null, title };
+        const contract = http ? contractLines(run, e.via, this.store.testName()) : [];
+        const title = [http ? 'HTTP ' + e.via : e.via, ...(run ? [edgeTitle(run, this.store.testName())] : []), ...contract].join('\n');
+        return {
+          d, from: e.from, to: e.to, back, http, via: e.via, c, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 4, run: run?.status ?? null,
+          both: http && bothSides(run), title,
+        };
       });
     const width = Math.max(...nodes.map((n) => n.x + NODE_W), 0) + 48;
     const height = Math.max(...nodes.map((n) => n.y + NODE_H), 0) + 4;

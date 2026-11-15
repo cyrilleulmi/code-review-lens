@@ -8,6 +8,7 @@ import { ruleChipText, ruleDetail, unmetByLine } from './rule-checks';
 import { assertionDrop, bendsExpectations, describeChange, newlyDisabled } from './expectations';
 import { highlightLines } from './highlight';
 import { mockBadgeTitle } from './mock-boundaries';
+import { HTTP_TAG, httpTitle } from './http-tests';
 import { Icon, SymbolBadge } from './icon';
 import { areaColor, areaLabel, areaOfSegment, langColor, langLabel } from './look';
 import { ReviewStore } from './review.store';
@@ -134,13 +135,18 @@ export class CodeBlock {
     });
   });
 
-  /** For test cases: the changed code they reach. */
+  protected readonly httpTag = HTTP_TAG;
+
+  /** For test cases: the changed code they reach (HTTP-Tests: a reach over a real request is tagged). */
   protected readonly covers = computed(() => {
     const t = this.store.tests().get(this.segment().id);
     const segs = this.store.segments();
     return (t?.covers ?? [])
       .filter((c) => segs.has(c.segmentId))
-      .map((c) => ({ id: c.segmentId, name: shortName(segs.get(c.segmentId)!), direct: c.direct, mocked: !!c.mocked }));
+      .map((c) => ({
+        id: c.segmentId, name: shortName(segs.get(c.segmentId)!), direct: c.direct, mocked: !!c.mocked,
+        http: c.http && !c.mocked ? httpTitle(c) : null,
+      }));
   });
 
   /** Testable changed function: is it reached by a changed test (static)? null for anything else. */

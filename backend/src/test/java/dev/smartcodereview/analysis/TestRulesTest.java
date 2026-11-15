@@ -304,7 +304,7 @@ class TestRulesTest {
     }
 
     @Test
-    void existingTestsOverHttpCountEvenWithoutCallGraphLink() throws Exception {
+    void existingTestsOverHttpReachTheEndpoint() throws Exception {
         String existingPath = "backend/src/test/java/app/api/PlayerResourceTest.java";
         String existing = """
                 package app.api;
@@ -328,32 +328,17 @@ class TestRulesTest {
         Analysis a = new Analyzer(defaultRules()).analyze(snapshot, Map.of(RESOURCE_PATH, RESOURCE), null, Map.of(), related,
                 Map.of(existingPath, existing));
         assertEquals(List.of("PlayerResourceTest › forbidsAPlayer"), a.existingTests().stream().map(ExistingTest::name).toList(),
-                "kept for its request to a changed endpoint; the other one reaches nothing changed");
-        assertTrue(a.existingTests().getFirst().covers().isEmpty());
+                "its request reaches a changed endpoint; the other one reaches nothing changed");
+        var covers = a.existingTests().getFirst().covers();
+        assertEquals(1, covers.size());
+        assertTrue(covers.getFirst().http() && covers.getFirst().direct(), "reached directly over HTTP");
+        assertEquals("DELETE /api/players/{}/jersey-number", covers.getFirst().endpoint());
         assertEquals(List.of("e1"), check(a, "endpoint-http", "PlayerResource.clearJerseyNumber").metBy());
         assertEquals(List.of("e1"), check(a, "auth-denied", "PlayerResource.clearJerseyNumber").metBy());
         assertFalse(check(a, "endpoint-http", "PlayerResource.update").met());
     }
 
-    @Test
-    void requestsInTestCode() throws Exception {
-        TestRules rules = new TestRules(defaultRules());
-        assertEquals(List.of("DELETE /api/players/{}/jersey-number"),
-                labels(rules.requests("mockMvc.perform(delete(\"/api/players/{id}/jersey-number\", id))")));
-        assertEquals(List.of("PUT /api/players/{}"),
-                labels(rules.requests("webTestClient.put().uri(\"/api/players/\" + id).exchange()")));
-        assertEquals(List.of("DELETE /api/x/{}"), labels(rules.requests("cy.request('DELETE', `/api/x/${id}`)")));
-        assertEquals(List.of("POST /api/x"), labels(rules.requests("await fetch('/api/x', { method: 'POST', body })")));
-        assertEquals(List.of("PATCH /api/x"), labels(rules.requests("request(app).patch('/api/x').send({})")));
-        assertEquals(List.of("DELETE /x/1"), labels(rules.requests("req := httptest.NewRequest(http.MethodDelete, \"/x/1\", nil)")));
-        assertTrue(rules.requests("map.put(\"key\", value); httpMock.expectOne('/api/x')").isEmpty(), "no path, no request");
-    }
-
     // ------------------------------------------------------------------ helpers
-
-    private static List<String> labels(List<Http.Call> calls) {
-        return calls.stream().map(c -> c.method() + " " + c.path()).toList();
-    }
 
     private static RuleCheck check(Analysis a, String ruleId, String symbol) {
         RuleCheck c = find(a, ruleId, symbol);

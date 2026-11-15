@@ -148,6 +148,13 @@ public final class CaseChecks {
         }
     }
 
+    /** Adds the integers in a piece of test code (see {@link #numbers}, e.g. the request of a helper) to a test's numbers. */
+    public static void addNumbers(Evidence e, String text) {
+        if (text != null && !text.isBlank()) {
+            e.numbers().addAll(numbers(text));
+        }
+    }
+
     /** An integer as written in the code, also inside quotes ('150', "-3"); null for anything else. */
     static Long number(String value) {
         if (value == null) {

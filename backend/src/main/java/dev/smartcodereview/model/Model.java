@@ -219,8 +219,9 @@ public final class Model {
     }
 
     /**
-     * A component a test is about. how: "name" (naming convention, e.g. PlayerResourceTest -> PlayerResource)
-     * or "call" (the test calls changed code in it). path is null when no file of the PR matches.
+     * A component a test is about. how: "name" (naming convention, e.g. PlayerResourceTest -> PlayerResource),
+     * "call" (the test calls changed code in it) or "http" (the test sends an HTTP request to a changed endpoint in it).
+     * path is null when no file of the PR matches.
      */
     @RegisterForReflection
     public record TestSubject(String name, String path, boolean inPr, String how) {
@@ -231,9 +232,16 @@ public final class Model {
      * the changed segment `via`. line: call site in the test (new-file line) that leads there. mocked: the segment
      * belongs to a collaborator the test replaces (TestProfile.mocks) - the test reaches only the mock, not this code,
      * and the walk through the call graph stops there (Mock-Grenze); false in analyses of older versions.
+     * http: the way there starts with a real HTTP request of the test (HTTP-Tests): directly the endpoint the request
+     * hits, indirectly what that endpoint calls; false in analyses of older versions. endpoint: for the endpoint reached
+     * directly over HTTP, its method and path ("PUT /api/players/{}"), else null.
      */
     @RegisterForReflection
-    public record TestCoverage(String segmentId, boolean direct, String via, Integer line, boolean mocked) {
+    public record TestCoverage(String segmentId, boolean direct, String via, Integer line, boolean mocked, boolean http,
+                               String endpoint) {
+        public TestCoverage(String segmentId, boolean direct, String via, Integer line, boolean mocked) {
+            this(segmentId, direct, via, line, mocked, false, null);
+        }
     }
 
     /**
@@ -375,8 +383,7 @@ public final class Model {
      * A test case of an existing, unchanged test file (RelatedTests) that reaches changed code. Not a segment: nothing
      * to review or mark. id: "e1", "e2", … (referenced by CodeCoverage.existingTests). line: start line in the file at
      * the PR head. reason: why its file was loaded (RelatedTestFile.reason). covers: the changed code it reaches, as for
-     * changed tests (direct, or indirect via other changed code; line = call site in the test); empty for a test that
-     * only sends an HTTP request to a changed endpoint (kept for the Erwartungs-Regeln, see RuleCheck). profile:
+     * changed tests (direct, or indirect via other changed code, also over HTTP; line = call site in the test). profile:
      * Test-Steckbrief.
      */
     @RegisterForReflection
@@ -503,10 +510,17 @@ public final class Model {
      * How the tests cover one connection of a flow. status: "tested" (a test reaches both ends really through this
      * call, i.e. crosses it), "separate" (both ends are tested really, but no single test crosses it - typical for the
      * REST hop between frontend and backend, http edges are never crossed), "partial" (only one end is tested really),
-     * "none". tests: the tests that cross it.
+     * "none". tests: the tests that cross it. For a REST edge (kind http) both sides of the contract: clientTests = tests
+     * that really reach the calling end and expect a request fitting the endpoint (HttpTestingController.expectOne,
+     * cy.intercept, …), serverTests = tests that send an HTTP request to the endpoint (HTTP-Tests); empty for call edges
+     * and in analyses of older versions.
      */
     @RegisterForReflection
-    public record EdgeCoverage(String from, String to, String status, List<String> tests) {
+    public record EdgeCoverage(String from, String to, String status, List<String> tests, List<String> clientTests,
+                               List<String> serverTests) {
+        public EdgeCoverage(String from, String to, String status, List<String> tests) {
+            this(from, to, status, tests, List.of(), List.of());
+        }
     }
 
     /** Mock-Grenzen of a flow: per step and per edge (in the order of Flow.steps / Flow.edges) what the tests execute. */
@@ -522,7 +536,7 @@ public final class Model {
      * code: that line, trimmed; trigger: what triggered it (the matched text, or the endpoint as "DELETE /api/x/{}").
      * met: a test shows what the rule expects; metBy: those tests (segment ids of changed tests, "e1" … of existing
      * ones). tests: the tests that were considered - changed and existing tests that reach the segment for real (not
-     * only a mock of it), for an endpoint also those that send an HTTP request to it (with a real HTTP backend). hint:
+     * only a mock of it), also over HTTP (an endpoint reached by a request of the test, HTTP-Tests). hint:
      * German text for the missing test (from the rule).
      */
     @RegisterForReflection

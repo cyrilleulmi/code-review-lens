@@ -265,7 +265,8 @@ export interface TestSubject {
   name: string;
   path: string | null;
   inPr: boolean;
-  how: 'name' | 'call';
+  /** name: naming convention; call: the test calls changed code in it; http: it sends an HTTP request to a changed endpoint in it */
+  how: 'name' | 'call' | 'http';
 }
 
 export interface TestCoverage {
@@ -275,6 +276,10 @@ export interface TestCoverage {
   line: number | null;
   /** only a mock of it is reached (its collaborator is mocked in the test); the walk stops there (absent in older analyses) */
   mocked?: boolean;
+  /** HTTP-Tests: the way starts with a real HTTP request of the test (absent in older analyses) */
+  http?: boolean;
+  /** for the endpoint reached directly over HTTP: its method and path («PUT /api/players/{}»), else null */
+  endpoint?: string | null;
 }
 
 export interface TestInfo {
@@ -547,6 +552,10 @@ export interface EdgeCoverage {
   status: EdgeRunStatus;
   /** tests that cross the call */
   tests: string[];
+  /** REST edge: tests that reach the calling end and expect a request fitting the endpoint (absent in older analyses) */
+  clientTests?: string[];
+  /** REST edge: tests that send an HTTP request to the endpoint (absent in older analyses) */
+  serverTests?: string[];
 }
 
 /** Mock-Grenzen of a flow: what the tests really execute, per step and per edge (Model.FlowCoverage). */
