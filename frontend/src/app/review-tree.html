@@ -1,10 +1,10 @@
 <div class="tabs" role="tablist">
-  <button type="button" role="tab" [class.active]="tab() === 'categories'" (click)="setTab('categories')">Kategorien</button>
+  <button type="button" role="tab" [class.active]="tab() === 'categories'" (click)="setTab('categories')">{{ t('Kategorien') }}</button>
   <button type="button" role="tab" [class.active]="tab() === 'flows'" (click)="setTab('flows')">
-    Flows <span class="badge">{{ store.bundle()?.analysis?.flows?.length ?? 0 }}</span>
+    {{ t('Flows') }} <span class="badge">{{ store.bundle()?.analysis?.flows?.length ?? 0 }}</span>
   </button>
   <button type="button" role="tab" [class.active]="tab() === 'files'" (click)="setTab('files')">
-    Dateien <span class="badge">{{ store.bundle()?.files?.length ?? 0 }}</span>
+    {{ t('Dateien') }} <span class="badge">{{ store.bundle()?.files?.length ?? 0 }}</span>
   </button>
   <button type="button" role="tab" [class.active]="tab() === 'commits'" (click)="setTab('commits')">
     Commits <span class="badge">{{ store.commits()?.commits?.length ?? '…' }}</span>
@@ -14,14 +14,14 @@
 @if (store.activeCommit(); as ac) {
   <div class="commit-filter" [title]="ac.message">
     <app-icon name="commit" [size]="13" />
-    <span>Nur Commit <b>{{ ac.sha.substring(0, 7) }}</b> {{ ac.title }}</span>
-    <button type="button" class="mark" (click)="store.setCommitFilter(null)" title="Alle Commits zeigen"><app-icon name="close" [size]="12" /></button>
+    <span>{{ t('Nur Commit') }} <b>{{ ac.sha.substring(0, 7) }}</b> {{ ac.title }}</span>
+    <button type="button" class="mark" (click)="store.setCommitFilter(null)" [title]="t('Alle Commits zeigen')"><app-icon name="close" [size]="12" /></button>
   </div>
 } @else if (store.sinceReviewActive()) {
-  <div class="commit-filter" title="Nur Zeilen, die seit deinem letzten Review neu sind oder sich geändert haben">
+  <div class="commit-filter" [title]="t('Nur Zeilen, die seit deinem letzten Review neu sind oder sich geändert haben')">
     <app-icon name="refresh" [size]="13" />
-    <span>Nur <b>neu seit Review</b> {{ store.reloadInfo()?.fromHeadSha?.substring(0, 7) }}</span>
-    <button type="button" class="mark" (click)="store.setCommitFilter(null)" title="Alle Änderungen zeigen"><app-icon name="close" [size]="12" /></button>
+    <span>{{ t('Nur') }} <b>{{ t('neu seit Review') }}</b> {{ store.reloadInfo()?.fromHeadSha?.substring(0, 7) }}</span>
+    <button type="button" class="mark" (click)="store.setCommitFilter(null)" [title]="t('Alle Änderungen zeigen')"><app-icon name="close" [size]="12" /></button>
   </div>
 }
 
@@ -34,14 +34,14 @@
     <div class="row overview" [class.selected]="store.selection().kind === 'overview'" (click)="store.select({ kind: 'overview' })">
       <span class="chev"></span>
       <app-icon name="home" [size]="14" />
-      <span class="label">Übersicht</span>
+      <span class="label">{{ t('Übersicht') }}</span>
     </div>
     @if (store.coverage().size && !store.testsCategory()) {
       <div class="row overview" [class.selected]="store.selection().kind === 'coverage'" (click)="store.openCoverage()"
-           title="Welche geänderten Funktionen ein geänderter Test erreicht (statisch ermittelt)">
+           [title]="t('Welche geänderten Funktionen ein geänderter Test erreicht (statisch ermittelt)')">
         <span class="chev"></span>
         <app-icon name="test" [size]="14" />
-        <span class="label">Abdeckung</span>
+        <span class="label">{{ t('Abdeckung') }}</span>
       </div>
     }
   }
@@ -64,7 +64,7 @@
         <span class="hint">{{ n.hint }}</span>
       }
       @if (n.multi) {
-        <span class="multi" [title]="n.multi + (n.multi === 1 ? ' Block ist' : ' Blöcke sind') + ' mehreren Orten zugewiesen (je ein Ok nötig)'">
+        <span class="multi" [title]="t(n.multi === 1 ? '{n} Block ist mehreren Orten zugewiesen (je ein Ok nötig)' : '{n} Blöcke sind mehreren Orten zugewiesen (je ein Ok nötig)', { n: n.multi })">
           <app-icon name="layers" [size]="11" /> {{ n.multi }}</span>
       }
       <span class="spacer"></span>
@@ -75,11 +75,11 @@
           <span class="cnt">{{ p.ok }}/{{ p.total }}</span>
         }
         @if (tab() === 'categories' && n.depth === 0) {
-          <button type="button" class="mark" (click)="switchOff(n, $event)" title="Kategorie ausschalten (in der Übersicht wieder einschalten)">
+          <button type="button" class="mark" (click)="switchOff(n, $event)" [title]="t('Kategorie ausschalten (in der Übersicht wieder einschalten)')">
             <app-icon name="eyeOff" [size]="12" />
           </button>
         }
-        <button type="button" class="mark" (click)="mark(n, $event)" [title]="p.ok === p.total ? 'Markierung entfernen' : 'Alles darin als ok markieren'">
+        <button type="button" class="mark" (click)="mark(n, $event)" [title]="p.ok === p.total ? t('Markierung entfernen') : t('Alles darin als ok markieren')">
           <app-icon name="check" [size]="12" />
         </button>
       }
@@ -87,10 +87,10 @@
   }
 </div>
 @if (store.commitFilter() && rows().length === 0) {
-  <p class="off-note">Dieser Commit hat hier keine Änderungen.</p>
+  <p class="off-note">{{ t('Dieser Commit hat hier keine Änderungen.') }}</p>
 }
 @if (tab() === 'categories' && store.disabledCategories().size) {
-  <p class="off-note">{{ store.disabledCategories().size }} {{ store.disabledCategories().size === 1 ? 'Kategorie' : 'Kategorien' }} ausgeschaltet –
-    <a href="javascript:void 0" (click)="store.select({ kind: 'overview' })">in der Übersicht einschalten</a></p>
+  <p class="off-note">{{ t(store.disabledCategories().size === 1 ? '{n} Kategorie ausgeschaltet' : '{n} Kategorien ausgeschaltet', { n: store.disabledCategories().size }) }} –
+    <a href="javascript:void 0" (click)="store.select({ kind: 'overview' })">{{ t('in der Übersicht einschalten') }}</a></p>
 }
 }

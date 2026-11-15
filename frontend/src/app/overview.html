@@ -5,7 +5,7 @@
     <app-icon [name]="p.provider" [size]="14" />
     <span class="repo">{{ ownerLabel(p.owner) }}/{{ p.repo }}</span>
     @if (store.isRepo()) {
-      <span class="tag">Ganzes Repository</span>
+      <span class="tag">{{ t('Ganzes Repository') }}</span>
     } @else {
       <span class="num">{{ store.provider().sigil }}{{ p.number }}</span>
     }
@@ -17,67 +17,68 @@
   <div class="sub">
     @if (store.isRepo()) {
       <span><app-icon name="branch" [size]="13" /> {{ p.headRef }} @ {{ p.headSha.substring(0, 7) }}</span>
-      <span>{{ p.additions }} Zeilen</span>
-      <span>{{ p.changedFiles }} Dateien</span>
+      <span>{{ t('{n} Zeilen', { n: p.additions }) }}</span>
+      <span>{{ t('{n} Dateien', { n: p.changedFiles }) }}</span>
     } @else {
       <span><app-icon name="branch" [size]="13" /> {{ p.headRef }} → {{ p.baseRef }}</span>
-      <span>von <b>{{ p.author }}</b></span>
+      <span>{{ t('von') }} <b>{{ p.author }}</b></span>
       <span class="add">+{{ p.additions }}</span><span class="del">−{{ p.deletions }}</span>
-      <span>{{ p.changedFiles }} Dateien</span>
-      <span>{{ inlineCount() }} Inline-Kommentare</span>
+      <span>{{ t('{n} Dateien', { n: p.changedFiles }) }}</span>
+      <span>{{ t('{n} Inline-Kommentare', { n: inlineCount() }) }}</span>
       <button type="button" class="btn small" (click)="store.openRepository()"
-              title="Alle Dateien des Default-Branches wie einen Pull Request analysieren">
-        <app-icon name="folder" [size]="13" /> Ganzes Repository analysieren</button>
+              [title]="t('Alle Dateien des Default-Branches wie einen Pull Request analysieren')">
+        <app-icon name="folder" [size]="13" /> {{ t('Ganzes Repository analysieren') }}</button>
     }
   </div>
   <div class="total">
     <div class="bar"><div class="fill" [style.width.%]="percent(total)"></div></div>
-    <span><b>{{ percent(total) }}%</b> · {{ total.ok }} von {{ total.total }} {{ store.isRepo() ? 'Zeilen' : 'geänderten Zeilen' }} als ok markiert</span>
+    <span><b>{{ percent(total) }}%</b> · {{ t(store.isRepo() ? '{ok} von {total} Zeilen als ok markiert' : '{ok} von {total} geänderten Zeilen als ok markiert', { ok: total.ok, total: total.total }) }}</span>
     @if (multiPlaced()) {
-      <span class="multi" title="Diese Blöcke erscheinen in mehreren Kategorien oder Flows und brauchen an jedem Ort ein eigenes Ok">
-        <app-icon name="layers" [size]="12" /> {{ multiPlaced() }} Blöcke an mehreren Orten</span>
+      <span class="multi" [title]="t('Diese Blöcke erscheinen in mehreren Kategorien oder Flows und brauchen an jedem Ort ein eigenes Ok')">
+        <app-icon name="layers" [size]="12" /> {{ t(multiPlaced() === 1 ? '{n} Block an mehreren Orten' : '{n} Blöcke an mehreren Orten', { n: multiPlaced() }) }}
+</span>
     }
   </div>
 </div>
 
-<h2>Vorgeschlagene Review-Reihenfolge</h2>
+<h2>{{ t('Vorgeschlagene Review-Reihenfolge') }}</h2>
 <div class="cats">
   @for (c of categories(); track c.id; let i = $index) {
     <button type="button" class="cat" [class]="'cat c-' + c.id" (click)="openCategory(c.id)"
-            [title]="[c.builds ? 'Aufbau: ' + c.builds : '', c.divides ? 'Unterteilung: ' + c.divides : ''].filter(x => x).join('\n\n')">
+            [title]="c.tooltip">
       <span class="idx">{{ i + 1 }}</span>
       <app-icon [name]="c.icon" [size]="20" />
       <span class="body">
-        <span class="label">{{ c.label }}</span>
-        <span class="desc">{{ c.description }}</span>
+        <span class="label">{{ serverText(c.label) }}</span>
+        <span class="desc">{{ serverText(c.description) }}</span>
         <span class="stats">{{ c.stats }}</span>
         @if (c.warning) {
-          <span class="warning" title="Bestehende Tests erwarten jetzt etwas anderes oder weniger, oder sind ausgeschaltet (musterbasiert erkannt) – Details in der Spezifikation der Tests">{{ c.warning }}</span>
+          <span class="warning" [title]="t('Bestehende Tests erwarten jetzt etwas anderes oder weniger, oder sind ausgeschaltet (musterbasiert erkannt) – Details in der Spezifikation der Tests')">{{ c.warning }}</span>
         }
         @if (c.smells) {
-          <span class="warning" title="Geänderte Tests mit Hinweisen, dass sie weniger wert sind, als sie aussehen (keine oder nur schwache Assertions, fokussiert, sleep, mockt die getestete Einheit, neu deaktiviert; musterbasiert erkannt) – Details in der Testübersicht, Spalte «Smells»">{{ c.smells }}</span>
+          <span class="warning" [title]="t('Geänderte Tests mit Hinweisen, dass sie weniger wert sind, als sie aussehen (keine oder nur schwache Assertions, fokussiert, sleep, mockt die getestete Einheit, neu deaktiviert; musterbasiert erkannt) – Details in der Testübersicht, Spalte «Smells»')">{{ c.smells }}</span>
         }
         @if (c.setup) {
-          <span class="warning" title="Geänderte Setup-Blöcke, Testdaten oder Testhilfen wirken auf Tests, die der PR nicht ändert – sie prüfen jetzt vielleicht etwas anderes (statisch erkannt) – Details in der Spezifikation der Tests">{{ c.setup }}</span>
+          <span class="warning" [title]="t('Geänderte Setup-Blöcke, Testdaten oder Testhilfen wirken auf Tests, die der PR nicht ändert – sie prüfen jetzt vielleicht etwas anderes (statisch erkannt) – Details in der Spezifikation der Tests')">{{ c.setup }}</span>
         }
         @if (c.rules) {
-          <span class="warning" title="Für diese Änderungen erwarten die Regeln einen Test einer bestimmten Form (z. B. verweigerter Zugriff, Test über HTTP), der fehlt – Details unter «Erwartete Tests (Regeln)»">{{ c.rules }}</span>
+          <span class="warning" [title]="t('Für diese Änderungen erwarten die Regeln einen Test einer bestimmten Form (z. B. verweigerter Zugriff, Test über HTTP), der fehlt – Details unter «Erwartete Tests (Regeln)»')">{{ c.rules }}</span>
         }
       </span>
       <span class="ring" [style.--p]="percent(c.progress)">
         <span>{{ percent(c.progress) }}%</span>
       </span>
-      <span class="switch on" role="switch" aria-checked="true" tabindex="0" title="Kategorie ausschalten (ausgeblendet, braucht kein Ok)"
+      <span class="switch on" role="switch" aria-checked="true" tabindex="0" [title]="t('Kategorie ausschalten (ausgeblendet, braucht kein Ok)')"
             (click)="toggle(c.id, $event)" (keydown.enter)="toggle(c.id, $event)"><span></span></span>
     </button>
   }
 </div>
 @if (disabled().length) {
   <div class="off-list">
-    <span class="lbl">Ausgeschaltet:</span>
+    <span class="lbl">{{ t('Ausgeschaltet:') }}</span>
     @for (c of disabled(); track c.id) {
-      <button type="button" class="off-cat" (click)="toggle(c.id, $event)" title="Wieder einschalten">
-        <app-icon [name]="c.icon" [size]="13" /> {{ c.label }} <span class="switch"><span></span></span>
+      <button type="button" class="off-cat" (click)="toggle(c.id, $event)" [title]="t('Wieder einschalten')">
+        <app-icon [name]="c.icon" [size]="13" /> {{ serverText(c.label) }} <span class="switch"><span></span></span>
       </button>
     }
   </div>
@@ -85,13 +86,13 @@
 
 @if (coverage(); as cv) {
   <button type="button" class="coverage" (click)="store.openCoverage()"
-          title="Welche geänderten Funktionen ein Test erreicht (statisch ermittelt: Aufrufe aus geänderten und nachgeladenen bestehenden Tests)">
+          [title]="t('Welche geänderten Funktionen ein Test erreicht (statisch ermittelt: Aufrufe aus geänderten und nachgeladenen bestehenden Tests)')">
     <app-icon name="test" [size]="16" class="cov-icon" />
-    <span class="label">Abdeckung des geänderten Codes</span>
-    <span class="desc">{{ cv.direct }} von {{ cv.total }} geänderten {{ cv.total === 1 ? 'Funktion' : 'Funktionen' }} direkt getestet
-      · {{ cv.indirect }} nur indirekt
-      @if (cv.existing > 0) { · {{ cv.existing }} nur durch bestehende Tests }
-      · <b [class.warn]="cv.none > 0">{{ cv.none }} ohne Test</b>
+    <span class="label">{{ t('Abdeckung des geänderten Codes') }}</span>
+    <span class="desc">{{ t(cv.total === 1 ? '{n} von {total} geänderten Funktion direkt getestet' : '{n} von {total} geänderten Funktionen direkt getestet', { n: cv.direct, total: cv.total }) }}
+      · {{ t('{n} nur indirekt', { n: cv.indirect }) }}
+      @if (cv.existing > 0) { · {{ t('{n} nur durch bestehende Tests', { n: cv.existing }) }} }
+      · <b [class.warn]="cv.none > 0">{{ t('{n} ohne Test', { n: cv.none }) }}</b>
       @if (cv.rules) { · <b class="warn">{{ cv.rules }}</b> }</span>
     <app-icon name="chevronRight" [size]="12" class="go" />
   </button>
@@ -99,40 +100,40 @@
 
 <div class="arch">
   @if (architecture()?.style === 'hexagonal') {
-    <span class="arch-badge" [title]="'Gefunden: ' + architecture()!.evidence.join(', ')"><app-icon name="hexagon" [size]="13" /> Ports &amp; Adapters erkannt</span>
-    <span class="muted">Kategorien Domäne, Use Cases, Application Layer und Adapter sind aktiv.</span>
+    <span class="arch-badge" [title]="t('Gefunden: {list}', { list: architecture()!.evidence.join(', ') })"><app-icon name="hexagon" [size]="13" /> {{ t('Ports & Adapters erkannt') }}</span>
+    <span class="muted">{{ t('Kategorien Domäne, Use Cases, Application Layer und Adapter sind aktiv.') }}</span>
   } @else if (architecture()?.style === 'layered') {
-    <span class="arch-badge" [title]="'Gefunden: ' + architecture()!.evidence.join(', ')"><app-icon name="layers" [size]="13" /> Schichten mit Adaptern erkannt</span>
-    <span class="muted">Domäne, Application und Adapter-Pakete ohne Ports (Onion-Stil): Aufrufe werden direkt verfolgt, nicht über Interfaces.</span>
+    <span class="arch-badge" [title]="t('Gefunden: {list}', { list: architecture()!.evidence.join(', ') })"><app-icon name="layers" [size]="13" /> {{ t('Schichten mit Adaptern erkannt') }}</span>
+    <span class="muted">{{ t('Domäne, Application und Adapter-Pakete ohne Ports (Onion-Stil): Aufrufe werden direkt verfolgt, nicht über Interfaces.') }}</span>
   } @else {
-    <span class="muted"><app-icon name="hexagon" [size]="13" /> Keine Ports-&amp;-Adapters-Struktur erkannt (Ordner wie <code>domain</code> + <code>adapter</code>/<code>port</code>) – keine Architektur-Kategorien.</span>
+    <span class="muted"><app-icon name="hexagon" [size]="13" /> {{ t('Keine Ports-&-Adapters-Struktur erkannt (Ordner wie') }} <code>domain</code> + <code>adapter</code>/<code>port</code>) – {{ t('keine Architektur-Kategorien.') }}</span>
   }
 </div>
 
 <h2>Commits @if (store.commits(); as cs) {<span class="h2-count">{{ cs.commits.length }}</span>}
   @if (commitFindings(); as cf) {
     <span class="h2-findings" [class.warn]="cf.warn"
-          [title]="'Was die Reihenfolge der Commits über die Tests sagt (in ' + cf.commits + (cf.commits === 1 ? ' Commit' : ' Commits') + '): Fix ohne Test, Erwartung nachträglich angepasst, Logik ohne Test – musterbasiert erkannt, Details an den Commits'">{{ cf.text }}</span>
+          [title]="t(cf.commits === 1 ? 'Was die Reihenfolge der Commits über die Tests sagt (in {n} Commit): Fix ohne Test, Erwartung nachträglich angepasst, Logik ohne Test – musterbasiert erkannt, Details an den Commits' : 'Was die Reihenfolge der Commits über die Tests sagt (in {n} Commits): Fix ohne Test, Erwartung nachträglich angepasst, Logik ohne Test – musterbasiert erkannt, Details an den Commits', { n: cf.commits })">{{ cf.text }}</span>
   }</h2>
-<p class="muted commits-hint">Klick auf einen Commit zeigt in allen Ansichten nur seine Änderungen, Häkchen gelten dann nur für seine Zeilen.
+<p class="muted commits-hint">{{ t('Klick auf einen Commit zeigt in allen Ansichten nur seine Änderungen, Häkchen gelten dann nur für seine Zeilen.') }}
   @if (store.isRepo()) {
-    Hier sind es die letzten 50 Commits des Branches; jede Zeile gehört zum Commit, der sie zuletzt geschrieben hat. Ältere Zeilen haben keinen Commit, die Blame-Spalte zeigt sie trotzdem.
+    {{ t('Hier sind es die letzten 50 Commits des Branches; jede Zeile gehört zum Commit, der sie zuletzt geschrieben hat. Ältere Zeilen haben keinen Commit, die Blame-Spalte zeigt sie trotzdem.') }}
   } @else {
-    Zugeordnet wird jede geänderte Zeile dem Commit, der sie zuletzt geschrieben bzw. entfernt hat.
+    {{ t('Zugeordnet wird jede geänderte Zeile dem Commit, der sie zuletzt geschrieben bzw. entfernt hat.') }}
   }</p>
 <div class="commits-box"><app-commit-list /></div>
 
-<h2>Komponenten</h2>
+<h2>{{ t('Komponenten') }}</h2>
 <app-component-diagram />
 
 <div class="cols">
   <section>
-    <h2>Beschreibung</h2>
-    <div class="desc-box">{{ p.body || 'Keine Beschreibung.' }}</div>
+    <h2>{{ t('Beschreibung') }}</h2>
+    <div class="desc-box">{{ p.body || t('Keine Beschreibung.') }}</div>
   </section>
   @if (!store.isRepo()) {
   <section>
-    <h2>Allgemeine Kommentare</h2>
+    <h2>{{ t('Allgemeine Kommentare') }}</h2>
     @for (c of generalComments(); track c.id) {
       <div class="comment">
         @if (c.avatarUrl) {
@@ -144,18 +145,19 @@
         </div>
       </div>
     } @empty {
-      <p class="muted">Noch keine allgemeinen Kommentare.</p>
+      <p class="muted">{{ t('Noch keine allgemeinen Kommentare.') }}</p>
     }
     <div class="editor">
-      <textarea rows="3" placeholder="Allgemeiner Kommentar zum {{ store.provider().noun }} – wird sofort auf {{ store.provider().label }} veröffentlicht" [value]="draft()" (input)="input($event)"></textarea>
-      <button type="button" class="btn primary" [disabled]="sending() || !draft().trim()" (click)="send()">Kommentieren</button>
+      <textarea rows="3" [placeholder]="t('Allgemeiner Kommentar zum {noun} – wird sofort auf {host} veröffentlicht', { noun: store.provider().noun, host: store.provider().label })" [value]="draft()" (input)="input($event)"></textarea>
+      <button type="button" class="btn primary" [disabled]="sending() || !draft().trim()" (click)="send()">{{ t('Kommentieren') }}</button>
     </div>
 
     @if (log().length) {
-      <h2>Letzte Markierungen</h2>
+      <h2>{{ t('Letzte Markierungen') }}</h2>
       <ul class="log">
         @for (l of log(); track $index) {
-          <li><span class="who">{{ l.by }}</span> {{ l.action === 'ok' ? '✓' : '✗' }} {{ l.count }} Zeilen · <code>{{ l.scope }}</code> <span class="muted">{{ time(l.at) }}</span></li>
+          <li><span class="who">{{ l.by }}</span> {{ l.action === 'ok' ? '✓' : '✗' }} {{ t('{n} Zeilen', { n: l.count }) }} ·
+ <code>{{ l.scope }}</code> <span class="muted">{{ time(l.at) }}</span></li>
         }
       </ul>
     }

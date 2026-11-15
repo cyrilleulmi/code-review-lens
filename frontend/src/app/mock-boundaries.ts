@@ -1,16 +1,19 @@
 import { Analysis, EdgeCoverage, EdgeRunStatus, FlowCoverage, MockWarning, Segment, StepCoverage, StepRunStatus } from './api';
+import { t } from './i18n';
 
 /**
  * Mock-Grenzen in words: which steps and calls of a flow the tests really execute, and which tests mock changed code
  * (Analysis.flowCoverage / mockWarnings). Pure helpers for the flow view, the tests view and the code blocks.
  */
 
+/** German, translated with t(). */
 export const STEP_LABELS: Record<StepRunStatus, string> = {
   tested: 'echt getestet',
   mocked: 'nur gemockt',
   none: 'nicht erreicht',
 };
 
+/** German, translated with t(). */
 export const EDGE_LABELS: Record<EdgeRunStatus, string> = {
   tested: 'von einem Test durchlaufen',
   separate: 'nur einzeln getestet',
@@ -29,9 +32,9 @@ export function testNamer(analysis: Analysis | null | undefined): (id: string) =
 /** «a, b und 3 weitere»: the first names, the rest counted. */
 export function nameList(names: string[], max = 3): string {
   if (names.length <= max) {
-    return names.length > 1 ? names.slice(0, -1).join(', ') + ' und ' + names[names.length - 1] : names.join('');
+    return names.length > 1 ? t('{list} und {last}', { list: names.slice(0, -1).join(', '), last: names[names.length - 1] }) : names.join('');
   }
-  return `${names.slice(0, max).join(', ')} und ${names.length - max} weitere`;
+  return t('{list} und {n} weitere', { list: names.slice(0, max).join(', '), n: names.length - max });
 }
 
 /** The coverage of one flow by segment id (steps) and by "from>to" (edges); empty maps when there is none. */
@@ -48,10 +51,12 @@ export function flowRuns(coverage: FlowCoverage | null | undefined): {
 /** Tooltip of a flow step: its status, the tests that run it for real, those that only mock it, and the warnings. */
 export function stepTitle(step: StepCoverage | undefined, name: (id: string) => string, warnings: MockWarning[] = []): string {
   if (!step) return '';
-  const lines = [`Tests: ${STEP_LABELS[step.status]}`];
-  if (step.tests.length) lines.push(`echt ausgeführt von ${nameList(step.tests.map(name))}`);
-  if (step.mockedBy.length) lines.push(`gemockt in ${nameList(step.mockedBy.map(name))}`);
-  for (const w of warnings) lines.push(`⚠ ${w.testName} stubbt ${w.collaborator}.${w.member} – prüft das alte Verhalten`);
+  const lines = [t('Tests: {status}', { status: t(STEP_LABELS[step.status]) })];
+  if (step.tests.length) lines.push(t('echt ausgeführt von {tests}', { tests: nameList(step.tests.map(name)) }));
+  if (step.mockedBy.length) lines.push(t('gemockt in {tests}', { tests: nameList(step.mockedBy.map(name)) }));
+  for (const w of warnings) {
+    lines.push('⚠ ' + t('{test} stubbt {member} – prüft das alte Verhalten', { test: w.testName, member: `${w.collaborator}.${w.member}` }));
+  }
   return lines.join('\n');
 }
 
@@ -60,13 +65,13 @@ export function edgeTitle(edge: EdgeCoverage | undefined, name: (id: string) => 
   if (!edge) return '';
   switch (edge.status) {
     case 'tested':
-      return `${EDGE_LABELS.tested}: ${nameList(edge.tests.map(name))}`;
+      return `${t(EDGE_LABELS.tested)}: ${nameList(edge.tests.map(name))}`;
     case 'separate':
-      return `${EDGE_LABELS.separate}: beide Seiten haben Tests, aber kein Test läuft durch diesen Aufruf`;
+      return `${t(EDGE_LABELS.separate)}: ${t('beide Seiten haben Tests, aber kein Test läuft durch diesen Aufruf')}`;
     case 'partial':
-      return `${EDGE_LABELS.partial}: kein Test läuft durch diesen Aufruf`;
+      return `${t(EDGE_LABELS.partial)}: ${t('kein Test läuft durch diesen Aufruf')}`;
     default:
-      return `${EDGE_LABELS.none}: kein Test erreicht eine der beiden Seiten`;
+      return `${t(EDGE_LABELS.none)}: ${t('kein Test erreicht eine der beiden Seiten')}`;
   }
 }
 
@@ -100,6 +105,6 @@ export function lineOwner(segments: Iterable<Segment>, path: string, line: numbe
 /** Header badge of a test that mocks changed code: the stubbed members in the tooltip. */
 export function mockBadgeTitle(warnings: MockWarning[]): string {
   const members = [...new Set(warnings.map((w) => `${w.collaborator}.${w.member}`))];
-  return `Dieser Test ersetzt geänderten Code durch einen Mock: ${members.join(', ')}`
-    + ' – er prüft das alte Verhalten der Funktion, nicht das neue. Musterbasiert erkannt (Mock-Grenzen).';
+  return t('Dieser Test ersetzt geänderten Code durch einen Mock: {members} – er prüft das alte Verhalten der Funktion, nicht das neue. Musterbasiert erkannt (Mock-Grenzen).',
+    { members: members.join(', ') });
 }

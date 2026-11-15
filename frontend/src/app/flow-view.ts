@@ -18,6 +18,7 @@ import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorI
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
 import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
 import { ReviewStore } from './review.store';
+import { serverText, t } from './i18n';
 
 interface Node {
   step: FlowStep;
@@ -88,6 +89,8 @@ export class FlowView {
   protected readonly hasRuns = computed(() => this.runs().steps.size > 0);
   /** A REST edge of this flow is checked from both sides (HTTP-Tests): the legend explains the label. */
   protected readonly hasBothSides = computed(() => [...this.runs().edges.values()].some(bothSides));
+  protected readonly t = t;
+  protected readonly serverText = serverText;
   protected readonly bothSidesLabel = BOTH_SIDES_LABEL;
   protected readonly stepLabels = STEP_LABELS;
   protected readonly edgeLabels = EDGE_LABELS;
@@ -254,7 +257,7 @@ export class FlowView {
       this.step(1);
     } else {
       this.stepIndex.set(null);
-      this.store.notify('Flow durchgearbeitet');
+      this.store.notify(t('Flow durchgearbeitet'));
     }
   }
 
@@ -281,8 +284,9 @@ export class FlowView {
     const edge = this.flow().edges.find((e) => e.from === parent && e.to === node.step.segmentId);
     const caller = this.store.segments().get(parent);
     const name = caller?.symbol ?? caller?.path ?? parent;
-    const how = edge?.kind === 'http' ? `per HTTP ${edge.via} ` : '';
-    return `${how}aufgerufen von ${this.stepOf()[parent] ?? ''} ${shortName(name)}${edge?.line ? ' · Zeile ' + edge.line : ''}`;
+    const how = edge?.kind === 'http' ? t('per HTTP {via}', { via: edge.via }) + ' ' : '';
+    return how + t('aufgerufen von {step} {name}', { step: this.stepOf()[parent] ?? '', name: shortName(name) })
+      + (edge?.line ? ' · ' + t('Zeile {line}', { line: edge.line }) : '');
   }
 
   protected shortName(name: string | null): string {

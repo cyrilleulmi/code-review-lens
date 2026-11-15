@@ -6,7 +6,11 @@ design decisions are in `docs/` (German): architecture overview `docs/09`, requi
 
 ## Rules
 
-- **Language:** UI texts and docs are German (Swiss spelling: «ss», never «ß»). Code, comments, commit messages: English.
+- **Language:** Docs are German (Swiss spelling: «ss», never «ß»). The UI is German and English: German is the source
+  language, every UI text goes through `t('…')` (`frontend/src/app/i18n.ts`) with its English text in `i18n.en.ts`
+  (British spelling, GitHub/GitLab/IntelliJ terms). Texts the backend sends stay German in files and API and are shown
+  through `serverText()`; add the English for new or changed ones to `i18n.server.en.ts` (`i18n.spec.ts` checks it).
+  Code, comments, commit messages: English.
 - **No AI in the analysis.** Categorisation and flows are pattern-based and deterministic (`backend/.../analysis/`).
   New heuristics go into `default-rules.json` when they can be expressed as rules.
 - **Bump `Analyzer.VERSION`** whenever analysis output changes, so cached `analysis.json` files are recomputed.
@@ -18,8 +22,10 @@ design decisions are in `docs/` (German): architecture overview `docs/09`, requi
   and `backend/src/main/resources/data-dir/AGENTS.md`); extend, don't rename.
 - **Native-friendly backend:** records with `@RegisterForReflection`, Jackson trees for external JSON, new classpath
   resources must be added to `quarkus.native.resources.includes`.
-- **UI look:** IntelliJ New UI dark. Colours only as tokens in `frontend/src/styles.scss` (incl. the palettes `--edge-n` for
-  connections, `--area-*` for layers, `--lang-*` for languages; helpers in `frontend/src/app/look.ts`), never inline hex values.
+- **UI look:** IntelliJ New UI, dark (default) and light (`theme.ts`). Colours only as tokens in `frontend/src/styles.scss`
+  (incl. the palettes `--edge-n` for connections, `--area-*` for layers, `--lang-*` for languages, `--syn-*` for syntax;
+  helpers in `frontend/src/app/look.ts`), never inline hex values; every new token needs a value in both the `:root`
+  (dark) and the `:root[data-theme='light']` block.
 - **No cache resets:** every file the UI loads has a content hash in its name (Angular `outputHashing: all`), except
   `index.html`. Don't add unhashed files referenced by the page (no `public/` assets; inline small ones like the
   favicon). Cache headers live in `application.properties` (`quarkus.http.filter.*`): hashed = immutable,

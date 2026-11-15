@@ -8,7 +8,7 @@
   padding: 16px;
   overflow-x: auto;
   background:
-    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.05) 1px, transparent 0) 0 0 / 16px 16px,
+    radial-gradient(circle at 1px 1px, var(--tint-dots) 1px, transparent 0) 0 0 / 16px 16px,
     var(--bg-panel-2);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -21,13 +21,13 @@
 
 .edges {
   display: block;
-  color: #5b6170;
+  color: var(--diagram-line);
   overflow: visible;
 }
 
 .edge {
   fill: none;
-  stroke: #5b6170;
+  stroke: var(--diagram-line);
   stroke-width: 1.5;
   transition: stroke 0.15s;
 
@@ -50,7 +50,7 @@
   padding: 0 10px 0 8px;
   box-sizing: border-box;
   background: var(--bg-editor);
-  border: 1px solid #43454a;
+  border: 1px solid var(--node-border);
   border-radius: 8px;
   color: var(--fg);
   font: inherit;
@@ -60,7 +60,7 @@
 
   &:hover {
     border-color: var(--accent);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 4px 14px var(--shadow-color);
     transform: translateY(-1px);
   }
 
@@ -273,20 +273,20 @@
 }
 
 .edge.http {
-  stroke: #c793e0;
+  stroke: var(--cat-violet);
   stroke-dasharray: 5 3;
-  color: #c793e0;
+  color: var(--cat-violet);
 }
 
 .http-label {
-  fill: #c793e0;
+  fill: var(--cat-violet);
   font: 600 9px var(--font-ui);
   letter-spacing: 0.04em;
 }
 
 /* layer of a step: coloured stripe and tag (frontend vs. backend layers) */
 .node {
-  border-left: 4px solid var(--area, #43454a);
+  border-left: 4px solid var(--area, var(--node-border));
 
   .file .area {
     color: var(--area);

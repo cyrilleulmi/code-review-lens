@@ -4,6 +4,7 @@ import { compactLine, findingDetail, findingsSummary, openFindings } from './cas
 import { ExistingChip, basisText, basisWarnings, existingChip } from './existing-tests';
 import { HTTP_TAG, httpCover, httpTitle } from './http-tests';
 import { Icon, SymbolBadge } from './icon';
+import { t } from './i18n';
 import { ReviewStore } from './review.store';
 import { SpecLineTarget } from './spec-overview';
 
@@ -30,6 +31,7 @@ interface CoverageRow {
   compact: string[];
 }
 
+/** Labels in German, translated with t(). */
 const GROUPS: { status: CoverageStatus; label: string }[] = [
   { status: 'none', label: 'Ohne Test' },
   { status: 'indirect', label: 'Nur indirekt getestet' },
@@ -52,10 +54,10 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
     <section class="box">
       <header>
         <app-icon name="test" [size]="15" class="head-icon" />
-        <b>Abdeckung des geänderten Codes</b>
-        <span class="hint">statisch ermittelt: Aufrufe aus Tests</span>
+        <b>{{ t('Abdeckung des geänderten Codes') }}</b>
+        <span class="hint">{{ t('statisch ermittelt: Aufrufe aus Tests') }}</span>
         @if (casesSummary(); as cs) {
-          <span class="cases-sum" title="Fehlerfälle, Grenzen und Wirkungen im Code, die kein Test prüft, der die Funktion wirklich erreicht">
+          <span class="cases-sum" [title]="t('Fehlerfälle, Grenzen und Wirkungen im Code, die kein Test prüft, der die Funktion wirklich erreicht')">
             <app-icon name="warning" [size]="12" /> {{ cs }}</span>
         }
       </header>
@@ -66,27 +68,27 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
         }
       </div>
       @if (total() === 0) {
-        <p class="summary">Keine geänderte Funktion, die Tests braucht – geändert sind nur Tests, Quick wins, Styles oder Konfiguration.</p>
+        <p class="summary">{{ t('Keine geänderte Funktion, die Tests braucht – geändert sind nur Tests, Quick wins, Styles oder Konfiguration.') }}</p>
       } @else {
         <p class="summary">
-          <b>{{ count('direct') }}</b> von {{ total() }} geänderten {{ total() === 1 ? 'Funktion' : 'Funktionen' }} direkt getestet
-          · <b>{{ count('indirect') }}</b> nur indirekt · <b>{{ count('existing') }}</b> nur durch bestehende Tests
-          · <b [class.warn]="count('none') > 0">{{ count('none') }}</b> ohne Test
+          {{ t(total() === 1 ? '{n} von {total} geänderten Funktion direkt getestet' : '{n} von {total} geänderten Funktionen direkt getestet', { n: count('direct'), total: total() }) }}
+          · {{ t('{n} nur indirekt', { n: count('indirect') }) }} · {{ t('{n} nur durch bestehende Tests', { n: count('existing') }) }}
+          · <b [class.warn]="count('none') > 0">{{ t('{n} ohne Test', { n: count('none') }) }}</b>
         </p>
         @for (g of groups(); track g.status) {
           @if (g.rows.length) {
             <button type="button" class="group-head" [class]="'group-head s-' + g.status" (click)="toggle(g.status)"
                     [attr.aria-expanded]="isOpen(g.status)">
               <app-icon [name]="isOpen(g.status) ? 'chevronDown' : 'chevronRight'" [size]="12" />
-              {{ g.label }} <span class="n">{{ g.rows.length }}</span>
+              {{ t(g.label) }} <span class="n">{{ g.rows.length }}</span>
               @if (openRows(g.rows); as n) {
-                <span class="open-n" [title]="n + (n === 1 ? ' Funktion' : ' Funktionen') + ' mit offenen Fällen'"><app-icon name="warning" [size]="11" /> {{ n }}</span>
+                <span class="open-n" [title]="t(n === 1 ? '{n} Funktion mit offenen Fällen' : '{n} Funktionen mit offenen Fällen', { n })"><app-icon name="warning" [size]="11" /> {{ n }}</span>
               }
             </button>
             @if (isOpen(g.status)) {
               @for (r of g.rows; track r.segment.id) {
                 <div class="row" [class.done]="r.done" role="button" tabindex="0" (click)="store.reveal(r.segment.id)"
-                     (keydown.enter)="store.reveal(r.segment.id)" [title]="r.segment.path + ' – zum Code springen'">
+                     (keydown.enter)="store.reveal(r.segment.id)" [title]="r.segment.path + ' – ' + t('zum Code springen')">
                   <span class="name">
                     <app-symbol-badge [kind]="r.segment.symbolKind" />
                     <span class="sym">{{ r.segment.symbol }}</span>
@@ -94,20 +96,20 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
                       <app-icon name="check" [size]="12" class="ok" />
                     }
                     @if (r.open) {
-                      <app-icon name="warning" [size]="12" class="open-mark" [title]="r.open + (r.open === 1 ? ' offener Fall' : ' offene Fälle') + ': kein Test prüft das'" />
+                      <app-icon name="warning" [size]="12" class="open-mark" [title]="t(r.open === 1 ? '{n} offener Fall' : '{n} offene Fälle', { n: r.open }) + ': ' + t('kein Test prüft das')" />
                     }
                   </span>
                   <span class="where">{{ fileOf(r.segment.path) }}:{{ range(r.segment) }}</span>
-                  <span class="metric" title="Entscheidungen in der ganzen Funktion: if, case, catch, for, while, &amp;&amp;, ||, ?:">
-                    {{ r.coverage.branches }} {{ r.coverage.branches === 1 ? 'Verzweigung' : 'Verzweigungen' }}</span>
-                  <span class="metric" title="Geänderte Zeilen ohne Leerzeilen, Kommentare und reine Klammern">
-                    {{ r.coverage.changedLines }} geändert</span>
+                  <span class="metric" [title]="t('Entscheidungen in der ganzen Funktion: if, case, catch, for, while, &&, ||, ?:')">
+                    {{ t(r.coverage.branches === 1 ? '{n} Verzweigung' : '{n} Verzweigungen', { n: r.coverage.branches }) }}</span>
+                  <span class="metric" [title]="t('Geänderte Zeilen ohne Leerzeilen, Kommentare und reine Klammern')">
+                    {{ t('{n} geändert', { n: r.coverage.changedLines }) }}</span>
                   <span class="tests">
-                    @for (t of r.tests; track t.id) {
-                      <button type="button" class="test" [class.indirect]="!t.direct" (click)="$event.stopPropagation(); testClick.emit(t.id)"
-                              [title]="(t.direct ? 'Ruft die Funktion direkt auf' : 'Erreicht sie über anderen geänderten Code') + (t.http ? ' · ' + t.http : '') + ' – zum Test springen'">
-                        <app-symbol-badge kind="test" /> <span class="tname">{{ t.name }}</span>
-                        @if (t.http) {
+                    @for (tt of r.tests; track tt.id) {
+                      <button type="button" class="test" [class.indirect]="!tt.direct" (click)="$event.stopPropagation(); testClick.emit(tt.id)"
+                              [title]="t(tt.direct ? 'Ruft die Funktion direkt auf' : 'Erreicht sie über anderen geänderten Code') + (tt.http ? ' · ' + tt.http : '') + ' – ' + t('zum Test springen')">
+                        <app-symbol-badge kind="test" /> <span class="tname">{{ tt.name }}</span>
+                        @if (tt.http) {
                           <span class="http-tag">{{ httpTag }}</span>
                         }
                       </button>
@@ -123,17 +125,17 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
                     @for (m of r.mocked; track m.id) {
                       <button type="button" class="test mocked" [disabled]="!m.changed"
                               (click)="$event.stopPropagation(); m.changed && testClick.emit(m.id)"
-                              title="Erreicht nur einen Mock dieser Funktion – zählt nicht als Test">
+                              [title]="t('Erreicht nur einen Mock dieser Funktion – zählt nicht als Test')">
                         <app-symbol-badge kind="test" /> <span class="tname">{{ m.name }}</span> <span class="mock-tag">Mock</span>
                       </button>
                     }
                     @if (!r.tests.length && !r.existing.length) {
-                      <span class="none">kein Test erreicht sie</span>
+                      <span class="none">{{ t('kein Test erreicht sie') }}</span>
                     }
                   </span>
                   @if (r.findings.length) {
                     <button type="button" class="cases" [class.has-open]="r.open > 0" (click)="toggleCases(r.segment.id, $event)"
-                            [attr.aria-expanded]="casesOpen(r.segment.id)" title="Fälle und Wirkungen im Code gegen das, was die Tests prüfen – Klick: alle zeigen">
+                            [attr.aria-expanded]="casesOpen(r.segment.id)" [title]="t('Fälle und Wirkungen im Code gegen das, was die Tests prüfen – Klick: alle zeigen')">
                       <app-icon [name]="casesOpen(r.segment.id) ? 'chevronDown' : 'chevronRight'" [size]="11" />
                       @if (r.open) {
                         <app-icon name="warning" [size]="11" />
@@ -145,7 +147,7 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
                         <span>{{ c }}</span>
                       }
                       @if (!r.compact.length) {
-                        <span class="all-ok">{{ r.findings.length }} {{ r.findings.length === 1 ? 'Fall' : 'Fälle' }} geprüft</span>
+                        <span class="all-ok">{{ t(r.findings.length === 1 ? '{n} Fall geprüft' : '{n} Fälle geprüft', { n: r.findings.length }) }}</span>
                       }
                     </button>
                     @if (casesOpen(r.segment.id)) {
@@ -238,6 +240,7 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
 })
 export class CoverageOverview {
   protected readonly store = inject(ReviewStore);
+  protected readonly t = t;
   protected readonly httpTag = HTTP_TAG;
   /** A test chip was clicked (test segment id). */
   readonly testClick = output<string>();

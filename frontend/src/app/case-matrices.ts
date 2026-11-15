@@ -1,7 +1,9 @@
 import { CaseColumn, CaseMatrix, CaseMatrixKind, CaseRow } from './api';
+import { t } from './i18n';
 
 /** Fallmatrix: summary, template slots, duplicate notes and covered values (pure helpers of the case-matrix view). */
 
+/** German, translated with t(). */
 export const KIND_LABELS: Record<CaseMatrixKind, string> = { similar: 'ähnliche Tests', parameterized: 'parametrisiert' };
 
 /** A piece of the template: plain code, or a slot ‹n› pointing at column n-1. */
@@ -18,8 +20,9 @@ export function matrixSummary(matrices: CaseMatrix[]): { text: string; warn: str
   const cases = matrices.reduce((n, m) => n + m.rows.length, 0);
   const duplicates = matrices.reduce((n, m) => n + m.rows.filter((r) => r.duplicateOf != null).length, 0);
   const contradictions = matrices.reduce((n, m) => n + m.rows.filter((r) => r.contradicts).length, 0);
-  const text = `${matrices.length} ${matrices.length === 1 ? 'Matrix' : 'Matrizen'} · ${cases} ${cases === 1 ? 'Fall' : 'Fälle'}`;
-  const warn = [duplicates ? `${duplicates} doppelt` : '', contradictions ? `${contradictions} widersprüchlich` : '']
+  const text = t(matrices.length === 1 ? '{n} Matrix' : '{n} Matrizen', { n: matrices.length }) + ' · '
+    + t(cases === 1 ? '{n} Fall' : '{n} Fälle', { n: cases });
+  const warn = [duplicates ? t('{n} doppelt', { n: duplicates }) : '', contradictions ? t('{n} widersprüchlich', { n: contradictions }) : '']
     .filter((s) => s)
     .join(' · ');
   return { text, warn: warn || null };
@@ -65,14 +68,14 @@ export function duplicateNote(m: CaseMatrix, row: CaseRow): string | null {
   if (row.duplicateOf == null) {
     return null;
   }
-  const other = m.rows[row.duplicateOf]?.name ?? `Zeile ${row.duplicateOf + 1}`;
-  return row.contradicts ? `gleiche Eingabe, andere Erwartung als ${other}` : `gleicher Fall wie ${other}`;
+  const other = m.rows[row.duplicateOf]?.name ?? t('Zeile {line}', { line: row.duplicateOf + 1 });
+  return row.contradicts ? t('gleiche Eingabe, andere Erwartung als {other}', { other }) : t('gleicher Fall wie {other}', { other });
 }
 
 /** Tooltip of a row: what clicking does. */
 export function rowTip(row: CaseRow, hasBlock: boolean): string {
-  const where = row.line != null ? ` (Zeile ${row.line})` : '';
+  const where = row.line != null ? ` (${t('Zeile {line}', { line: row.line })})` : '';
   return hasBlock
-    ? `${row.name}${where} – zum Test springen`
-    : `${row.name}${where} – unveränderter Test, in der Dateiansicht zeigen`;
+    ? `${row.name}${where} – ${t('zum Test springen')}`
+    : `${row.name}${where} – ${t('unveränderter Test, in der Dateiansicht zeigen')}`;
 }

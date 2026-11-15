@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component as NgComponent, computed, inject, signal } from '@angular/core';
 import { Component } from './api';
 import { Icon } from './icon';
+import { t } from './i18n';
 import { areaColor } from './look';
 import { ReviewStore } from './review.store';
 
@@ -12,6 +13,7 @@ interface Box {
 }
 
 /** Columns from the outside in: who calls whom, roughly left to right. */
+/** Labels in German, translated with t(). */
 const AREAS: { id: string; label: string }[] = [
   { id: 'test', label: 'Tests' },
   { id: 'frontend', label: 'Frontend' },
@@ -41,26 +43,26 @@ const HEAD = 28;
   imports: [Icon],
   template: `
     <div class="bar">
-      <span class="count">{{ boxes().length }} von {{ all().length }} Komponenten · {{ lines().length }} Verbindungen</span>
+      <span class="count">{{ t('{n} von {total} Komponenten · {edges} Verbindungen', { n: boxes().length, total: all().length, edges: lines().length }) }}</span>
       @if (focusName(); as f) {
-        <span class="focus-info"><app-icon name="focus" [size]="12" /> Fokus: <b>{{ f }}</b> und ihre Abhängigkeiten</span>
-        <button type="button" class="ftool" (click)="focus.set(null)"><app-icon name="close" [size]="12" /> Fokus aufheben</button>
+        <span class="focus-info"><app-icon name="focus" [size]="12" /> {{ t('Fokus:') }} <b>{{ f }}</b> {{ t('und ihre Abhängigkeiten') }}</span>
+        <button type="button" class="ftool" (click)="focus.set(null)"><app-icon name="close" [size]="12" /> {{ t('Fokus aufheben') }}</button>
       }
       <span class="spacer"></span>
       @if (hasTests()) {
         <button type="button" class="ftool" [class.on]="showTests()" (click)="showTests.set(!showTests())"><app-icon name="test" [size]="12" /> Tests</button>
       }
       <button type="button" class="ftool" [class.on]="hideIsolated()" (click)="hideIsolated.set(!hideIsolated())"
-              title="Komponenten ohne Aufrufbeziehung ausblenden"><app-icon name="eyeOff" [size]="12" /> Ohne Verbindung ausblenden</button>
-      <span class="legend"><i class="l-call"></i> Aufruf <i class="l-http"></i> REST/HTTP</span>
+              [title]="t('Komponenten ohne Aufrufbeziehung ausblenden')"><app-icon name="eyeOff" [size]="12" /> {{ t('Ohne Verbindung ausblenden') }}</button>
+      <span class="legend"><i class="l-call"></i> {{ t('Aufruf') }} <i class="l-http"></i> REST/HTTP</span>
     </div>
     @if (boxes().length === 0) {
-      <p class="empty">Keine Komponenten mit Code-Änderungen.</p>
+      <p class="empty">{{ t('Keine Komponenten mit Code-Änderungen.') }}</p>
     } @else {
       <div class="scroll">
         <div class="canvas" [style.width.px]="size().w" [style.height.px]="size().h">
           @for (col of columns(); track col.id) {
-            <div class="col-head" [style.left.px]="col.x" [style.width.px]="w" [style.--area]="areaColor(col.id)">{{ col.label }}</div>
+            <div class="col-head" [style.left.px]="col.x" [style.width.px]="w" [style.--area]="areaColor(col.id)">{{ t(col.label) }}</div>
           }
           <svg [attr.width]="size().w" [attr.height]="size().h" class="edges">
             <defs>
@@ -92,7 +94,7 @@ const HEAD = 28;
                 <span class="cnt">{{ p.ok }}/{{ p.total }}</span>
               }
               <button type="button" class="focus" [class.on]="focus() === b.c.id" (click)="toggleFocus(b.c.id, $event)"
-                      [title]="focus() === b.c.id ? 'Fokus aufheben' : 'Nur diese Komponente und alles, wovon sie abhängt, zeigen'">
+                      [title]="focus() === b.c.id ? t('Fokus aufheben') : t('Nur diese Komponente und alles, wovon sie abhängt, zeigen')">
                 <app-icon name="focus" [size]="12" />
               </button>
             </div>
@@ -109,21 +111,21 @@ const HEAD = 28;
     .focus-info { display: inline-flex; align-items: center; gap: 5px; color: var(--accent-fg); }
     .focus-info b { color: var(--fg); }
     .legend { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-dim); font-size: 11px; margin-left: 6px; }
-    .legend i { display: inline-block; width: 18px; border-top: 2px solid #6f737a; }
-    .legend i.l-http { border-top: 2px dashed #6f737a; }
+    .legend i { display: inline-block; width: 18px; border-top: 2px solid var(--fg-dim); }
+    .legend i.l-http { border-top: 2px dashed var(--fg-dim); }
     .empty { color: var(--fg-muted); padding: 12px; margin: 0; }
     .scroll { overflow: auto; max-height: 560px; }
     .canvas { position: relative; margin: 10px 14px 14px; }
     .col-head { position: absolute; top: 0; height: 20px; color: var(--area); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; border-bottom: 2px solid color-mix(in srgb, var(--area) 50%, transparent); }
-    .edges { position: absolute; inset: 0; overflow: visible; color: #6f737a; }
-    .edge { fill: none; stroke: #5b6170; stroke-width: 1.5; transition: stroke 0.15s, opacity 0.15s; }
+    .edges { position: absolute; inset: 0; overflow: visible; color: var(--fg-dim); }
+    .edge { fill: none; stroke: var(--diagram-line); stroke-width: 1.5; transition: stroke 0.15s, opacity 0.15s; }
     .edge { opacity: 0.75; }
     .edge.http { stroke-dasharray: 5 3; }
     .edge.hot { opacity: 1; stroke-width: 2.6; }
     .edge.dim { opacity: 0.25; }
     .node { position: absolute; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 10px; box-sizing: border-box;
       background: color-mix(in srgb, var(--area) 7%, var(--bg-editor));
-      border: 1px solid #43454a; border-left: 4px solid var(--area); border-radius: 8px; cursor: pointer; transition: border-color 0.15s, opacity 0.15s; }
+      border: 1px solid var(--node-border); border-left: 4px solid var(--area); border-radius: 8px; cursor: pointer; transition: border-color 0.15s, opacity 0.15s; }
     .node:hover { border-color: var(--accent); }
     .node.done { border-color: var(--ok-border); background: var(--ok-head); }
     .node.root { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(53, 116, 240, 0.3); }
@@ -140,6 +142,7 @@ const HEAD = 28;
 })
 export class ComponentDiagram {
   protected readonly store = inject(ReviewStore);
+  protected readonly t = t;
   protected readonly w = W;
   protected readonly h = H;
   protected readonly areaColor = areaColor;
@@ -231,7 +234,7 @@ export class ComponentDiagram {
           d = `M ${x1} ${y1} C ${x1 + 34} ${y1}, ${x1 + 34} ${y2}, ${x1 + 3} ${y2}`;
         }
         const width = 1.3 + Math.min(2.5, Math.log2(e.calls));
-        const title = `${a.c.name} → ${b.c.name}: ${e.calls} ${e.calls === 1 ? 'Aufruf' : 'Aufrufe'}${e.http ? ' (über REST/HTTP)' : ''}`;
+        const title = `${a.c.name} → ${b.c.name}: ${t(e.calls === 1 ? '{n} Aufruf' : '{n} Aufrufe', { n: e.calls })}${e.http ? t(' (über REST/HTTP)') : ''}`;
         // a connection takes the colour of the calling layer: frontend -> backend reads cyan, backend calls orange/...
         return { key: e.from + '>' + e.to, d, http: e.http, from: e.from, to: e.to, width, title, color: areaColor(a.c.area) };
       });

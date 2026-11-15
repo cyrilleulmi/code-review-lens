@@ -94,7 +94,8 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | FR-UI-12 | Das System muss vollständig markierte Blöcke einklappen können. | Toolbar-Knopf, Standard an. | M |
 | FR-UI-13 | Das System muss jeden Zustand verlinkbar machen. | Hash-Routing `#/<provider>/<owner>/<repo>/<n>[/c/<sha>]/<auswahl>`; Neuladen stellt PR, Auswahl und Commit-Filter wieder her. | M |
 | FR-UI-14 | Das System muss Tastaturkürzel für die Tool-Fenster bieten. | Alt+1 PR-Liste, Alt+2 Review-Fenster. | M |
-| FR-UI-15 | Das UI muss dem IntelliJ New UI Dark folgen. | Nur Dark Theme (A8); Farben als Tokens in `styles.scss`. | M |
+| FR-UI-15 | Das UI muss dem IntelliJ New UI folgen, dunkel (Standard) oder hell. | Umschalter (Kontrast-Symbol) in der Toolbar wechselt ohne Neuladen zwischen Dark und Light (A8), Wahl pro Browser gespeichert (`localStorage` `scr.theme`) und schon vor dem ersten Zeichnen angewendet (kein Aufblitzen). Farben nur als Tokens in `styles.scss`, jedes Token mit Wert für beide Themes (`:root` und `:root[data-theme='light']`), Syntaxfarben nach den IntelliJ-Schemata «Dark» bzw. «Light». | M |
+| FR-UI-16 | Das UI muss auf Deutsch und auf Englisch bedienbar sein, umschaltbar ohne Neuladen. | Umschalter DE \| EN in der Toolbar, Wahl pro Browser gespeichert (`localStorage` `scr.lang`), Standard Deutsch, `<html lang>` folgt. Alle UI-Texte, Tooltips, Meldungen, Datums- und Zahlenformate wechseln. Texte aus dem Backend (Kategorien, Regel-Gruppen und -Gründe, Erwartungs-Regeln, Test-Smells, zusammengesetzte Hinweise, Fehlermeldungen) werden nur für die Anzeige übersetzt; Dateien, Ids und API bleiben deutsch (Vertrag mit Agenten). Texte einer eigenen `rules.json` erscheinen, wie sie dort stehen. Englische Begriffe wie auf GitHub/GitLab und in IntelliJ (pull request / merge request, «Annotate with Git Blame», check off, mark as ok, coverage, test smells). | T: i18n.spec.ts (jeder Text übersetzt, Platzhalter gleich, alle Texte der mitgelieferten Regeln, zusammengesetzte Backend-Texte, Umschalten) |
 
 ## 6. Review-Status (FR-REV)
 
@@ -194,7 +195,7 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | NFR-12 | Native-Tauglichkeit | Backend muss ohne Zusatzkonfiguration nativ laufen. | Records mit `@RegisterForReflection`, Ressourcen in `quarkus.native.resources.includes`. | Image-Build |
 | NFR-13 | Wartbarkeit | Kategorien und Provider sind austauschbar ohne Seiteneffekte. | Module sehen nur `SegmentFacts`; nur `github/`/`gitlab/` kennen ihren Host. | T: CategoryModulesTest |
 | NFR-14 | Bedienbarkeit | Vertrautes Bedienkonzept für IntelliJ-Nutzer:innen. | Tool-Fenster, Stripe, Breadcrumbs, Annotate-Spalte. | M |
-| NFR-15 | Sprache | UI und Doku Deutsch (Schweizer Schreibweise), Code Englisch. | Kein «ß» in UI/Doku. | Code-Review |
+| NFR-15 | Sprache | UI Deutsch (Schweizer Schreibweise, Quellsprache) und Englisch (britische Schreibweise, FR-UI-16), Doku Deutsch, Code Englisch. | Kein «ß» in UI/Doku; jeder UI-Text läuft über `t()` und hat eine englische Übersetzung (i18n.spec.ts). | T: i18n.spec.ts, Code-Review |
 
 ## 14. Rückverfolgbarkeit und Lücken
 
@@ -234,6 +235,7 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | `commits/AttributionTest` | 7 | FR-COM-02, -03 |
 | `commits/CommitChecksTest` | 9 | FR-COM-08 |
 | `frontend/src/app/commit-findings.spec.ts` | 3 | FR-COM-08 (Chips pro Commit, Zählung für die Übersicht, Markierung und Zeilen-Chips) |
+| `frontend/src/app/i18n.spec.ts` | 8 | FR-UI-16, NFR-15 (Übersetzungen vollständig, Platzhalter, Texte der mitgelieferten Regeln, zusammengesetzte Backend-Texte, Umschalten) |
 | `gitlab/ProviderUrlTest` | 3 | FR-ZUG-03, FR-REP-01 |
 | `repo/RepositorySnapshotTest` | 1 | FR-REP-02, -03 |
 
@@ -242,5 +244,5 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 * Alle Provider-Abbildungen (FR-ZUG-01, -02, -04, -06, FR-SNP-01, FR-KOM-01 bis -04, FR-COM-01, FR-BLA-05, FR-REP-04): kein Test gegen aufgezeichnete Antworten von GitHub/GitLab. GitHub-Blame (GraphQL) und alle GitLab-Teile von Commits, Blame und Repository-Modus sind auch manuell noch nicht live geprüft.
 * `ReviewService` (Caching, Invalidierung, `mark` mit Schreiben/Lesen von `review.json`, Fortschritt, Laden der bestehenden Tests für FR-ANA-20, Neuberechnen der Commit-Befunde für FR-COM-08): kein Test, nur über `LineAcceptance` indirekt.
 * REST-API (FR-AGT-01): kein `@QuarkusTest`.
-* UI (FR-UI-*, FR-COM-04 bis -06, FR-BLA-01 bis -04): ausser `acceptance.spec.ts`, `expectations.spec.ts`, `test-profile.spec.ts`, `case-matrices.spec.ts`, `existing-tests.spec.ts`, `mock-boundaries.spec.ts`, `case-checks.spec.ts`, `rule-checks.spec.ts`, `test-smells.spec.ts`, `setup-impact.spec.ts`, `commit-findings.spec.ts` und `http-tests.spec.ts` (reine Hilfsfunktionen) keine Frontend-Tests.
+* UI (FR-UI-*, FR-COM-04 bis -06, FR-BLA-01 bis -04): ausser `acceptance.spec.ts`, `expectations.spec.ts`, `test-profile.spec.ts`, `case-matrices.spec.ts`, `existing-tests.spec.ts`, `mock-boundaries.spec.ts`, `case-checks.spec.ts`, `rule-checks.spec.ts`, `test-smells.spec.ts`, `setup-impact.spec.ts`, `commit-findings.spec.ts`, `http-tests.spec.ts` (reine Hilfsfunktionen) und `i18n.spec.ts` (Übersetzungen) keine Frontend-Tests.
 * NFR-10 (Pfad-Sicherheit), FR-BET-06 (Health).

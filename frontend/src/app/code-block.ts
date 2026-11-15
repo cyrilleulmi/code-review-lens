@@ -12,6 +12,7 @@ import { HTTP_TAG, httpTitle } from './http-tests';
 import { Icon, SymbolBadge } from './icon';
 import { areaColor, areaLabel, areaOfSegment, langColor, langLabel } from './look';
 import { ReviewStore } from './review.store';
+import { locale, serverText, t } from './i18n';
 
 /**
  * Scrolls to the row of a new-file line inside a rendered code block and flashes it; false when the row is not shown
@@ -71,6 +72,8 @@ interface Thread {
 })
 export class CodeBlock {
   protected readonly store = inject(ReviewStore);
+  protected readonly t = t;
+  protected readonly serverText = serverText;
 
   readonly segment = input.required<Segment>();
   /** The place (group id) this block is shown at; null = file view, marks apply to all places. */
@@ -139,9 +142,9 @@ export class CodeBlock {
 
   /** For test cases: the changed code they reach (HTTP-Tests: a reach over a real request is tagged). */
   protected readonly covers = computed(() => {
-    const t = this.store.tests().get(this.segment().id);
+    const info = this.store.tests().get(this.segment().id);
     const segs = this.store.segments();
-    return (t?.covers ?? [])
+    return (info?.covers ?? [])
       .filter((c) => segs.has(c.segmentId))
       .map((c) => ({
         id: c.segmentId, name: shortName(segs.get(c.segmentId)!), direct: c.direct, mocked: !!c.mocked,
@@ -154,19 +157,21 @@ export class CodeBlock {
     const c = this.store.coverage().get(this.segment().id);
     if (!c) return null;
     const existing = c.existingTests?.length ?? 0;
-    const label = c.status === 'none' ? 'ohne Test' : c.status === 'indirect' ? 'nur indirekt getestet'
-      : c.status === 'existing' ? 'durch bestehende Tests'
-      : c.directTests.length === 1 ? '1 Test' : `${c.directTests.length} Tests`;
-    const tests = c.status === 'none' ? 'Kein Test erreicht diese Funktion'
-      : c.status === 'indirect' ? `Nur über anderen geänderten Code erreicht (${c.indirectTests.length} ${c.indirectTests.length === 1 ? 'Test' : 'Tests'})`
-      : c.status === 'existing' ? `Kein geänderter Test, aber ${existing} ${existing === 1 ? 'bestehender Test erreicht' : 'bestehende Tests erreichen'} sie`
-      : `${c.directTests.length} ${c.directTests.length === 1 ? 'Test ruft' : 'Tests rufen'} die Funktion direkt auf`
-        + (c.indirectTests.length ? `, ${c.indirectTests.length} indirekt` : '');
-    const old = c.status !== 'existing' && existing ? ` · dazu ${existing} ${existing === 1 ? 'bestehender Test' : 'bestehende Tests'}` : '';
+    const label = c.status === 'none' ? t('ohne Test') : c.status === 'indirect' ? t('nur indirekt getestet')
+      : c.status === 'existing' ? t('durch bestehende Tests')
+      : c.directTests.length === 1 ? t('1 Test') : t('{n} Tests', { n: c.directTests.length });
+    const indirect = c.indirectTests.length;
+    const tests = c.status === 'none' ? t('Kein Test erreicht diese Funktion')
+      : c.status === 'indirect' ? t('Nur über anderen geänderten Code erreicht ({tests})', { tests: indirect === 1 ? t('1 Test') : t('{n} Tests', { n: indirect }) })
+      : c.status === 'existing' ? t(existing === 1 ? 'Kein geänderter Test, aber {n} bestehender Test erreicht sie' : 'Kein geänderter Test, aber {n} bestehende Tests erreichen sie', { n: existing })
+      : t(c.directTests.length === 1 ? '{n} Test ruft die Funktion direkt auf' : '{n} Tests rufen die Funktion direkt auf', { n: c.directTests.length })
+        + (indirect ? t(', {n} indirekt', { n: indirect }) : '');
+    const old = c.status !== 'existing' && existing
+      ? ' · ' + t(existing === 1 ? 'dazu {n} bestehender Test' : 'dazu {n} bestehende Tests', { n: existing }) : '';
     const mocked = c.mockedTests?.length ?? 0;
-    const mocks = mocked ? ` · in ${mocked} ${mocked === 1 ? 'Test' : 'Tests'} nur gemockt (zählt nicht)` : '';
-    const branches = `${c.branches} ${c.branches === 1 ? 'Verzweigung' : 'Verzweigungen'}`;
-    return { status: c.status, label, title: `${tests}${old}${mocks} · ${branches} · statisch ermittelt – Klick: Abdeckung zeigen` };
+    const mocks = mocked ? ' · ' + t(mocked === 1 ? 'in {n} Test nur gemockt (zählt nicht)' : 'in {n} Tests nur gemockt (zählt nicht)', { n: mocked }) : '';
+    const branches = t(c.branches === 1 ? '{n} Verzweigung' : '{n} Verzweigungen', { n: c.branches });
+    return { status: c.status, label, title: `${tests}${old}${mocks} · ${branches} · ${t('statisch ermittelt – Klick: Abdeckung zeigen')}` };
   });
 
   /**
@@ -183,7 +188,7 @@ export class CodeBlock {
     this.segment().lines.forEach((line, i) => {
       const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
       if (found) {
-        result.set(i, found.map((f) => ({ text: lineChipText(f), title: findingDetail(f, testName) + ' – statisch ermittelt, Klick: Abdeckung zeigen' })));
+        result.set(i, found.map((f) => ({ text: lineChipText(f), title: findingDetail(f, testName) + ' – ' + t('statisch ermittelt, Klick: Abdeckung zeigen') })));
       }
     });
     return result;
@@ -203,7 +208,7 @@ export class CodeBlock {
     this.segment().lines.forEach((line, i) => {
       const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
       if (found) {
-        result.set(i, found.map((c) => ({ text: ruleChipText(c), title: ruleDetail(c, testName) + ' – statisch ermittelt, Klick: Tests zeigen' })));
+        result.set(i, found.map((c) => ({ text: ruleChipText(c), title: ruleDetail(c, testName) + ' – ' + t('statisch ermittelt, Klick: Tests zeigen') })));
       }
     });
     return result;
@@ -224,7 +229,7 @@ export class CodeBlock {
       if (found) {
         result.set(i, found.map((f) => ({
           text: laterExpectationChip(f),
-          title: `${laterExpectationText(f)}\n${f.detail}\n– Klick: nur diesen Commit zeigen`,
+          title: `${laterExpectationText(f)}\n${serverText(f.detail)}\n– ${t('Klick: nur diesen Commit zeigen')}`,
           sha: f.sha,
           warn: f.level === 'warn',
         })));
@@ -261,7 +266,7 @@ export class CodeBlock {
     this.segment().lines.forEach((line, i) => {
       const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
       if (found) {
-        result.set(i, found.map((s) => ({ text: `Smell: ${smellText(s)}`, title: smellDetail(s) + ' – Klick: Testübersicht zeigen' })));
+        result.set(i, found.map((s) => ({ text: `Smell: ${smellText(s)}`, title: smellDetail(s) + ' – ' + t('Klick: Testübersicht zeigen') })));
       }
     });
     return result;
@@ -282,12 +287,12 @@ export class CodeBlock {
     if (!disabled && !bends) return null;
     const details = (e.expectations ?? []).map(describeChange);
     const drop = assertionDrop(e);
-    if (drop) details.push(`${drop.before} → ${drop.after} Assertions`);
-    if (e.disabled && !newlyDisabled(e)) details.push('war schon vorher deaktiviert');
+    if (drop) details.push(t('{before} → {after} Assertions', drop));
+    if (e.disabled && !newlyDisabled(e)) details.push(t('war schon vorher deaktiviert'));
     return {
-      label: disabled ? 'deaktiviert' : 'Erwartung geändert',
+      label: disabled ? t('deaktiviert') : t('Erwartung geändert'),
       warn: newlyDisabled(e) || bends,
-      title: details.join('\n') + '\n– Musterbasiert erkannt (Spec-Diff)',
+      title: details.join('\n') + '\n' + t('– Musterbasiert erkannt (Spec-Diff)'),
     };
   });
 
@@ -357,21 +362,21 @@ export class CodeBlock {
       previous = sha + removed;
       const n = no.get(sha) ?? null;
       const date = !c?.date ? '' : oneDay
-        ? new Date(c.date).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })
-        : new Date(c.date).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: '2-digit' });
-      const t = time(c?.date);
+        ? new Date(c.date).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })
+        : new Date(c.date).toLocaleDateString(locale(), { day: '2-digit', month: '2-digit', year: '2-digit' });
+      const ts = time(c?.date);
       return {
         sha, first, removed, no: n, url: c?.url ?? null,
-        age: max > min && t > 0 ? (t - min) / (max - min) : 1,
+        age: max > min && ts > 0 ? (ts - min) / (max - min) : 1,
         text: `${date} ${shortAuthor(c)}`.trim() || sha.substring(0, 7),
         title: [
-          `${sha.substring(0, 10)}${n ? ` · Commit ${n} dieses ${this.store.provider().noun}` : ''}`,
-          `${c?.author ?? c?.authorLogin ?? '?'} · ${c?.date ? new Date(c.date).toLocaleString('de-CH') : ''}`,
-          removed ? 'Diese Zeile wurde in diesem Commit entfernt.' : '',
+          `${sha.substring(0, 10)}${n ? ' · ' + t('Commit {n} dieses {noun}', { n, noun: this.store.provider().noun }) : ''}`,
+          `${c?.author ?? c?.authorLogin ?? '?'} · ${c?.date ? new Date(c.date).toLocaleString(locale()) : ''}`,
+          removed ? t('Diese Zeile wurde in diesem Commit entfernt.') : '',
           '',
           c?.message?.trim() ?? '',
           '',
-          n ? 'Klick: nur diesen Commit zeigen' : 'Klick: Commit öffnen',
+          n ? t('Klick: nur diesen Commit zeigen') : t('Klick: Commit öffnen'),
         ].filter((x, j) => x !== '' || j === 3 || j === 5).join('\n'),
       };
     });
@@ -576,7 +581,7 @@ export class CodeBlock {
   }
 
   protected time(iso: string): string {
-    return new Date(iso).toLocaleString('de-CH', { dateStyle: 'short', timeStyle: 'short' });
+    return new Date(iso).toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' });
   }
 }
 

@@ -1,11 +1,12 @@
 import { CommitFinding, CommitFindingKind } from './api';
+import { serverText, t } from './i18n';
 
 /**
  * Commit-Bezug der Tests: pure helpers for the chips in the commit list, the count on the overview, the marker in the
  * test specification and the line chips of a test's code block.
  */
 
-/** Chip texts in the commit list, in the order they are shown. */
+/** Chip texts in the commit list, in the order they are shown (German, translated with t()). */
 export const FINDING_LABELS: Record<CommitFindingKind, string> = {
   'fix-without-test': 'Fix ohne Test',
   'expectation-later': 'passt Erwartungen an',
@@ -29,13 +30,13 @@ export function commitChips(findings: CommitFinding[] | null | undefined, sha: s
   return KIND_ORDER.flatMap((kind) => {
     const list = mine.filter((f) => f.kind === kind);
     if (!list.length) return [];
-    const label = FINDING_LABELS[kind] + (list.length > 1 ? ` ×${list.length}` : '');
+    const label = t(FINDING_LABELS[kind]) + (list.length > 1 ? ` ×${list.length}` : '');
     return [{
       kind,
       label,
       count: list.length,
       warn: list.some((f) => f.level === 'warn'),
-      title: list.map((f) => f.detail).join('\n\n') + '\n– aus der Reihenfolge der Commits, musterbasiert (Commit-Bezug)',
+      title: list.map((f) => serverText(f.detail)).join('\n\n') + '\n' + t('– aus der Reihenfolge der Commits, musterbasiert (Commit-Bezug)'),
     }];
   });
 }
@@ -52,21 +53,21 @@ export function findingTotals(findings: CommitFinding[] | null | undefined): { c
 
 /** «⚠ 2 Commit-Hinweise · 3 Infos» for the overview; null without findings. */
 export function findingSummary(findings: CommitFinding[] | null | undefined): string | null {
-  const t = findingTotals(findings);
+  const totals = findingTotals(findings);
   const parts: string[] = [];
-  if (t.warn) parts.push(`⚠ ${t.warn} ${t.warn === 1 ? 'Commit-Hinweis' : 'Commit-Hinweise'}`);
-  if (t.info) parts.push(`${t.info} ${t.info === 1 ? 'Info' : 'Infos'}`);
+  if (totals.warn) parts.push('⚠ ' + t(totals.warn === 1 ? '{n} Commit-Hinweis' : '{n} Commit-Hinweise', { n: totals.warn }));
+  if (totals.info) parts.push(t(totals.info === 1 ? '{n} Info' : '{n} Infos', { n: totals.info }));
   return parts.length ? parts.join(' · ') : null;
 }
 
 /** «Erwartung nachträglich in 406522a «fix tests» geändert» (marker in the specification and line chip). */
 export function laterExpectationText(f: CommitFinding): string {
-  return `Erwartung nachträglich in ${f.sha.substring(0, 7)} «${f.title}» geändert`;
+  return t('Erwartung nachträglich in {sha} «{title}» geändert', { sha: f.sha.substring(0, 7), title: f.title });
 }
 
 /** Short form for the line chip in a code block. */
 export function laterExpectationChip(f: CommitFinding): string {
-  return `Erwartung nachträglich geändert (${f.sha.substring(0, 7)})`;
+  return t('Erwartung nachträglich geändert ({sha})', { sha: f.sha.substring(0, 7) });
 }
 
 /** expectation-later findings by test segment id. */

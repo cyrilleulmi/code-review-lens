@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { serverText, t } from './i18n';
 
 // Mirrors backend dev.smartcodereview.model.Model
 
@@ -867,5 +868,6 @@ function base(pr: PrKey): string {
 
 export function errorMessage(err: unknown): string {
   const e = err as { error?: { message?: string }; message?: string; status?: number };
-  return e?.error?.message ?? (e?.status === 0 ? 'Backend nicht erreichbar' : e?.message ?? 'Unbekannter Fehler');
+  if (e?.error?.message) return serverText(e.error.message);
+  return e?.status === 0 ? t('Backend nicht erreichbar') : e?.message ?? t('Unbekannter Fehler');
 }

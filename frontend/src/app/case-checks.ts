@@ -1,4 +1,5 @@
 import { CaseFinding, CodeCoverage, MatrixBoundary } from './api';
+import { serverText, t } from './i18n';
 
 /**
  * Fall- und Effekt-Abgleich: pure helpers for the coverage view, the line chips of code blocks and the Fallmatrix.
@@ -25,18 +26,22 @@ export function findingsSummary(coverage: CodeCoverage[]): string | null {
     functions += n > 0 ? 1 : 0;
   }
   if (open === 0) return null;
-  return `${open} ${open === 1 ? 'offener Fall' : 'offene Fälle'} in ${functions} ${functions === 1 ? 'Funktion' : 'Funktionen'}`;
+  return t(open === 1 ? '{n} offener Fall' : '{n} offene Fälle', { n: open }) + ' '
+    + t(functions === 1 ? 'in {n} Funktion' : 'in {n} Funktionen', { n: functions });
 }
 
 /** The short form of a finding in the compact line: «NotFoundException ungeprüft», «Grenze 1…99: 1, 99 fehlen». */
 export function compactText(f: CaseFinding): string {
+  const label = serverText(f.label);
   switch (f.kind) {
     case 'boundary':
-      return f.missing.length ? `${f.label}: ${f.missing.join(', ')} ${f.missing.length === 1 ? 'fehlt' : 'fehlen'}` : `${f.label} geprüft`;
+      return f.missing.length
+        ? t(f.missing.length === 1 ? '{label}: {values} fehlt' : '{label}: {values} fehlen', { label, values: f.missing.join(', ') })
+        : t('{label} geprüft', { label });
     case 'branches':
-      return f.label;
+      return label;
     default:
-      return `${f.subject ?? f.label} ${f.checked ? 'geprüft' : 'ungeprüft'}`;
+      return t(f.checked ? '{label} geprüft' : '{label} ungeprüft', { label: f.subject ?? label });
   }
 }
 
@@ -50,26 +55,28 @@ export function compactLine(c: CodeCoverage): string[] {
 export function lineChipText(f: CaseFinding): string {
   switch (f.kind) {
     case 'exception':
-      return `kein Test erwartet ${f.subject ?? 'diesen Fehler'}`;
+      return f.subject ? t('kein Test erwartet {subject}', { subject: f.subject }) : t('kein Test erwartet diesen Fehler');
     case 'boundary':
-      return `Grenze nicht geprüft: ${f.missing.join(', ')}`;
+      return t('Grenze nicht geprüft: {values}', { values: f.missing.join(', ') });
     default:
-      return `Wirkung ungeprüft: ${f.subject ?? f.label}`;
+      return t('Wirkung ungeprüft: {subject}', { subject: f.subject ?? serverText(f.label) });
   }
 }
 
 /** What a finding means in full, for the expanded list and tooltips; testName resolves test ids. */
 export function findingDetail(f: CaseFinding, testName: (id: string) => string): string {
   const by = f.checkedBy.map(testName).join(', ');
+  const label = serverText(f.label);
   switch (f.kind) {
     case 'boundary': {
-      const covered = f.covered.length ? f.covered.join(', ') : 'keine Zahlen';
-      return `${f.label}: geprüft ${covered}` + (f.missing.length ? ` – nicht geprüft: ${f.missing.join(', ')}` : ' – alle Grenzwerte geprüft');
+      const covered = f.covered.length ? f.covered.join(', ') : t('keine Zahlen');
+      return t('{label}: geprüft {covered}', { label, covered })
+        + (f.missing.length ? t(' – nicht geprüft: {values}', { values: f.missing.join(', ') }) : t(' – alle Grenzwerte geprüft'));
     }
     case 'branches':
-      return `${f.label} – mehr Entscheidungen als Tests (Hinweis, keine Warnung)`;
+      return t('{label} – mehr Entscheidungen als Tests (Hinweis, keine Warnung)', { label });
     default:
-      return f.checked ? `${f.label} – geprüft von ${by}` : `${f.label} – kein Test prüft das`;
+      return f.checked ? t('{label} – geprüft von {by}', { label, by }) : t('{label} – kein Test prüft das', { label });
   }
 }
 
@@ -86,6 +93,8 @@ export function findingsByLine(c: CodeCoverage | undefined): Map<number, CaseFin
 /** «Grenze im Code (isInRange): 1…99 – in dieser Matrix fehlen 1, 99» */
 export function boundaryNote(b: MatrixBoundary, symbol: string | null): string {
   const where = symbol ? ` (${symbol})` : '';
-  const head = `Grenze im Code${where}: ${b.subject} ${b.label} – Grenzwerte ${b.values.join(', ')}`;
-  return b.missing.length ? `${head} – in dieser Matrix fehlen ${b.missing.join(', ')}` : `${head} – alle in der Matrix`;
+  const head = t('Grenze im Code{where}: {subject} {label} – Grenzwerte {values}', { where, subject: b.subject, label: b.label, values: b.values.join(', ') });
+  return b.missing.length
+    ? head + t(' – in dieser Matrix fehlen {values}', { values: b.missing.join(', ') })
+    : head + t(' – alle in der Matrix');
 }

@@ -1,4 +1,5 @@
 import { RuleCheck } from './api';
+import { serverText, t } from './i18n';
 
 /**
  * Erwartungs-Regeln: pure helpers for the rules box of the tests view, the line chips of code blocks and the overview.
@@ -19,32 +20,33 @@ export function rulesSummary(checks: RuleCheck[]): string | null {
   const total = checks.length;
   if (total === 0) return null;
   const unmet = unmetCount(checks);
-  if (unmet === 0) return total === 1 ? '1 Regel erfüllt' : `Alle ${total} Regeln erfüllt`;
-  return `${unmet} von ${total} ${total === 1 ? 'Regel' : 'Regeln'} nicht erfüllt`;
+  if (unmet === 0) return total === 1 ? t('1 Regel erfüllt') : t('Alle {n} Regeln erfüllt', { n: total });
+  return t(total === 1 ? '{unmet} von {total} Regel nicht erfüllt' : '{unmet} von {total} Regeln nicht erfüllt', { unmet, total });
 }
 
 /** The overview: «2 Erwartungs-Regeln nicht erfüllt»; null when every check is met (or there is none). */
 export function unmetWarning(checks: RuleCheck[]): string | null {
   const n = unmetCount(checks);
   if (n === 0) return null;
-  return `${n} ${n === 1 ? 'Erwartungs-Regel' : 'Erwartungs-Regeln'} nicht erfüllt`;
+  return t(n === 1 ? '{n} Erwartungs-Regel nicht erfüllt' : '{n} Erwartungs-Regeln nicht erfüllt', { n });
 }
 
 /** The chip on the trigger line of an unmet check: «Regel: Test für den verweigerten Zugriff (401/403) fehlt». */
 export function ruleChipText(c: RuleCheck): string {
-  return `Regel: ${c.hint || c.label}`;
+  return t('Regel: {text}', { text: serverText(c.hint || c.label) });
 }
 
 /** What a check means in full (tooltip, second line); testName resolves test ids. */
 export function ruleDetail(c: RuleCheck, testName: (id: string) => string): string {
-  const trigger = c.trigger ? ` (ausgelöst durch ${c.trigger})` : '';
+  const label = serverText(c.label);
+  const trigger = c.trigger ? t(' (ausgelöst durch {trigger})', { trigger: serverText(c.trigger) }) : '';
   if (c.met) {
-    return `${c.label}${trigger} – erfüllt durch ${c.metBy.map(testName).join(', ')}`;
+    return t('{label}{trigger} – erfüllt durch {tests}', { label, trigger, tests: c.metBy.map(testName).join(', ') });
   }
   const tests = c.tests.length
-    ? `geprüft: ${c.tests.map(testName).join(', ')} – keiner zeigt das`
-    : 'kein Test erreicht den Code';
-  return `${c.label}${trigger} – ${c.hint || 'kein passender Test'}; ${tests}`;
+    ? t('geprüft: {tests} – keiner zeigt das', { tests: c.tests.map(testName).join(', ') })
+    : t('kein Test erreicht den Code');
+  return `${label}${trigger} – ${c.hint ? serverText(c.hint) : t('kein passender Test')}; ${tests}`;
 }
 
 /** Unmet checks of one segment by trigger line (for the line chips of a code block). */

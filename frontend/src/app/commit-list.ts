@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input } from '@an
 import { Commit } from './api';
 import { FindingChip, commitChips } from './commit-findings';
 import { Icon } from './icon';
+import { locale, serverText, t } from './i18n';
 import { ReviewStore, SINCE_REVIEW } from './review.store';
 
 interface Row {
@@ -29,16 +30,16 @@ interface Row {
   template: `
     @let c = store.commits();
     @if (!c) {
-      <p class="note">@if (store.commitsLoading()) {<span class="spinner"></span> Lade Commits …} @else {Keine Commits geladen.}</p>
+      <p class="note">@if (store.commitsLoading()) {<span class="spinner"></span> {{ t('Lade Commits …') }}} @else {{{ t('Keine Commits geladen.') }}}</p>
     } @else if (c.error && !c.commits.length) {
-      <p class="note err">Commits nicht verfügbar: {{ c.error }}
-        <a href="javascript:void 0" (click)="store.loadCommits()">Erneut versuchen</a></p>
+      <p class="note err">{{ t('Commits nicht verfügbar: {error}', { error: serverText(c.error) }) }}
+        <a href="javascript:void 0" (click)="store.loadCommits()">{{ t('Erneut versuchen') }}</a></p>
     } @else {
       <div class="list" role="listbox" [class.compact]="compact()">
         <div class="row all" role="option" [class.selected]="!store.commitFilter()" (click)="store.setCommitFilter(null)"
-             title="Alle Änderungen des Pull Requests zeigen">
+             [title]="t('Alle Änderungen des Pull Requests zeigen')">
           <app-icon name="layers" [size]="14" class="ico" />
-          <span class="title">Alle Commits</span>
+          <span class="title">{{ t('Alle Commits') }}</span>
           <span class="meta">{{ c.commits.length }}</span>
         </div>
         @if (store.sinceReview().size) {
@@ -46,7 +47,7 @@ interface Row {
           <div class="row all since" role="option" [class.selected]="store.commitFilter() === since" [class.done]="sp.total > 0 && sp.ok === sp.total"
                (click)="store.setCommitFilter(store.commitFilter() === since ? null : since)" [title]="sinceTooltip()">
             <app-icon name="refresh" [size]="14" class="ico" />
-            <span class="title">Neu seit letztem Review</span>
+            <span class="title">{{ t('Neu seit letztem Review') }}</span>
             @if (sp.total > 0 && sp.ok === sp.total) {
               <app-icon name="check" [size]="13" class="okicon" />
             } @else {
@@ -54,7 +55,7 @@ interface Row {
             }
             @if (sp.total > 0) {
               <button type="button" class="mark" (click)="markSince($event)"
-                      [title]="sp.ok === sp.total ? 'Markierung entfernen' : 'Alle neuen und geänderten Zeilen als ok markieren'">
+                      [title]="sp.ok === sp.total ? t('Markierung entfernen') : t('Alle neuen und geänderten Zeilen als ok markieren')">
                 <app-icon name="check" [size]="12" />
               </button>
             }
@@ -67,7 +68,7 @@ interface Row {
             <span class="no">{{ r.no }}</span>
             <span class="sha">{{ r.commit.sha.substring(0, 7) }}</span>
             @if (r.isNew) {
-              <span class="new" title="Nach deinem letzten Review dazugekommen">neu</span>
+              <span class="new" [title]="t('Nach deinem letzten Review dazugekommen')">{{ t('neu') }}</span>
             }
             <span class="body">
               <span class="title">{{ r.commit.title }}</span>
@@ -75,11 +76,11 @@ interface Row {
                 <span class="meta">
                   {{ r.commit.author ?? r.commit.authorLogin ?? '?' }} · {{ date(r.commit.date) }}
                   · <span class="add">+{{ r.commit.additions }}</span> <span class="del">−{{ r.commit.deletions }}</span>
-                  · {{ r.commit.files.length }} {{ r.commit.files.length === 1 ? 'Datei' : 'Dateien' }}
+                  · {{ t(r.commit.files.length === 1 ? '{n} Datei' : '{n} Dateien', { n: r.commit.files.length }) }}
                   @if (r.via) {
-                    · via Merge {{ r.via.sha.substring(0, 7) }}
+                    · {{ t('via Merge {sha}', { sha: r.via.sha.substring(0, 7) }) }}
                   } @else if (r.lines === 0) {
-                    · nichts mehr im Diff
+                    · {{ t('nichts mehr im Diff') }}
                   }
                 </span>
               } @else if (r.via) {
@@ -105,19 +106,19 @@ interface Row {
                 <span class="cnt">{{ p.ok }}/{{ p.total }}</span>
               }
               <button type="button" class="mark" (click)="mark(r, $event)"
-                      [title]="p.ok === p.total ? 'Markierung entfernen' : 'Alle Zeilen dieses Commits als ok markieren'">
+                      [title]="p.ok === p.total ? t('Markierung entfernen') : t('Alle Zeilen dieses Commits als ok markieren')">
                 <app-icon name="check" [size]="12" />
               </button>
             }
             @if (r.commit.url) {
               <a class="mark" [href]="r.commit.url" target="_blank" rel="noopener" (click)="$event.stopPropagation()"
-                 [title]="'Auf ' + store.provider().label + ' öffnen'"><app-icon name="external" [size]="12" /></a>
+                 [title]="t('Auf {host} öffnen', { host: store.provider().label })"><app-icon name="external" [size]="12" /></a>
             }
           </div>
         }
       </div>
       @if (c.error) {
-        <p class="note err">Nicht aktualisiert: {{ c.error }}</p>
+        <p class="note err">{{ t('Nicht aktualisiert: {error}', { error: serverText(c.error) }) }}</p>
       }
     }
   `,
@@ -178,6 +179,8 @@ interface Row {
 })
 export class CommitList {
   protected readonly store = inject(ReviewStore);
+  protected readonly t = t;
+  protected readonly serverText = serverText;
   /** one line per commit (tool window); otherwise with statistics */
   readonly compact = input(false);
 
@@ -206,8 +209,8 @@ export class CommitList {
   protected sinceTooltip(): string {
     const r = this.store.reloadInfo();
     return r
-      ? `Zeilen, die seit deinem Review-Stand ${r.fromHeadSha.substring(0, 7)} neu sind oder sich geändert haben `
-        + `(und noch offene von früheren Neuladungen). ${r.kept} Markierungen wurden übernommen, ${r.dropped} verworfen.`
+      ? t('Zeilen, die seit deinem Review-Stand {sha} neu sind oder sich geändert haben (und noch offene von früheren Neuladungen). {kept} Markierungen wurden übernommen, {dropped} verworfen.',
+        { sha: r.fromHeadSha.substring(0, 7), kept: r.kept, dropped: r.dropped })
       : '';
   }
 
@@ -219,7 +222,7 @@ export class CommitList {
   protected pick(r: Row): void {
     if (r.via && r.lines === 0) {
       this.store.setCommitFilter(r.via.sha);
-      this.store.notify(`Die Änderungen von ${r.commit.sha.substring(0, 7)} stecken im Merge-Commit ${r.via.sha.substring(0, 7)}`);
+      this.store.notify(t('Die Änderungen von {sha} stecken im Merge-Commit {merge}', { sha: r.commit.sha.substring(0, 7), merge: r.via.sha.substring(0, 7) }));
       return;
     }
     this.store.setCommitFilter(this.store.commitFilter() === r.commit.sha ? null : r.commit.sha);
@@ -233,15 +236,15 @@ export class CommitList {
   protected tooltip(r: Row): string {
     const parts = [r.commit.message.trim(), '', `${r.commit.sha}`, `${r.commit.author ?? ''} · ${this.date(r.commit.date)}`];
     if (r.lines === 0 && !r.via) {
-      parts.push('', 'Keine Änderung dieses Commits ist im Diff des Pull Requests sichtbar (später überschrieben oder zurückgenommen).');
+      parts.push('', t('Keine Änderung dieses Commits ist im Diff des Pull Requests sichtbar (später überschrieben oder zurückgenommen).'));
     }
     if (r.via) {
-      parts.push('', `Kommt über den Merge-Commit ${r.via.sha.substring(0, 7)} in den Branch; seine Zeilen sind dort zugeordnet.`);
+      parts.push('', t('Kommt über den Merge-Commit {sha} in den Branch; seine Zeilen sind dort zugeordnet.', { sha: r.via.sha.substring(0, 7) }));
     }
     return parts.join('\n');
   }
 
   protected date(iso: string | null): string {
-    return iso ? new Date(iso).toLocaleString('de-CH', { dateStyle: 'short', timeStyle: 'short' }) : '';
+    return iso ? new Date(iso).toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' }) : '';
   }
 }

@@ -79,7 +79,11 @@ cd frontend && npm start              # UI auf :4200, /api wird an :8080 weiterg
 | Tests | Kategorie *Tests*: Testübersicht mit Komponenten und abgedeckten Codestellen; im Code-Block «Getestet von …» bzw. «Testet …» |
 | Ganzes Repository | Ordner-Knopf in der Toolbar oder «Ganzes Repository analysieren» auf der Übersicht eines PRs (bzw. Repo-URL ins Suchfeld): Kategorien, Flows, Komponenten, Tests, Commits und Blame über den gesamten Code. Kommentare gibt es dort keine |
 | Commits | Review-Fenster → *Commits* oder Übersicht: Klick auf einen Commit zeigt in allen Ansichten nur seine Änderungen (Änderungen anderer Commits abgeblendet), Häkchen gelten dann nur für seine Zeilen; ✓ markiert den ganzen Commit. In der Toolbar ← → zum vorherigen/nächsten Commit, × zeigt wieder alles |
-| Annotieren (Blame) | Toolbar-Knopf (Zeilen-Symbol): Spalte mit Datum, Autor und Nummer des PR-Commits pro Zeile, wie «Annotate with Git Blame» in IntelliJ; gelöschte Zeilen zeigen den Commit, der sie entfernt hat. Klick filtert auf diesen Commit bzw. öffnet ältere Commits auf GitHub/GitLab |
+| Design | Kontrast-Knopf in der Toolbar: dunkles (Standard) oder helles Design im Stil von IntelliJ, pro Browser gespeichert |
+| Sprache | Umschalter
+ *DE \| EN* rechts in der Toolbar: das ganze UI auf Deutsch oder Englisch, ohne Neuladen; die Wahl gilt pro Browser |
+| Annotieren (Blame) |
+ Toolbar-Knopf (Zeilen-Symbol): Spalte mit Datum, Autor und Nummer des PR-Commits pro Zeile, wie «Annotate with Git Blame» in IntelliJ; gelöschte Zeilen zeigen den Commit, der sie entfernt hat. Klick filtert auf diesen Commit bzw. öffnet ältere Commits auf GitHub/GitLab |
 
 ![Fokus auf einen Zweig des Flows](docs/img/focus.png)
 
