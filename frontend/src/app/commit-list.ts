@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input } from '@an
 import { Commit } from './api';
 import { FindingChip, commitChips } from './commit-findings';
 import { Icon } from './icon';
-import { ReviewStore } from './review.store';
+import { ReviewStore, SINCE_REVIEW } from './review.store';
 
 interface Row {
   commit: Commit;
@@ -13,6 +13,8 @@ interface Row {
   via: Commit | null;
   /** Commit-Bezug der Tests: «Fix ohne Test», «passt Erwartungen an», «Logik ohne Test» */
   chips: FindingChip[];
+  /** came after the last review (see ReviewStore.newCommits) */
+  isNew: boolean;
 }
 
 /**
@@ -39,12 +41,34 @@ interface Row {
           <span class="title">Alle Commits</span>
           <span class="meta">{{ c.commits.length }}</span>
         </div>
+        @if (store.sinceReview().size) {
+          @let sp = store.sinceReviewProgress();
+          <div class="row all since" role="option" [class.selected]="store.commitFilter() === since" [class.done]="sp.total > 0 && sp.ok === sp.total"
+               (click)="store.setCommitFilter(store.commitFilter() === since ? null : since)" [title]="sinceTooltip()">
+            <app-icon name="refresh" [size]="14" class="ico" />
+            <span class="title">Neu seit letztem Review</span>
+            @if (sp.total > 0 && sp.ok === sp.total) {
+              <app-icon name="check" [size]="13" class="okicon" />
+            } @else {
+              <span class="cnt">{{ sp.ok }}/{{ sp.total }}</span>
+            }
+            @if (sp.total > 0) {
+              <button type="button" class="mark" (click)="markSince($event)"
+                      [title]="sp.ok === sp.total ? 'Markierung entfernen' : 'Alle neuen und geänderten Zeilen als ok markieren'">
+                <app-icon name="check" [size]="12" />
+              </button>
+            }
+          </div>
+        }
         @for (r of rows(); track r.commit.sha) {
           @let p = r.progress;
           <div class="row" role="option" [class.selected]="store.commitFilter() === r.commit.sha" [class.empty]="r.lines === 0"
                [class.done]="p.total > 0 && p.ok === p.total" (click)="pick(r)" [title]="tooltip(r)">
             <span class="no">{{ r.no }}</span>
             <span class="sha">{{ r.commit.sha.substring(0, 7) }}</span>
+            @if (r.isNew) {
+              <span class="new" title="Nach deinem letzten Review dazugekommen">neu</span>
+            }
             <span class="body">
               <span class="title">{{ r.commit.title }}</span>
               @if (!compact()) {
@@ -113,6 +137,11 @@ interface Row {
     .row.done .title { color: var(--fg-muted); }
     .row.all { font-weight: 600; }
     .row.all .title { flex: 1; }
+    .row.since { font-weight: 500; }
+    .new {
+      flex: none; padding: 0 5px; border-radius: 7px; font-size: 10px; font-weight: 600; line-height: 14px;
+      color: var(--accent-fg); background: var(--bg-selected-soft);
+    }
     .ico { color: var(--fg-muted); }
     .no {
       display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
@@ -157,6 +186,7 @@ export class CommitList {
     const bySha = this.store.commitBySha();
     const counts = this.store.commitLineCount();
     const findings = this.store.commitFindings();
+    const fresh = this.store.newCommits();
     return (c?.commits ?? []).map((commit, i) => {
       const via = c?.mergedVia?.[commit.sha];
       return {
@@ -166,9 +196,25 @@ export class CommitList {
         progress: this.store.commitProgress(commit.sha),
         via: via ? bySha.get(via) ?? null : null,
         chips: commitChips(findings, commit.sha),
+        isNew: fresh.has(commit.sha),
       };
     });
   });
+
+  protected readonly since = SINCE_REVIEW;
+
+  protected sinceTooltip(): string {
+    const r = this.store.reloadInfo();
+    return r
+      ? `Zeilen, die seit deinem Review-Stand ${r.fromHeadSha.substring(0, 7)} neu sind oder sich geändert haben `
+        + `(und noch offene von früheren Neuladungen). ${r.kept} Markierungen wurden übernommen, ${r.dropped} verworfen.`
+      : '';
+  }
+
+  protected markSince(event: Event): void {
+    event.stopPropagation();
+    this.store.toggle(this.store.sinceReviewLines(), 'since-review');
+  }
 
   protected pick(r: Row): void {
     if (r.via && r.lines === 0) {

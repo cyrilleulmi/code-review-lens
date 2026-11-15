@@ -39,6 +39,7 @@ import dev.smartcodereview.provider.ProviderException;
 import dev.smartcodereview.provider.ReviewProvider;
 import dev.smartcodereview.repo.RepositorySnapshot;
 import dev.smartcodereview.review.LineAcceptance;
+import dev.smartcodereview.review.MarkCarry;
 import dev.smartcodereview.store.DataStore;
 import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -160,13 +161,36 @@ public class ReviewService {
         }
     }
 
-    /** Fetches the PR again (new commits are out of scope for the PoC: marks are kept as they are). */
+    /**
+     * Fetches the PR again. When it has moved on (new commits, rebase), the marks are carried to the line keys of the
+     * new snapshot ({@link MarkCarry}): unchanged lines keep their marks, new and changed lines are open.
+     */
     public ReviewBundle reload(PrRef ref) {
         synchronized (lock(ref)) {
+            Optional<Snapshot> before = store.read(snapshotFile(ref), Snapshot.class);
+            Optional<Analysis> beforeAnalysis = store.read(analysisFile(ref), Analysis.class);
             Snapshot snapshot = fetch(ref);
             Analysis analysis = analyse(ref, snapshot);
+            if (before.isPresent() && Files.exists(stateFile(ref)) && moved(before.get(), snapshot)) {
+                ReviewState carried = MarkCarry.carry(state(ref), before.get(), beforeAnalysis.orElse(null), snapshot,
+                        analysis, Instant.now().toString());
+                if (carried.log().size() > MAX_LOG_ENTRIES) {
+                    List<LogEntry> log = carried.log().subList(carried.log().size() - MAX_LOG_ENTRIES, carried.log().size());
+                    carried = new ReviewState(carried.schemaVersion(), carried.pr(), carried.headSha(), carried.ok(),
+                            List.copyOf(log), carried.okAt(), carried.reload());
+                }
+                store.write(stateFile(ref), carried);
+                Log.infof("Carried marks of %s from %s to %s: %d kept, %d dropped", ref.key(),
+                        before.get().pr().headSha(), snapshot.pr().headSha(), carried.reload().kept(), carried.reload().dropped());
+            }
             return toBundle(ref, snapshot, analysis);
         }
+    }
+
+    /** Line keys change when the head or the base moved. */
+    private static boolean moved(Snapshot before, Snapshot after) {
+        return !Objects.equals(before.pr().headSha(), after.pr().headSha())
+                || !Objects.equals(before.pr().baseSha(), after.pr().baseSha());
     }
 
     public ReviewBundle reanalyse(PrRef ref) {
@@ -457,10 +481,10 @@ public class ReviewService {
         return store.read(stateFile(ref), ReviewState.class)
                 .map(s -> s.okAt() != null && s.ok() != null && s.log() != null ? s
                         : new ReviewState(s.schemaVersion(), s.pr(), s.headSha(), s.ok() == null ? Map.of() : s.ok(),
-                        s.log() == null ? List.of() : s.log(), s.okAt() == null ? Map.of() : s.okAt()))
+                        s.log() == null ? List.of() : s.log(), s.okAt() == null ? Map.of() : s.okAt(), s.reload()))
                 .orElseGet(() -> {
                     String headSha = store.read(snapshotFile(ref), Snapshot.class).map(s -> s.pr().headSha()).orElse(null);
-                    return new ReviewState(Model.SCHEMA_VERSION, ref.key(), headSha, new TreeMap<>(), new ArrayList<>(), new TreeMap<>());
+                    return new ReviewState(Model.SCHEMA_VERSION, ref.key(), headSha, new TreeMap<>(), new ArrayList<>(), new TreeMap<>(), null);
                 });
     }
 
@@ -527,7 +551,7 @@ public class ReviewService {
             }
             String headSha = current.headSha() != null ? current.headSha()
                     : store.read(snapshotFile(ref), Snapshot.class).map(s -> s.pr().headSha()).orElse(null);
-            ReviewState next = new ReviewState(Model.SCHEMA_VERSION, ref.key(), headSha, out, log, outAt);
+            ReviewState next = new ReviewState(Model.SCHEMA_VERSION, ref.key(), headSha, out, log, outAt, current.reload());
             store.write(stateFile(ref), next);
             return next;
         }
@@ -554,20 +578,8 @@ public class ReviewService {
     }
 
     private static List<String> sortedKeys(Set<String> keys) {
-        return keys.stream().sorted(LINE_KEY_ORDER).toList();
+        return MarkCarry.sortedKeys(keys);
     }
-
-    /** N12 before N100, O-lines after N-lines. */
-    private static final Comparator<String> LINE_KEY_ORDER = Comparator
-            .comparing((String k) -> k.isEmpty() ? ' ' : k.charAt(0))
-            .thenComparingInt(k -> {
-                try {
-                    return Integer.parseInt(k.substring(1));
-                } catch (RuntimeException e) {
-                    return Integer.MAX_VALUE;
-                }
-            })
-            .thenComparing(Comparator.naturalOrder());
 
     private Optional<Progress> progress(PrRef ref) {
         Optional<Analysis> analysis = store.read(analysisFile(ref), Analysis.class);

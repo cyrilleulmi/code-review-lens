@@ -17,6 +17,12 @@
     <span>Nur Commit <b>{{ ac.sha.substring(0, 7) }}</b> {{ ac.title }}</span>
     <button type="button" class="mark" (click)="store.setCommitFilter(null)" title="Alle Commits zeigen"><app-icon name="close" [size]="12" /></button>
   </div>
+} @else if (store.sinceReviewActive()) {
+  <div class="commit-filter" title="Nur Zeilen, die seit deinem letzten Review neu sind oder sich geändert haben">
+    <app-icon name="refresh" [size]="13" />
+    <span>Nur <b>neu seit Review</b> {{ store.reloadInfo()?.fromHeadSha?.substring(0, 7) }}</span>
+    <button type="button" class="mark" (click)="store.setCommitFilter(null)" title="Alle Änderungen zeigen"><app-icon name="close" [size]="12" /></button>
+  </div>
 }
 
 @if (tab() === 'commits') {

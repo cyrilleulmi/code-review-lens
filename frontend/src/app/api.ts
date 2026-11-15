@@ -728,6 +728,18 @@ export interface ReviewState {
   log: LogEntry[];
   /** place -> path -> keys that are ok at that place only */
   okAt: Record<string, Record<string, string[]>>;
+  /** what the last reload with new commits did to the marks (absent before the first one) */
+  reload?: ReloadInfo | null;
+}
+
+/** Marks carried from fromHeadSha to toHeadSha; newLines: path -> keys new or changed since fromHeadSha (and still open). */
+export interface ReloadInfo {
+  fromHeadSha: string;
+  toHeadSha: string;
+  at: string;
+  kept: number;
+  dropped: number;
+  newLines: Record<string, string[]>;
 }
 
 export interface FileSummary {

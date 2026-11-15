@@ -22,6 +22,14 @@
         <button type="button" class="tb-btn small" (click)="store.stepCommit(1)" title="Nächster Commit"><app-icon name="arrowRight" [size]="13" /></button>
         <button type="button" class="tb-btn small" (click)="store.setCommitFilter(null)" title="Alle Commits zeigen"><app-icon name="close" [size]="12" /></button>
       </span>
+    } @else if (store.sinceReviewActive()) {
+      @let sp = store.sinceReviewProgress();
+      <span class="widget commit" title="Nur Zeilen, die seit deinem letzten Review neu sind oder sich geändert haben">
+        <app-icon name="refresh" [size]="14" />
+        <span class="t">Neu seit Review {{ store.reloadInfo()?.fromHeadSha?.substring(0, 7) }}</span>
+        <span class="no">{{ sp.ok }}/{{ sp.total }}</span>
+        <button type="button" class="tb-btn small" (click)="store.setCommitFilter(null)" title="Alle Änderungen zeigen"><app-icon name="close" [size]="12" /></button>
+      </span>
     }
     @if (store.isRepo()) {
       <span class="pr-title" title="Das ganze Repository am Stand des Default-Branches, analysiert wie ein Pull Request, in dem jede Datei neu ist">

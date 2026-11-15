@@ -23,7 +23,7 @@ Ein lokal startbares Werkzeug, das
 
 **Später:** mehrere «Sortiermöglichkeiten» (andere Gruppierungen und Reihenfolgen), weitere Code-Hosts.
 
-**Out of scope:** Umgang mit neuen Commits in einem bereits angeschauten PR.
+**Ursprünglich out of scope, inzwischen umgesetzt:** Umgang mit neuen Commits in einem bereits angeschauten PR (Markierungen übertragen, «Neu seit letztem Review»).
 
 ## Entscheide aus den Rückfragen
 
@@ -41,7 +41,7 @@ Ein lokal startbares Werkzeug, das
 
 | Begriff | Bedeutung |
 |---|---|
-| **Snapshot** | Eingefrorener Stand eines PRs (Metadaten, Diff, Quelltexte der neuen Version). Neue Commits werden nicht automatisch nachgeladen. |
+| **Snapshot** | Eingefrorener Stand eines PRs (Metadaten, Diff, Quelltexte der neuen Version). Neue Commits werden nicht automatisch nachgeladen; «Neu laden» holt sie und überträgt die Markierungen. |
 | **Segment** | Kleinste Review-Einheit: eine geänderte Funktion/Methode, ein geänderter Typ, eine Konstante, oder ein Hunk, wenn keine Struktur erkennbar ist. |
 | **Kategorie / Gruppe** | Quick wins (mit Gruppen wie «Übersetzungen», «DTOs & Typen»), Datenflüsse, Einzelne Änderungen, Tests, Styles & Assets. |
 | **Flow** | Zusammenhängende Segmente, die sich gegenseitig aufrufen, geordnet ab dem Einstiegspunkt. |

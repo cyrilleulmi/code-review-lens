@@ -12,6 +12,7 @@ import {
   NewComment,
   PrKey,
   PullRequestSummary,
+  ReloadInfo,
   ReviewBundle,
   ReviewState,
   Segment,
@@ -26,6 +27,7 @@ import {
 import { AcceptStatus, Acceptance, accept, acceptedElsewhere, acceptedIn, statusOf } from './acceptance';
 import { laterExpectationsByTest } from './commit-findings';
 import { groupWarnings, testNamer } from './mock-boundaries';
+import { reloadMessage } from './reload-message';
 
 export type Selection =
   | { kind: 'overview' }
@@ -62,6 +64,9 @@ export interface PlaceInfo {
 
 const SEP = '\u0000';
 
+/** Commit filter value for "new or changed since my last review" (also in the URL: …/c/since-review). */
+export const SINCE_REVIEW = 'since-review';
+
 /** Central UI state (signals). Marks are applied optimistically and confirmed by the backend. */
 @Injectable({ providedIn: 'root' })
 export class ReviewStore {
@@ -92,8 +97,10 @@ export class ReviewStore {
   /** Commits of the open PR and which commit made each changed line (loaded after the bundle). */
   readonly commits = signal<Commits | null>(null);
   readonly commitsLoading = signal(false);
-  /** Show only the changes of this commit (full sha); null = all changes of the PR. */
+  /** Show only the changes of this commit (full sha), or SINCE_REVIEW; null = all changes of the PR. */
   readonly commitFilter = signal<string | null>(null);
+  /** What the last reload with new commits did to the marks (from review.json). */
+  readonly reloadInfo = signal<ReloadInfo | null>(null);
   /** git blame annotations in the code blocks ("Annotate with Git Blame" in IntelliJ). */
   readonly annotate = signal(readFlag('scr.annotate'));
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
@@ -160,6 +167,34 @@ export class ReviewStore {
     return map;
   });
 
+  /** "path\0key" of the lines new or changed since the last review (empty unless the snapshot came from a reload). */
+  readonly sinceReview = computed<ReadonlySet<string>>(() => {
+    const r = this.reloadInfo();
+    if (!r || r.toHeadSha !== this.bundle()?.pr.headSha) return new Set();
+    const result = new Set<string>();
+    for (const [path, keys] of Object.entries(r.newLines ?? {})) {
+      keys.forEach((k) => result.add(path + SEP + k));
+    }
+    return result;
+  });
+
+  /** The views show only what is new since the last review. */
+  readonly sinceReviewActive = computed(() => this.commitFilter() === SINCE_REVIEW);
+
+  /** Reviewable lines new or changed since the last review, with their progress. */
+  readonly sinceReviewProgress = computed<Progress>(() => {
+    const lines = this.sinceReviewLines();
+    return { ok: lines.filter((l) => this.isOkAt(l.path, l.key, null)).length, total: lines.length };
+  });
+
+  /** Commits that came after the last review (the head reviewed before is one of the PR's commits). */
+  readonly newCommits = computed<ReadonlySet<string>>(() => {
+    const from = this.sinceReview().size ? this.reloadInfo()?.fromHeadSha : null;
+    const list = this.commits()?.commits ?? [];
+    const i = from ? list.findIndex((c) => c.sha === from) : -1;
+    return new Set(i < 0 ? [] : list.slice(i + 1).map((c) => c.sha));
+  });
+
   /** Commit-Bezug der Tests (computed with the commits; empty until they are loaded). */
   readonly commitFindings = computed(() => this.commits()?.findings ?? []);
 
@@ -176,10 +211,9 @@ export class ReviewStore {
   private readonly commitSegments = computed<ReadonlySet<string> | null>(() => {
     const sha = this.commitFilter();
     if (!sha) return null;
-    const lc = this.lineCommit();
     const result = new Set<string>();
     for (const s of this.bundle()?.analysis.segments ?? []) {
-      if (s.lineKeys.some((k) => lc.get(s.path + SEP + k) === sha)) {
+      if (s.lineKeys.some((k) => this.inCommit(s.path, k))) {
         result.add(s.id);
       }
     }
@@ -371,10 +405,11 @@ export class ReviewStore {
       return;
     }
     this.loading.set(`Lade ${this.provider().noun} neu von ${this.provider().label} …`);
+    const previousHead = this.bundle()?.pr.headSha;
     this.api.reload(key).subscribe({
       next: (b) => {
         this.applyBundle(b, this.selection());
-        this.notify('Snapshot neu geladen und analysiert');
+        this.notify(reloadMessage(previousHead, b.pr.headSha, b.state.reload));
       },
       error: (e) => {
         this.loading.set(null);
@@ -496,6 +531,8 @@ export class ReviewStore {
         const match = pending ? c.commits.find((x) => x.sha.startsWith(pending)) : null;
         if (match) {
           this.setCommitFilter(match.sha);
+        } else if (pending === SINCE_REVIEW && this.sinceReview().size) {
+          this.setCommitFilter(SINCE_REVIEW);
         }
       },
       error: (e) => {
@@ -549,10 +586,30 @@ export class ReviewStore {
     return this.lineCommit().get(path + SEP + key);
   }
 
-  /** Is the change on this line part of the selected commit? Always true without a commit filter. */
+  /** Is the change on this line part of the selected commit (or new since the review)? Always true without a filter. */
   inCommit(path: string, key: string): boolean {
     const sha = this.commitFilter();
+    if (sha === SINCE_REVIEW) {
+      return this.sinceReview().has(path + SEP + key);
+    }
     return !sha || this.lineCommit().get(path + SEP + key) === sha;
+  }
+
+  /** Reviewable lines new or changed since the last review, everywhere (place null). */
+  sinceReviewLines(): LineMark[] {
+    const since = this.sinceReview();
+    if (!since.size) return [];
+    const ignored = this.ignored();
+    const result: LineMark[] = [];
+    for (const s of this.bundle()?.analysis.segments ?? []) {
+      if (ignored.has(s.id)) continue;
+      for (const key of s.lineKeys) {
+        if (since.has(s.path + SEP + key)) {
+          result.push({ path: s.path, key, place: null });
+        }
+      }
+    }
+    return result;
   }
 
   toggleAnnotate(): void {
@@ -815,6 +872,7 @@ export class ReviewStore {
     this.ok.set(set);
     this.okAt.set(at);
     this.log.set(state.log ?? []);
+    this.reloadInfo.set(state.reload ?? null);
   }
 
   // ------------------------------------------------------------- comments
@@ -899,7 +957,7 @@ function parseHash(hash: string): { pr: PrKey; selection: Selection; commit: str
   }
   const pr = { provider: parts[0], owner: parts[1], repo: parts[2], number: Number(parts[3]) };
   let commit: string | null = null;
-  if (parts[4] === 'c' && /^[0-9a-f]{4,40}$/i.test(parts[5] ?? '')) {
+  if (parts[4] === 'c' && (/^[0-9a-f]{4,40}$/i.test(parts[5] ?? '') || parts[5] === SINCE_REVIEW)) {
     commit = parts[5].toLowerCase();
     parts.splice(4, 2);
   }

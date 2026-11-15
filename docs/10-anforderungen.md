@@ -39,7 +39,9 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | ID | Anforderung | Akzeptanzkriterien | Nachweis |
 |---|---|---|---|
 | FR-SNP-01 | Das System muss beim ersten Öffnen einen eingefrorenen Stand des PRs speichern (Metadaten, Diff, Quelltexte der neuen Version für analysierte Dateien). | `snapshot.json` und `sources/` entstehen; weitere Aufrufe gehen ohne Code-Host. | M |
-| FR-SNP-02 | Das System muss den Snapshot auf Wunsch neu laden und neu analysieren. | `POST …/reload`; Markierungen bleiben unverändert (A4). | M |
+| FR-SNP-02 | Das System muss den Snapshot auf Wunsch neu laden und neu analysieren. | `POST …/reload`; ohne neuen Head bleibt `review.json` unverändert. | M |
+| FR-SNP-05 | Bringt das Neuladen neue Commits (oder einen Rebase), muss das System die Markierungen auf die neuen Zeilenschlüssel übertragen: unveränderte Zeilen behalten sie, geänderte und neue sind offen; nie darf neuer Code als geprüft erscheinen. | Paarung nach Inhalt und Reihenfolge pro Datei (A4); Orte in `okAt` folgen der Gruppe bzw. dem Flow (Einstiegspunkt); umbenannte Dateien über `previousPath`; `reload` in `review.json` mit `kept`, `dropped`, `newLines`; Log-Eintrag `carry`. | T: MarkCarryTest; LineMatchTest; manuell spongecoach#13 (`1cc0359`) |
+| FR-SNP-06 | Das UI muss nach dem Neuladen melden, was mit den Markierungen geschah, und zeigen lassen, was seit dem letzten Review neu ist. | Meldung «Neue Commits: n Markierungen übernommen, m verworfen · k Zeilen neu oder geändert»; Eintrag «Neu seit letztem Review» in der Commit-Liste filtert alle Ansichten (URL `…/c/since-review`), ✓ markiert alle diese Zeilen; neue Commits tragen «neu». | T: reload-message.spec.ts; Rest M |
 | FR-SNP-03 | Das System muss fehlende Quelltexte nachladen, wenn neue Regeln sie brauchen. | Analyse nach Regeländerung holt fehlende `sources/` einmal nach (B9). | M |
 | FR-SNP-04 | Das System muss Grenzen des Hosts einhalten und sauber melden. | Max. 3000 Dateien pro PR, Dateien > 1 MB ohne Inhalt (A10). | M |
 
@@ -205,6 +207,9 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | `analysis/LayeredSpringAngularTest` | 3 | FR-ANA-06, -07, -08 |
 | `analysis/CategoryModulesTest` | 5 | FR-ANA-14, NFR-13 |
 | `review/LineAcceptanceTest` | 9 | FR-REV-04 bis -07, -09 |
+| `review/MarkCarryTest` | 5 | FR-SNP-05 |
+| `review/LineMatchTest` | 5 | FR-SNP-05 (Paarung der Zeilen) |
+| `frontend/src/app/reload-message.spec.ts` | 3 | FR-SNP-06 (Meldung nach dem Neuladen) |
 | `frontend/src/app/acceptance.spec.ts` | 5 | FR-REV-04, -05, -07 (UI-Seite) |
 | `analysis/ExpectationsTest` | 6 | FR-ANA-17 |
 | `frontend/src/app/expectations.spec.ts` | 4 | FR-ANA-17 (Markierungen und Warnzeile im UI) |

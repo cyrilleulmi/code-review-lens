@@ -8,7 +8,7 @@ Mögliche zukünftige Funktionen, grob nach Nutzen geordnet. Verbesserungen am B
 
 | # | Punkt | Stand |
 |---|---|---|
-| 1 | Neue Commits, Markierungen übertragen | offen, durch die Commit-Zuordnung jetzt einfacher (F-01, F-02) |
+| 1 | Neue Commits, Markierungen übertragen | umgesetzt (F-02, F-01); offen: neue Commits von selbst melden (F-34) |
 | 2 | REST-Verbindung erweitern | teilweise: generierte OpenAPI-Clients seit 0.5.0; Konstanten/Env, GraphQL und Architektur-Regeln offen (F-12, F-21) |
 | 3 | Unveränderte Zwischenstationen | offen (F-13) |
 | 4 | Weitere Zustände pro Zeile | offen (F-04) |
@@ -26,8 +26,8 @@ Mögliche zukünftige Funktionen, grob nach Nutzen geordnet. Verbesserungen am B
 
 | ID | Feature | Beschreibung | Nutzen | Aufwand |
 |---|---|---|---|---|
-| F-01 | **Neu seit meinem letzten Review** | Beim Neuladen den alten Head merken. Über die Commit-Zuordnung zeigen, welche Zeilen aus Commits nach dem letzten Review stammen, und nur diese als offen markieren. Schalter «nur neue Commits» im Commit-Filter. | ★★★ | M |
-| F-02 | **Markierungen über neue Commits retten** | Beim Neuladen Markierungen über Zeileninhalt (Hash + Nachbarschaft) und Commit-Zuordnung auf die neuen Zeilenschlüssel übertragen statt sie unverändert zu lassen (heute Annahme A4). Grundlage für F-01. | ★★★ | M |
+| F-01 | ~~**Neu seit meinem letzten Review**~~ | Umgesetzt: `reload.newLines` in `review.json`, Filter «Neu seit letztem Review» in der Commit-Liste, neue Commits mit «neu». | ★★★ | M |
+| F-02 | ~~**Markierungen über neue Commits retten**~~ | Umgesetzt: Paarung der geänderten Zeilen nach Inhalt und Reihenfolge (`MarkCarry`, `LineMatch`), Orte über Gruppen-ID bzw. Flow-Einstiegspunkt (FR-SNP-05). | ★★★ | M |
 | F-03 | **Commit-Bereich filtern** | Mehrere Commits oder «ab Commit X» statt genau einem; Mehrfachauswahl in der Commit-Liste. | ★★ | S |
 | F-04 | **Weitere Zustände pro Zeile/Block** | «Frage», «muss geändert werden», mit Notiz; daraus einen Kommentarentwurf erzeugen. Format: neues Feld in `review.json` (ergänzt, nicht umbenannt). | ★★★ | M |
 | F-05 | **Review abschliessen** | Approve / Request changes aus dem Tool; Kommentare optional als gesammelter Review (Pending) statt einzeln. | ★★ | M |
