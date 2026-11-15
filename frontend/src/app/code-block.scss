@@ -109,6 +109,41 @@
   color: #79c27e;
 }
 
+/* coverage of a testable changed function (static): untested, only indirectly tested, tested */
+.cov {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 1px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.cov:hover {
+  border-color: var(--accent);
+}
+
+.cov.cov-none {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+
+.cov.cov-indirect {
+  border-style: dashed;
+}
+
+.cov.cov-direct {
+  color: var(--ok);
+  border-color: var(--ok-border);
+}
+
 .called-by {
   display: inline-flex;
   align-items: center;

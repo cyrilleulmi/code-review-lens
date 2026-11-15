@@ -38,6 +38,14 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    A segment at several places needs one ok per place.
 5. `tests[]` → per changed test case: `subjects` (components under test) and `covers` (reached segments,
    `direct` or `via` another segment, `line` = call site in the test). `segments[].testedBy` is the reverse.
+   `coverage[]` is the view from the code (static; only changed tests and changed code): one entry per testable
+   changed function (function/method/component outside tests whose category has `needsTests`, default true;
+   false for quick wins, tests, styles, config, API contracts, persistence). `status`: `direct` (a changed test
+   calls it), `indirect` (only reached via other changed code), `none` (no changed test reaches it);
+   `directTests` / `indirectTests` = test segment ids; `branches` = decision points in the whole function
+   (if, case, catch, for, while, &&, ||, ternary ?); `changedLines` = non-blank, non-brace changed lines;
+   `risk` = changedLines × (1 + branches). Sorted: `none`, `indirect`, `direct`, each by risk descending.
+   Missing (null) in analyses of older versions.
 6. `architecture.style` = "hexagonal" when the repo uses ports & adapters, "layered" for domain / application /
    adapter packages without ports; then `segments[].layer` is domain | application | usecase | adapter.
    `segments[].frontend` marks web frontend code. `flows[].edges[].kind` = "http" for REST calls from the

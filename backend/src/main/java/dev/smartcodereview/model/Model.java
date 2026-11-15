@@ -234,11 +234,29 @@ public final class Model {
     public record ComponentEdge(String from, String to, int calls, boolean http) {
     }
 
+    /**
+     * Test coverage seen from the code (static, only changed tests and changed code): one entry per testable
+     * changed function - a function/method/component outside tests whose main category needs tests (rules:
+     * needsTests). status: "direct" (a changed test calls it, also via test helpers), "indirect" (only reached via
+     * other changed code), "none". directTests / indirectTests: ids of the test segments. branches: decision points
+     * in the whole function (if, case, catch, for, while, &&, ||, ternary ?). changedLines: non-blank changed
+     * lines. risk = changedLines × (1 + branches), for sorting.
+     */
+    @RegisterForReflection
+    public record CodeCoverage(String segmentId, String status, List<String> directTests, List<String> indirectTests,
+                               int branches, int changedLines, int risk) {
+    }
+
+    /**
+     * coverage: testable changed functions, "none" first, then "indirect", then "direct", each by risk (highest
+     * first); null in analyses of older versions.
+     */
     @RegisterForReflection
     public record Analysis(int schemaVersion, String generatedAt, String headSha, String rulesHash,
                            List<Segment> segments, List<Category> categories, List<Flow> flows,
                            List<TestInfo> tests, ArchitectureInfo architecture,
-                           List<Component> components, List<ComponentEdge> componentEdges) {
+                           List<Component> components, List<ComponentEdge> componentEdges,
+                           List<CodeCoverage> coverage) {
     }
 
     /**

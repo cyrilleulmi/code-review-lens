@@ -399,6 +399,54 @@ h2 {
   }
 }
 
+.coverage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  width: 100%;
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-panel);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--accent);
+  }
+
+  .cov-icon {
+    color: var(--area-test);
+  }
+
+  .label {
+    font-weight: 600;
+  }
+
+  .desc {
+    color: var(--fg-muted);
+    font-size: 12.5px;
+  }
+
+  .desc b {
+    font-weight: 600;
+    color: var(--fg);
+  }
+
+  .desc b.warn {
+    color: var(--warn);
+  }
+
+  .go {
+    margin-left: auto;
+    color: var(--fg-dim);
+  }
+}
+
 .arch {
   display: flex;
   flex-wrap: wrap;

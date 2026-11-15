@@ -83,7 +83,9 @@ final class CategoryModules {
         if (concern) {
             extra = extra.or(s -> s.concerns().contains(id));
         }
-        return new GroupedCategory(info, CategoryModule.ORIGIN_RULES, s -> id.equals(s.category()), extra, extraGroup);
+        // tests come with the test overview and the coverage of the changed code
+        String view = id.equals("tests") ? CategoryModule.VIEW_TESTS : CategoryModule.VIEW_GROUPS;
+        return new GroupedCategory(info, CategoryModule.ORIGIN_RULES, s -> id.equals(s.category()), extra, extraGroup, view);
     }
 
     private static String adapterGroup(SegmentFacts s) {
@@ -129,7 +131,8 @@ final class CategoryModules {
                     + reasons(rules.concerns, id) + ". Ein Segment kann in mehreren Querschnitts-Kategorien stehen.");
         }
         if (id.equals("tests")) {
-            parts.add("Test-Dateien werden in Testfälle zerlegt, damit jeder mit dem getesteten Code verknüpft werden kann.");
+            parts.add("Test-Dateien werden in Testfälle zerlegt, damit jeder mit dem getesteten Code verknüpft werden kann. "
+                    + "Umgekehrt zeigt die Abdeckung, welche geänderten Funktionen kein geänderter Test erreicht.");
         }
         return parts.isEmpty() ? "Keine Regel weist dieser Kategorie Code zu." : String.join(" ", parts);
     }

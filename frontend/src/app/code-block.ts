@@ -119,6 +119,25 @@ export class CodeBlock {
       .map((c) => ({ id: c.segmentId, name: shortName(segs.get(c.segmentId)!), direct: c.direct }));
   });
 
+  /** Testable changed function: is it reached by a changed test (static)? null for anything else. */
+  protected readonly coverage = computed(() => {
+    const c = this.store.coverage().get(this.segment().id);
+    if (!c) return null;
+    const label = c.status === 'none' ? 'ohne Test' : c.status === 'indirect' ? 'nur indirekt getestet'
+      : c.directTests.length === 1 ? '1 Test' : `${c.directTests.length} Tests`;
+    const tests = c.status === 'none' ? 'Kein geänderter Test erreicht diese Funktion'
+      : c.status === 'indirect' ? `Nur über anderen geänderten Code erreicht (${c.indirectTests.length} ${c.indirectTests.length === 1 ? 'Test' : 'Tests'})`
+      : `${c.directTests.length} ${c.directTests.length === 1 ? 'Test ruft' : 'Tests rufen'} die Funktion direkt auf`
+        + (c.indirectTests.length ? `, ${c.indirectTests.length} indirekt` : '');
+    const branches = `${c.branches} ${c.branches === 1 ? 'Verzweigung' : 'Verzweigungen'}`;
+    return { status: c.status, label, title: `${tests} · ${branches} · statisch ermittelt – Klick: Abdeckung zeigen` };
+  });
+
+  protected openCoverage(event: Event): void {
+    event.stopPropagation();
+    this.store.openCoverage();
+  }
+
   /** Tests that reach this code. */
   protected readonly testedBy = computed(() => {
     const segs = this.store.segments();

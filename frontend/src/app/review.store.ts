@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import {
   Api,
   Blame,
+  CodeCoverage,
   Comment,
   Commit,
   Commits,
@@ -16,6 +17,7 @@ import {
   Segment,
   TestInfo,
   errorMessage,
+  isTestsView,
   prLabel,
   providerInfo,
 } from './api';
@@ -26,7 +28,9 @@ export type Selection =
   | { kind: 'category'; id: string }
   | { kind: 'group'; id: string }
   | { kind: 'flow'; id: string }
-  | { kind: 'file'; path: string };
+  | { kind: 'file'; path: string }
+  /** coverage of the changed code on its own page (when there is no switched-on test category to show it in) */
+  | { kind: 'coverage' };
 
 export type PrFilter = 'all' | 'authored' | 'review-requested';
 
@@ -236,6 +240,18 @@ export class ReviewStore {
     return map;
   });
 
+  /** Coverage of the testable changed functions by segment id (static, see CodeCoverage). */
+  readonly coverage = computed(() => {
+    const map = new Map<string, CodeCoverage>();
+    for (const c of this.bundle()?.analysis.coverage ?? []) {
+      map.set(c.segmentId, c);
+    }
+    return map;
+  });
+
+  /** The switched-on test category, which shows the coverage above its test overview; null when there is none. */
+  readonly testsCategory = computed(() => this.categories().find((c) => isTestsView(c)) ?? null);
+
   readonly filteredPrs = computed(() => {
     const f = this.prFilter();
     return f === 'all' ? this.prs() : this.prs().filter((p) => p.roles.includes(f));
@@ -373,6 +389,8 @@ export class ReviewStore {
         return b.analysis.flows.some((f) => f.id === sel.id);
       case 'file':
         return b.files.some((f) => f.path === sel.path);
+      case 'coverage':
+        return (b.analysis.coverage?.length ?? 0) > 0;
     }
   }
 
@@ -515,6 +533,12 @@ export class ReviewStore {
     });
   }
 
+  /** Shows the coverage of the changed code: in the test category if switched on, else on its own page. */
+  openCoverage(): void {
+    const tests = this.testsCategory();
+    this.select(tests ? { kind: 'category', id: tests.id } : { kind: 'coverage' });
+  }
+
   /** Navigates to a segment at another place than the current one (its first place, else its file). */
   reveal(segmentId: string): void {
     const seg = this.segments().get(segmentId);
@@ -580,6 +604,8 @@ export class ReviewStore {
           .filter((s) => s.path === sel.path)
           .sort((x, y) => (x.startLine ?? lineOf(x.lineKeys[0])) - (y.startLine ?? lineOf(y.lineKeys[0])))
           .map((s) => ({ segmentId: s.id, place: null }));
+      case 'coverage':
+        return [];
     }
   }
 
@@ -797,6 +823,8 @@ function formatHash(pr: PrKey, sel: Selection, commit: string | null): string {
       return base;
     case 'file':
       return `${base}/file/${encodeURIComponent(sel.path)}`;
+    case 'coverage':
+      return `${base}/coverage`;
     default:
       return `${base}/${sel.kind}/${encodeURIComponent(sel.id)}`;
   }
@@ -818,6 +846,8 @@ function parseHash(hash: string): { pr: PrKey; selection: Selection; commit: str
   let selection: Selection = { kind: 'overview' };
   if (kind === 'file' && value) {
     selection = { kind: 'file', path: value };
+  } else if (kind === 'coverage') {
+    selection = { kind: 'coverage' };
   } else if ((kind === 'category' || kind === 'group' || kind === 'flow') && value) {
     selection = { kind, id: value };
   }

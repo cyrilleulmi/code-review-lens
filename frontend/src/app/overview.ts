@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { isFlowView, ownerLabel } from './api';
+import { isFlowView, isTestsView, ownerLabel } from './api';
 import { CommitList } from './commit-list';
 import { ComponentDiagram } from './component-diagram';
 import { Icon } from './icon';
@@ -23,13 +23,13 @@ export class Overview {
   protected readonly allCategories = computed(() =>
     this.store.bundle()!.analysis.categories.map((c) => {
       const ids = c.groups.flatMap((g) => g.segmentIds);
-      const tests = c.id === 'tests' ? this.store.bundle()!.analysis.tests ?? [] : [];
+      const tests = isTestsView(c) ? this.store.bundle()!.analysis.tests ?? [] : [];
       const covered = new Set(tests.flatMap((t) => t.covers.map((x) => x.segmentId))).size;
       return {
         ...c,
         segmentCount: new Set(ids).size,
         progress: this.store.progressOf(this.store.slotsFor({ kind: 'category', id: c.id })),
-        stats: c.id === 'tests' && tests.length
+        stats: tests.length
           ? `${tests.length} Testfälle · erreichen ${covered} geänderte Codestellen`
           : `${c.groups.length} ${isFlowView(c) ? 'Flows' : 'Gruppen'} · ${new Set(ids).size} Blöcke`,
         enabled: !this.store.disabledCategories().has(c.id),
@@ -42,6 +42,13 @@ export class Overview {
   protected readonly categories = computed(() => this.allCategories().filter((c) => c.enabled));
   protected readonly disabled = computed(() => this.allCategories().filter((c) => !c.enabled));
   protected readonly architecture = computed(() => this.store.bundle()!.analysis.architecture);
+  /** Coverage of the changed code (static): counts per status; null when no changed function needs tests. */
+  protected readonly coverage = computed(() => {
+    const list = this.store.bundle()!.analysis.coverage ?? [];
+    if (list.length === 0) return null;
+    const n = (status: string) => list.filter((c) => c.status === status).length;
+    return { total: list.length, direct: n('direct'), indirect: n('indirect'), none: n('none') };
+  });
 
   protected toggle(id: string, event: Event): void {
     event.stopPropagation();

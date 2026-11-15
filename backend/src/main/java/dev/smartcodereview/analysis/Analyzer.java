@@ -10,6 +10,7 @@ import dev.smartcodereview.model.Model.Analysis;
 import dev.smartcodereview.model.Model.ApiOperation;
 import dev.smartcodereview.model.Model.ArchitectureInfo;
 import dev.smartcodereview.model.Model.Category;
+import dev.smartcodereview.model.Model.CodeCoverage;
 import dev.smartcodereview.model.Model.Component;
 import dev.smartcodereview.model.Model.ComponentEdge;
 import dev.smartcodereview.model.Model.DiffFile;
@@ -54,7 +55,8 @@ import java.util.stream.Collectors;
  *   <li>Changed functions that reference each other (name match + import check) are connected; every entry
  *       point gets a <em>flow</em> with everything it reaches, in call order. A function reached from two entry
  *       points is part of both flows.</li>
- *   <li>Changed test cases are linked to the changed code they reach through the same call graph.</li>
+ *   <li>Changed test cases are linked to the changed code they reach through the same call graph; seen from the
+ *       code, every testable changed function gets a coverage status (direct, indirect, none) and a branch count.</li>
  *   <li>Frontend REST calls are matched to backend endpoints (http edges), so a flow can run from a component
  *       through the API client into the backend.</li>
  *   <li>Ports &amp; adapters projects get a layer per segment (domain, use case, application, adapter); frontend
@@ -84,7 +86,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 14;
+    public static final int VERSION = 15;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -278,7 +280,8 @@ public final class Analyzer {
         Map<String, String> componentOf = new HashMap<>();
         List<Component> components = components(works, !evidence.isEmpty(), componentOf);
         return new Analysis(Model.SCHEMA_VERSION, Instant.now().toString(), snapshot.pr().headSha(), fingerprint(rules),
-                segments, categories, flows, tests, architecture, components, componentEdges(edges, componentOf));
+                segments, categories, flows, tests, architecture, components, componentEdges(edges, componentOf),
+                coverage(works, tests));
     }
 
     /** The code of a segment as text: the whole symbol, or the changed lines of a hunk/module segment. */
@@ -1066,6 +1069,45 @@ public final class Analyzer {
                     List.copyOf(covers.values())));
         }
         return result;
+    }
+
+    /**
+     * Coverage from the code's side: for every testable changed function, which changed tests reach it directly or
+     * only via other changed code, how many branches it has and how much of it changed (see Model.CodeCoverage).
+     */
+    private List<CodeCoverage> coverage(List<Work> works, List<TestInfo> tests) {
+        Map<String, List<String>> direct = new HashMap<>();
+        Map<String, List<String>> indirect = new HashMap<>();
+        for (TestInfo t : tests) {
+            for (TestCoverage c : t.covers()) {
+                (c.direct() ? direct : indirect).computeIfAbsent(c.segmentId(), k -> new ArrayList<>()).add(t.segmentId());
+            }
+        }
+        List<CodeCoverage> result = new ArrayList<>();
+        for (Work w : works) {
+            int changed = (int) w.changed.stream().filter(l -> !Rules.isTrivial(l.text())).count();
+            if (!needsTests(w) || changed == 0) {
+                continue;
+            }
+            List<String> d = direct.getOrDefault(w.id, List.of());
+            List<String> i = indirect.getOrDefault(w.id, List.of());
+            String status = !d.isEmpty() ? Coverage.DIRECT : !i.isEmpty() ? Coverage.INDIRECT : Coverage.NONE;
+            List<String> code = w.ctx.text.code;
+            int branches = Coverage.branches(code.subList(Math.min(w.symbol.startLine() - 1, code.size()), Math.min(w.symbol.endLine(), code.size())));
+            result.add(new CodeCoverage(w.id, status, List.copyOf(d), List.copyOf(i), branches, changed, Coverage.risk(changed, branches)));
+        }
+        result.sort(Coverage.ORDER);
+        return result;
+    }
+
+    /**
+     * Testable changed logic: a changed function/method/component (no test case, no test helper) whose main
+     * category needs tests (rules: needsTests). Framework hooks (NOT_CALLED: constructor, ngOnInit, render, ...)
+     * are left out - no test calls them by name, so the static view could only ever report them as untested.
+     */
+    private boolean needsTests(Work w) {
+        return "symbol".equals(w.kind) && w.ctx != null && w.symbol.isCallable() && !w.symbol.isTestBlock() && !isTest(w)
+                && !NOT_CALLED.contains(w.symbol.name()) && rules.needsTests(w.category);
     }
 
     private static List<TestSubject> subjects(Work test, Iterable<TestCoverage> covers, Map<String, Work> byId, List<DiffFile> files) {

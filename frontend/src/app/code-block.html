@@ -19,6 +19,11 @@
     <span class="lines">:{{ seg.startLine }}</span>
   }
   <span class="chip" [class]="'chip cat-' + seg.category" [title]="seg.reason">{{ seg.category === 'logic' ? 'Logik' : seg.category === 'tests' ? (seg.symbolKind === 'test' ? 'Testfall' : 'Test') : seg.group }}</span>
+  @if (coverage(); as cv) {
+    <button type="button" class="cov" [class]="'cov cov-' + cv.status" [title]="cv.title" (click)="openCoverage($event)">
+      <app-icon [name]="cv.status === 'none' ? 'info' : 'test'" [size]="11" /> {{ cv.label }}
+    </button>
+  }
   @if (calledBy(); as by) {
     <button class="called-by" type="button" [style.--c]="calledByColor()" (click)="$event.stopPropagation(); calledByClick.emit()">
       <app-icon name="arrowLeft" [size]="12" /> {{ by }}

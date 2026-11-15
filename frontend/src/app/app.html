@@ -119,9 +119,19 @@
               <app-flow-view [flow]="f" />
             }
           }
+          @case ('coverage') {
+            <div class="view-head">
+              <app-icon name="test" [size]="18" />
+              <div class="titles">
+                <h1>Abdeckung</h1>
+                <p>Welche geänderten Funktionen ein geänderter Test erreicht – und welche nicht. Ohne geänderte Tests steht hier alles unter «Ohne Test».</p>
+              </div>
+            </div>
+            <app-coverage-overview (testClick)="store.reveal($event)" />
+          }
           @default {
             <app-group-view [title]="c.title!" [description]="c.description ?? null" [details]="c.details ?? null" [icon]="c.icon ?? 'code'"
-                            [slots]="c.slots!" [scope]="c.scope!" [fileView]="store.selection().kind === 'file'" />
+                            [slots]="c.slots!" [scope]="c.scope!" [fileView]="store.selection().kind === 'file'" [coverage]="!!c.coverage" />
           }
         }
       </div>

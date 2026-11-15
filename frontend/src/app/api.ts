@@ -189,6 +189,11 @@ export function isFlowView(c: { id: string; view?: string | null }): boolean {
   return (c.view ?? (c.id === 'flows' ? 'flow' : 'groups')) === 'flow';
 }
 
+/** The test category: groups plus the test overview and the coverage of the changed code. */
+export function isTestsView(c: { view?: string | null }): boolean {
+  return c.view === 'tests';
+}
+
 export interface Category {
   id: string;
   label: string;
@@ -199,7 +204,7 @@ export interface Category {
   /** how the category is composed / split into groups (absent in analyses of older versions) */
   builds?: string | null;
   divides?: string | null;
-  /** 'groups' = list of groups; other values are exceptions with their own UI ('flow') */
+  /** 'groups' = list of groups; other values are exceptions with their own UI ('flow', 'tests') */
   view?: string | null;
   /** 'builtin' | 'rules' (| later 'external') */
   origin?: string | null;
@@ -250,6 +255,25 @@ export interface TestInfo {
   covers: TestCoverage[];
 }
 
+export type CoverageStatus = 'direct' | 'indirect' | 'none';
+
+/**
+ * Coverage of a testable changed function, seen from the code (Model.CodeCoverage), found statically:
+ * direct = a changed test calls it, indirect = only reached via other changed code, none = no changed test reaches it.
+ */
+export interface CodeCoverage {
+  segmentId: string;
+  status: CoverageStatus;
+  directTests: string[];
+  indirectTests: string[];
+  /** decision points in the whole function (if, case, catch, for, while, &&, ||, ternary) */
+  branches: number;
+  /** non-blank, non-brace changed lines */
+  changedLines: number;
+  /** changedLines × (1 + branches), for sorting */
+  risk: number;
+}
+
 export interface ArchitectureInfo {
   /** hexagonal: ports & adapters; layered: domain / application / adapter packages without ports */
   style: 'hexagonal' | 'layered' | null;
@@ -288,6 +312,8 @@ export interface Analysis {
   architecture: ArchitectureInfo | null;
   components: Component[];
   componentEdges: ComponentEdge[];
+  /** testable changed functions: none first, then indirect, then direct, each by risk (absent in older analyses) */
+  coverage?: CodeCoverage[] | null;
 }
 
 export interface LogEntry {

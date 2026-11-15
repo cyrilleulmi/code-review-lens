@@ -22,7 +22,8 @@ public interface CategoryModule {
 
     /**
      * How the UI shows this category. "groups" (default): a list of groups with code blocks. Other values are
-     * exceptions for special UIs; "flow" = call tree diagram plus blocks in call order.
+     * exceptions for special UIs; "flow" = call tree diagram plus blocks in call order; "tests" = groups plus the
+     * test overview and the coverage of the changed code ("Abdeckung").
      */
     default String view() {
         return VIEW_GROUPS;
@@ -38,6 +39,7 @@ public interface CategoryModule {
 
     String VIEW_GROUPS = "groups";
     String VIEW_FLOW = "flow";
+    String VIEW_TESTS = "tests";
     String ORIGIN_BUILTIN = "builtin";
     String ORIGIN_RULES = "rules";
 }

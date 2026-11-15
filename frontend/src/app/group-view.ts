@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, computed, inject, input, linkedSignal } from '@angular/core';
 import { CodeBlock } from './code-block';
+import { CoverageOverview } from './coverage-overview';
 import { Icon } from './icon';
 import { ReviewStore, Slot } from './review.store';
 import { TestOverview } from './test-overview';
@@ -8,7 +9,7 @@ import { TestOverview } from './test-overview';
 @Component({
   selector: 'app-group-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CodeBlock, Icon, TestOverview],
+  imports: [CodeBlock, CoverageOverview, Icon, TestOverview],
   template: `
     <div class="view-head">
       <app-icon [name]="icon()" [size]="18" />
@@ -39,6 +40,9 @@ import { TestOverview } from './test-overview';
     }
     @if (slots().length === 0) {
       <p class="empty">Keine Änderungen in dieser Auswahl.</p>
+    }
+    @if (coverage() && store.bundle()?.analysis?.coverage && stepIndex() === null) {
+      <app-coverage-overview (testClick)="openRef($event)" />
     }
     @if (testIds().length && stepIndex() === null) {
       <app-test-overview [testIds]="testIds()" (testClick)="scrollTo($event)" />
@@ -100,6 +104,8 @@ export class GroupView {
   readonly scope = input.required<string>();
   /** File view: marks apply to all places of a line. */
   readonly fileView = input(false);
+  /** Show the coverage of the changed code above the blocks (test category). */
+  readonly coverage = input(false);
 
   protected readonly progress = computed(() => this.store.progressOf(this.slots()));
   /** Step-by-step mode: index of the only block shown, null = off. Reset when the content changes. */

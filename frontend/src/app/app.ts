@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
-import { prLabel } from './api';
+import { isTestsView, prLabel } from './api';
+import { CoverageOverview } from './coverage-overview';
 import { FlowView } from './flow-view';
 import { GroupView } from './group-view';
 import { Icon } from './icon';
@@ -11,20 +12,22 @@ import { ReviewTree } from './review-tree';
 type ToolWindow = 'prs' | 'review' | null;
 
 interface EditorContent {
-  kind: 'overview' | 'group' | 'flow';
+  kind: 'overview' | 'group' | 'flow' | 'coverage';
   title?: string;
   description?: string | null;
   details?: { builds?: string | null; divides?: string | null } | null;
   icon?: string;
   slots?: Slot[];
   scope?: string;
+  /** group view of the test category: shows the coverage of the changed code */
+  coverage?: boolean;
   crumbs: string[];
 }
 
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView],
+  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, CoverageOverview],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -51,7 +54,7 @@ export class App {
         const c = cats.find((x) => x.id === sel.id)!;
         return {
           kind: 'group', title: c.label, description: c.description, details: c, icon: c.icon,
-          slots: this.store.slotsFor(sel), scope: `category:${c.id}`, crumbs: [c.label],
+          slots: this.store.slotsFor(sel), scope: `category:${c.id}`, crumbs: [c.label], coverage: isTestsView(c),
         };
       }
       case 'group': {
@@ -74,6 +77,8 @@ export class App {
           slots: this.store.slotsFor(sel), scope: `file:${sel.path}`, crumbs: ['Dateien', ...sel.path.split('/')],
         };
       }
+      case 'coverage':
+        return { kind: 'coverage', crumbs: ['Abdeckung'] };
     }
   });
 

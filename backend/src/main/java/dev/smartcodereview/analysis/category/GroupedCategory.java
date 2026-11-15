@@ -23,9 +23,17 @@ public class GroupedCategory implements CategoryModule {
     private final Predicate<SegmentFacts> primary;
     private final Predicate<SegmentFacts> extra;
     private final Function<SegmentFacts, String> extraGroup;
+    private final String view;
 
     public GroupedCategory(CategoryInfo info, String origin, Predicate<SegmentFacts> primary,
                            Predicate<SegmentFacts> extra, Function<SegmentFacts, String> extraGroup) {
+        this(info, origin, primary, extra, extraGroup, VIEW_GROUPS);
+    }
+
+    /** view: how the UI shows the groups (see {@link CategoryModule#view()}). */
+    public GroupedCategory(CategoryInfo info, String origin, Predicate<SegmentFacts> primary,
+                           Predicate<SegmentFacts> extra, Function<SegmentFacts, String> extraGroup, String view) {
+        this.view = view;
         this.info = info;
         this.origin = origin;
         this.primary = primary;
@@ -51,6 +59,11 @@ public class GroupedCategory implements CategoryModule {
     @Override
     public String origin() {
         return origin;
+    }
+
+    @Override
+    public String view() {
+        return view;
     }
 
     @Override

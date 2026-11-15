@@ -16,8 +16,11 @@ public final class Rules {
     /**
      * builds / divides: optional hand-written explanation of how the category is composed and split into groups;
      * when empty the category module derives it from the rules.
+     * needsTests: changed functions whose main category is this one count as testable logic in the coverage view
+     * ("Abdeckung"); false for trivial or mechanical code (quick wins, tests, styles, configuration). Default true.
      */
-    public record CategoryDef(String id, String label, String description, String icon, String builds, String divides) {
+    public record CategoryDef(String id, String label, String description, String icon, String builds, String divides,
+                              boolean needsTests) {
     }
 
     /**
@@ -74,7 +77,7 @@ public final class Rules {
         for (JsonNode c : root.path("categories")) {
             categories.add(new CategoryDef(c.path("id").asText(), c.path("label").asText(),
                     c.path("description").asText(""), c.path("icon").asText("code"),
-                    c.path("builds").asText(""), c.path("divides").asText("")));
+                    c.path("builds").asText(""), c.path("divides").asText(""), c.path("needsTests").asBoolean(true)));
         }
         return new Rules(categories, rules(root.path("rules")), rules(root.path("aspects")), rules(root.path("concerns")), hash);
     }
@@ -131,6 +134,11 @@ public final class Rules {
             }
         }
         return sb.toString();
+    }
+
+    /** Does changed code of this (main) category need tests? Categories the rules file does not define do. */
+    public boolean needsTests(String categoryId) {
+        return categories.stream().filter(c -> c.id().equals(categoryId)).findFirst().map(CategoryDef::needsTests).orElse(true);
     }
 
     /** First path rule that matches the file, or null. */

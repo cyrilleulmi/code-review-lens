@@ -71,6 +71,17 @@
   </div>
 }
 
+@if (coverage(); as cv) {
+  <button type="button" class="coverage" (click)="store.openCoverage()"
+          title="Welche geänderten Funktionen ein geänderter Test erreicht (statisch ermittelt: Aufrufe aus geänderten Tests)">
+    <app-icon name="test" [size]="16" class="cov-icon" />
+    <span class="label">Abdeckung des geänderten Codes</span>
+    <span class="desc">{{ cv.direct }} von {{ cv.total }} geänderten {{ cv.total === 1 ? 'Funktion' : 'Funktionen' }} direkt getestet
+      · {{ cv.indirect }} nur indirekt · <b [class.warn]="cv.none > 0">{{ cv.none }} ohne Test</b></span>
+    <app-icon name="chevronRight" [size]="12" class="go" />
+  </button>
+}
+
 <div class="arch">
   @if (architecture()?.style === 'hexagonal') {
     <span class="arch-badge" [title]="'Gefunden: ' + architecture()!.evidence.join(', ')"><app-icon name="hexagon" [size]="13" /> Ports &amp; Adapters erkannt</span>
