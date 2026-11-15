@@ -117,7 +117,7 @@ class AnalyzerTest {
         for (Model.Category c : analysis.categories()) {
             assertTrue(c.builds() != null && !c.builds().isBlank(), c.id() + " builds");
             assertTrue(c.divides() != null && !c.divides().isBlank(), c.id() + " divides");
-            assertEquals(c.id().equals("flows") ? "flow" : "groups", c.view(), c.id());
+            assertEquals(c.id().equals("flows") ? "flow" : c.id().equals("tests") ? "tests" : "groups", c.view(), c.id());
             assertTrue(c.groups().stream().allMatch(g -> g.id().startsWith(c.id() + "/")), c.id() + " group ids");
         }
     }

@@ -30,6 +30,14 @@
       <app-icon name="home" [size]="14" />
       <span class="label">Übersicht</span>
     </div>
+    @if (store.coverage().size && !store.testsCategory()) {
+      <div class="row overview" [class.selected]="store.selection().kind === 'coverage'" (click)="store.openCoverage()"
+           title="Welche geänderten Funktionen ein geänderter Test erreicht (statisch ermittelt)">
+        <span class="chev"></span>
+        <app-icon name="test" [size]="14" />
+        <span class="label">Abdeckung</span>
+      </div>
+    }
   }
   @for (n of rows(); track n.id) {
     @let p = progress(n);

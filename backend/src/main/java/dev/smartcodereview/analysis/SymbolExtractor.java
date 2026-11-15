@@ -16,7 +16,7 @@ public final class SymbolExtractor {
 
     /**
      * Lines are 1-based and inclusive. kind: class | interface | type | enum | function | method | component | const
-     * | test (a test case) | suite (describe block) | setup (beforeEach & co.)
+     * | test (a test case) | suite (describe block) | setup (beforeEach &amp; co., JUnit @BeforeEach/@AfterAll/… methods)
      */
     public record Symbol(String name, String kind, int startLine, int endLine, String container) {
         public int span() {
@@ -71,12 +71,28 @@ public final class SymbolExtractor {
             "^\\s*(?:@\\w+(?:\\([^)]*\\))?\\s+)*(?:(?:public|private|protected|static|final|synchronized|abstract|default|override|suspend|fun|async|virtual)\\s+)*"
                     + "(?:<[^>]+>\\s+)?([A-Za-z_$][\\w$.]*(?:<[^()]*>)?(?:\\[\\])*\\??)\\s+([A-Za-z_$][\\w$]*)\\s*\\(");
     /** Object/class property holding a function: `name: async (x) => {`, `name = (x) => {`. */
-    /** JS/TS test blocks: `describe('…', …)`, `it.only("…", …)`, `test.each(rows)('…', …)`. Strings are blanked, quotes stay. */
+    /**
+     * JS/TS test blocks: `describe('…', …)`, `it.only("…", …)`, `test.each(rows)('…', …)`, Jasmine/Jest `xit` /
+     * `fdescribe` (switched off / focused). Strings are blanked, quotes stay.
+     */
     private static final Pattern TEST_BLOCK = Pattern.compile(
-            "^\\s*(describe|context|suite|it|test|specify)(?:\\.(?:only|skip|todo|concurrent|each\\b[^(]*\\([^)]*\\)))*\\s*\\(\\s*(['\"`])");
+            "^\\s*(?:x|f)?(describe|context|suite|it|test|specify)(?:\\.(?:only|skip|todo|concurrent|each\\b[^(]*\\([^)]*\\)))*\\s*\\(\\s*(['\"`])");
+    /**
+     * JS/TS parameterised test blocks with their table: `it.each([...])('…', …)`, `test.each`…`('…', …)`. The table
+     * may span lines, so the name is searched after it (see {@link #eachTable}).
+     */
+    private static final Pattern EACH_BLOCK = Pattern.compile(
+            "^\\s*(?:x|f)?(describe|context|suite|it|test|specify)(?:\\.(?:only|skip|concurrent))*\\.each\\s*([(`])");
     private static final Pattern SETUP_BLOCK = Pattern.compile("^\\s*(beforeEach|beforeAll|afterEach|afterAll)\\s*\\(");
+    /** An annotation with arguments: `@CsvSource(`, `@Test(`. */
+    private static final Pattern ANNOTATION_WITH_ARGS = Pattern.compile("^\\s*@[\\w.]+\\s*\\(");
+    /** JVM languages: their annotations may span lines and belong to the declaration below. */
+    private static final Pattern JVM = Pattern.compile("\\.(java|kt|kts|groovy|scala)$");
     /** JUnit annotations of a test method. */
     private static final Pattern TEST_ANNOTATION = Pattern.compile("@(Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)\\b");
+    /** JUnit 4/5 and TestNG lifecycle annotations: the method is a setup block like beforeEach. */
+    private static final Pattern SETUP_ANNOTATION = Pattern.compile(
+            "@(BeforeEach|BeforeAll|AfterEach|AfterAll|Before|After|BeforeClass|AfterClass|BeforeMethod|AfterMethod)\\b(?!\\s*\\.)");
     /** Go: TestXxx, BenchmarkXxx, FuzzXxx in _test.go files. */
     private static final Pattern GO_TEST_NAME = Pattern.compile("^(Test|Benchmark|Fuzz)([A-Z_]\\w*)?$");
     private static final Pattern PROPERTY_FUNCTION = Pattern.compile(
@@ -89,7 +105,7 @@ public final class SymbolExtractor {
         List<Symbol> symbols = new ArrayList<>();
         boolean jsx = path.endsWith(".tsx") || path.endsWith(".jsx");
         if (path.endsWith(".go")) {
-            return withContainers(withLeadingComments(text, extractGo(text, path.endsWith("_test.go"))));
+            return withContainers(withLeadingComments(text, extractGo(text, path.endsWith("_test.go")), false));
         }
         List<String> code = text.code;
 
@@ -100,6 +116,14 @@ public final class SymbolExtractor {
             }
             Matcher m;
 
+            EachTable each = eachTable(text, li);
+            if (each != null && each.name() != null) {
+                // the call after the table holds the body: a template table ends on a line of its own
+                int end = Math.max(text.statementEnd(li), text.statementEnd(each.endLine()));
+                symbols.add(new Symbol(each.name().isEmpty() ? each.keyword() : each.name(), each.suite() ? "suite" : "test",
+                        li + 1, end + 1, null));
+                continue;
+            }
             if ((m = TEST_BLOCK.matcher(line)).find()) {
                 String kind = switch (m.group(1)) {
                     case "describe", "context", "suite" -> "suite";
@@ -157,7 +181,9 @@ public final class SymbolExtractor {
             }
             if ((m = TYPED_METHOD_DECL.matcher(line)).find() && (m.group(1).equals("void") || !KEYWORDS.contains(m.group(1)))
                     && !KEYWORDS.contains(m.group(2))) {
-                Symbol s = bodyAfterParams(text, li, m.end() - 1, m.group(2), annotatedAsTest(text, li) ? "test" : "method");
+                String kind = annotatedWith(text, li, TEST_ANNOTATION) ? "test"
+                        : annotatedWith(text, li, SETUP_ANNOTATION) ? "setup" : "method";
+                Symbol s = bodyAfterParams(text, li, m.end() - 1, m.group(2), kind);
                 if (s != null) {
                     symbols.add(s);
                     continue;
@@ -170,22 +196,136 @@ public final class SymbolExtractor {
                 }
             }
         }
-        return withContainers(withLeadingComments(text, symbols));
+        return withContainers(withLeadingComments(text, symbols, JVM.matcher(path).find()));
     }
 
-    /** A JUnit test method: a test annotation on the declaration line or on the annotation lines right above it. */
-    private static boolean annotatedAsTest(CodeText text, int line) {
-        for (int i = line; i >= 0 && i >= line - 6; i--) {
+    /**
+     * A JUnit test (or setup) method: an annotation of the pattern on the declaration line or on the annotation lines
+     * right above it (annotations whose arguments span lines, like a multi-line @CsvSource, included).
+     */
+    private static boolean annotatedWith(CodeText text, int line, Pattern annotation) {
+        if (annotation.matcher(text.code.get(line)).find()) {
+            return true;
+        }
+        int i = line - 1;
+        for (int steps = 0; i >= 0 && steps < 12; steps++) {
             String c = text.code.get(i).strip();
-            if (TEST_ANNOTATION.matcher(c).find()) {
-                return true;
+            if (c.startsWith("@") || (c.isEmpty() && !text.lines.get(i).isBlank())) {
+                if (annotation.matcher(c).find()) {
+                    return true;
+                }
+                i--;
+                continue;
             }
-            boolean annotationOrComment = c.startsWith("@") || (c.isEmpty() && !text.lines.get(i).isBlank());
-            if (i < line && !annotationOrComment) {
+            int start = annotationStartAbove(text, i);
+            if (start < 0) {
                 return false;
             }
+            if (annotation.matcher(text.code.get(start)).find()) {
+                return true;
+            }
+            i = start - 1;
         }
         return false;
+    }
+
+    /**
+     * The last line (0-based) of an annotation starting at line li: where the parenthesis of `@Name(` closes, li
+     * for annotations on one line or without arguments.
+     */
+    static int annotationEnd(CodeText text, int li) {
+        Matcher m = ANNOTATION_WITH_ARGS.matcher(text.code.get(li));
+        if (!m.find()) {
+            return li;
+        }
+        int[] end = text.skipParens(li, m.end() - 1);
+        return end == null ? li : end[0];
+    }
+
+    /**
+     * The first line (0-based) of a multi-line annotation that ends at line li (`})` of a @CsvSource), or -1 when
+     * line li does not close one.
+     */
+    static int annotationStartAbove(CodeText text, int li) {
+        for (int k = li - 1; k >= 0 && k >= li - 60; k--) {
+            if (ANNOTATION_WITH_ARGS.matcher(text.code.get(k)).find()) {
+                int end = annotationEnd(text, k);
+                return end == li ? k : -1;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * The table of a JS/TS `.each` block starting at line li (0-based): from its opening bracket or backtick to the
+     * closing one, plus the name in the call that follows (`it.each([...])('name', …)`; null when the table is not
+     * followed by a name string). keyword: e.g. "it"; suite: describe.each.
+     */
+    record EachTable(String keyword, boolean suite, boolean template, int line, int col, int endLine, int endCol, String name) {
+    }
+
+    static EachTable eachTable(CodeText text, int li) {
+        Matcher m = EACH_BLOCK.matcher(text.code.get(li));
+        if (!m.find()) {
+            return null;
+        }
+        boolean template = m.group(2).equals("`");
+        int col = m.end() - 1;
+        int endLine;
+        int endCol;
+        if (template) {
+            int[] close = findChar(text, li, col + 1, '`', 200);
+            if (close == null) {
+                return null;
+            }
+            endLine = close[0];
+            endCol = close[1] + 1;
+        } else {
+            int[] close = text.skipParens(li, col);
+            if (close == null) {
+                return null;
+            }
+            endLine = close[0];
+            endCol = close[1];
+        }
+        String keyword = m.group(1);
+        boolean suite = keyword.equals("describe") || keyword.equals("context") || keyword.equals("suite");
+        // the call with the name: optional whitespace, "(", whitespace, a quote
+        int[] open = nextNonSpace(text, endLine, endCol, 2);
+        String name = null;
+        if (open != null && text.code.get(open[0]).charAt(open[1]) == '(') {
+            int[] quote = nextNonSpace(text, open[0], open[1] + 1, 2);
+            if (quote != null && "'\"`".indexOf(text.code.get(quote[0]).charAt(quote[1])) >= 0) {
+                String raw = text.lines.get(quote[0]);
+                char q = raw.charAt(quote[1]);
+                int close = raw.indexOf(q, quote[1] + 1);
+                name = raw.substring(quote[1] + 1, close < 0 ? raw.length() : close).strip();
+            }
+        }
+        return new EachTable(keyword, suite, template, li, col, endLine, endCol, name);
+    }
+
+    /** Position of the next non-blank code character at or after (line, col), within maxLines lines. */
+    private static int[] nextNonSpace(CodeText text, int line, int col, int maxLines) {
+        for (int li = line; li < text.code.size() && li <= line + maxLines; li++) {
+            String s = text.code.get(li);
+            for (int i = li == line ? col : 0; i < s.length(); i++) {
+                if (!Character.isWhitespace(s.charAt(i))) {
+                    return new int[]{li, i};
+                }
+            }
+        }
+        return null;
+    }
+
+    private static int[] findChar(CodeText text, int line, int col, char c, int maxLines) {
+        for (int li = line; li < text.code.size() && li <= line + maxLines; li++) {
+            int i = text.code.get(li).indexOf(c, li == line ? col : 0);
+            if (i >= 0) {
+                return new int[]{li, i};
+            }
+        }
+        return null;
     }
 
     /** Go has its own simple top-level grammar: funcs (with receiver = container) and struct/interface types. */
@@ -218,8 +358,12 @@ public final class SymbolExtractor {
         return symbols;
     }
 
-    /** Doc comments, line comments and annotations right above a declaration belong to it. */
-    private static List<Symbol> withLeadingComments(CodeText text, List<Symbol> symbols) {
+    /**
+     * Doc comments, line comments and annotations right above a declaration belong to it (also annotations whose
+     * arguments span lines, like a multi-line @CsvSource, in JVM languages; TS decorators such as a multi-line
+     * @Component({...}) stay outside the class).
+     */
+    private static List<Symbol> withLeadingComments(CodeText text, List<Symbol> symbols, boolean jvm) {
         List<Symbol> result = new ArrayList<>(symbols.size());
         for (Symbol s : symbols) {
             int start = s.startLine(); // 1-based
@@ -228,9 +372,13 @@ public final class SymbolExtractor {
                 boolean comment = !raw.isEmpty() && text.code.get(start - 2).isBlank();
                 if (comment || raw.startsWith("@")) {
                     start--;
-                } else {
+                    continue;
+                }
+                int annotation = raw.isEmpty() || !jvm ? -1 : annotationStartAbove(text, start - 2);
+                if (annotation < 0) {
                     break;
                 }
+                start = annotation + 1;
             }
             result.add(start == s.startLine() ? s : new Symbol(s.name(), s.kind(), start, s.endLine(), s.container()));
         }

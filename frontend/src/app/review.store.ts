@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import {
   Api,
   Blame,
+  CodeCoverage,
   Comment,
   Commit,
   Commits,
@@ -14,19 +15,26 @@ import {
   ReviewBundle,
   ReviewState,
   Segment,
+  SetupImpact,
+  SpecEntry,
   TestInfo,
   errorMessage,
+  isTestsView,
   prLabel,
   providerInfo,
 } from './api';
 import { AcceptStatus, Acceptance, accept, acceptedElsewhere, acceptedIn, statusOf } from './acceptance';
+import { laterExpectationsByTest } from './commit-findings';
+import { groupWarnings, testNamer } from './mock-boundaries';
 
 export type Selection =
   | { kind: 'overview' }
   | { kind: 'category'; id: string }
   | { kind: 'group'; id: string }
   | { kind: 'flow'; id: string }
-  | { kind: 'file'; path: string };
+  | { kind: 'file'; path: string }
+  /** coverage of the changed code on its own page (when there is no switched-on test category to show it in) */
+  | { kind: 'coverage' };
 
 export type PrFilter = 'all' | 'authored' | 'review-requested';
 
@@ -79,6 +87,8 @@ export class ReviewStore {
   readonly collapseCommand = signal<{ collapsed: boolean; seq: number } | null>(null);
   /** Segment to scroll to after the next render (e.g. clicked in a flow diagram). */
   readonly focusSegment = signal<string | null>(null);
+  /** Line (new file) to show within the focused block after the next render (e.g. a finding of the coverage view). */
+  readonly focusLine = signal<{ segmentId: string; line: number } | null>(null);
   /** Commits of the open PR and which commit made each changed line (loaded after the bundle). */
   readonly commits = signal<Commits | null>(null);
   readonly commitsLoading = signal(false);
@@ -149,6 +159,12 @@ export class ReviewStore {
     }
     return map;
   });
+
+  /** Commit-Bezug der Tests (computed with the commits; empty until they are loaded). */
+  readonly commitFindings = computed(() => this.commits()?.findings ?? []);
+
+  /** Tests whose expectation a later commit changed: test segment id -> findings (expectation-later). */
+  readonly laterExpectations = computed(() => laterExpectationsByTest(this.commitFindings()));
 
   /** The commit the views are filtered to, if any. */
   readonly activeCommit = computed(() => {
@@ -235,6 +251,52 @@ export class ReviewStore {
     }
     return map;
   });
+
+  /** Coverage of the testable changed functions by segment id (static, see CodeCoverage). */
+  readonly coverage = computed(() => {
+    const map = new Map<string, CodeCoverage>();
+    for (const c of this.bundle()?.analysis.coverage ?? []) {
+      map.set(c.segmentId, c);
+    }
+    return map;
+  });
+
+  /** Erwartungs-Regeln that apply to changed code (empty for older analyses and a whole repository). */
+  readonly ruleChecks = computed(() => this.bundle()?.analysis.ruleChecks ?? []);
+
+  /** Mock-Grenzen: tests that mock changed code, by test id (code block badge) and by mocked segment (flow marker). */
+  readonly mockWarningsByTest = computed(() => groupWarnings(this.bundle()?.analysis.mockWarnings, 'test'));
+  readonly mockWarningsBySegment = computed(() => groupWarnings(this.bundle()?.analysis.mockWarnings, 'segmentId'));
+  /** Wirkung von Setup und Testdaten: changed setup blocks, fixtures and helpers with the tests they affect. */
+  readonly setupImpacts = computed(() => this.bundle()?.analysis.setupImpacts ?? []);
+  /** The same by the changed segment (code block badge). */
+  readonly setupImpactsBySegment = computed(() => {
+    const map = new Map<string, SetupImpact[]>();
+    for (const i of this.setupImpacts()) {
+      map.set(i.segmentId, [...(map.get(i.segmentId) ?? []), i]);
+    }
+    return map;
+  });
+  /** Mock-Grenzen of each flow (what the tests really execute), by flow id. */
+  readonly flowCoverage = computed(() => new Map((this.bundle()?.analysis.flowCoverage ?? []).map((c) => [c.flowId, c])));
+  /** Test name by id: changed tests by segment id, existing tests by "e1" …. */
+  readonly testName = computed(() => testNamer(this.bundle()?.analysis));
+
+  /** Spec-Diff entries of tests with changed expectations or switched off, by segment id (code block badge). */
+  readonly expectationsBySegment = computed(() => {
+    const map = new Map<string, SpecEntry>();
+    for (const f of this.bundle()?.analysis.specs ?? []) {
+      for (const e of f.entries) {
+        if (e.segmentId && (e.expectations?.length || e.disabled)) {
+          map.set(e.segmentId, e);
+        }
+      }
+    }
+    return map;
+  });
+
+  /** The switched-on test category, which shows the coverage above its test overview; null when there is none. */
+  readonly testsCategory = computed(() => this.categories().find((c) => isTestsView(c)) ?? null);
 
   readonly filteredPrs = computed(() => {
     const f = this.prFilter();
@@ -373,6 +435,8 @@ export class ReviewStore {
         return b.analysis.flows.some((f) => f.id === sel.id);
       case 'file':
         return b.files.some((f) => f.path === sel.path);
+      case 'coverage':
+        return (b.analysis.coverage?.length ?? 0) > 0;
     }
   }
 
@@ -515,6 +579,12 @@ export class ReviewStore {
     });
   }
 
+  /** Shows the coverage of the changed code: in the test category if switched on, else on its own page. */
+  openCoverage(): void {
+    const tests = this.testsCategory();
+    this.select(tests ? { kind: 'category', id: tests.id } : { kind: 'coverage' });
+  }
+
   /** Navigates to a segment at another place than the current one (its first place, else its file). */
   reveal(segmentId: string): void {
     const seg = this.segments().get(segmentId);
@@ -530,6 +600,22 @@ export class ReviewStore {
       this.focusSegment.set(segmentId);
       this.select({ kind: 'file', path: seg.path });
     }
+  }
+
+  /** Like reveal, and then scrolls to a line of the block (when the block is expanded). */
+  revealLine(segmentId: string, line: number): void {
+    this.focusLine.set({ segmentId, line });
+    this.reveal(segmentId);
+  }
+
+  /** The line to show in a block that was just scrolled to (once), else null. */
+  takeFocusLine(segmentId: string): number | null {
+    const f = this.focusLine();
+    if (!f || f.segmentId !== segmentId) {
+      return null;
+    }
+    this.focusLine.set(null);
+    return f.line;
   }
 
   goToPlace(place: string, segmentId: string): void {
@@ -580,6 +666,8 @@ export class ReviewStore {
           .filter((s) => s.path === sel.path)
           .sort((x, y) => (x.startLine ?? lineOf(x.lineKeys[0])) - (y.startLine ?? lineOf(y.lineKeys[0])))
           .map((s) => ({ segmentId: s.id, place: null }));
+      case 'coverage':
+        return [];
     }
   }
 
@@ -797,6 +885,8 @@ function formatHash(pr: PrKey, sel: Selection, commit: string | null): string {
       return base;
     case 'file':
       return `${base}/file/${encodeURIComponent(sel.path)}`;
+    case 'coverage':
+      return `${base}/coverage`;
     default:
       return `${base}/${sel.kind}/${encodeURIComponent(sel.id)}`;
   }
@@ -818,6 +908,8 @@ function parseHash(hash: string): { pr: PrKey; selection: Selection; commit: str
   let selection: Selection = { kind: 'overview' };
   if (kind === 'file' && value) {
     selection = { kind: 'file', path: value };
+  } else if (kind === 'coverage') {
+    selection = { kind: 'coverage' };
   } else if ((kind === 'category' || kind === 'group' || kind === 'flow') && value) {
     selection = { kind, id: value };
   }

@@ -6,13 +6,16 @@ import dev.smartcodereview.analysis.Analyzer;
 import dev.smartcodereview.analysis.Languages;
 import dev.smartcodereview.analysis.OpenApi;
 import dev.smartcodereview.analysis.Rules;
+import dev.smartcodereview.analysis.Specs;
 import dev.smartcodereview.commits.Attribution;
+import dev.smartcodereview.commits.CommitChecks;
 import dev.smartcodereview.model.Model;
 import dev.smartcodereview.model.Model.Account;
 import dev.smartcodereview.model.Model.ApiOperation;
 import dev.smartcodereview.model.Model.Analysis;
 import dev.smartcodereview.model.Model.Blame;
 import dev.smartcodereview.model.Model.Commit;
+import dev.smartcodereview.model.Model.CommitFinding;
 import dev.smartcodereview.model.Model.Commits;
 import dev.smartcodereview.model.Model.Comment;
 import dev.smartcodereview.model.Model.DiffFile;
@@ -24,6 +27,8 @@ import dev.smartcodereview.model.Model.NewComment;
 import dev.smartcodereview.model.Model.PrRef;
 import dev.smartcodereview.model.Model.Progress;
 import dev.smartcodereview.model.Model.PullRequestSummary;
+import dev.smartcodereview.model.Model.RelatedTestFile;
+import dev.smartcodereview.model.Model.RelatedTests;
 import dev.smartcodereview.model.Model.ReviewBundle;
 import dev.smartcodereview.model.Model.RepoStructure;
 import dev.smartcodereview.model.Model.ReviewState;
@@ -55,6 +60,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -200,24 +206,101 @@ public class ReviewService {
         for (DiffFile f : snapshot.files()) {
             store.readText(DataStore.resolveInside(sourcesDir, f.path())).ifPresent(s -> sources.put(f.path(), s));
         }
+        Map<String, String> baseSources = baseSources(ref, snapshot);
+        RepoStructure structure = structure(ref, snapshot);
+        RelatedTests related = relatedTests(ref, snapshot, structure);
+        Map<String, String> relatedSources = new HashMap<>();
+        if (related != null) {
+            Path dir = store.relatedSourcesDir(ref);
+            related.files().stream().filter(RelatedTestFile::loaded).forEach(f ->
+                    store.readText(DataStore.resolveInside(dir, f.path())).ifPresent(s -> relatedSources.put(f.path(), s)));
+        }
         long t0 = System.currentTimeMillis();
-        Analysis analysis = new Analyzer(rules()).analyze(snapshot, sources, structure(ref, snapshot));
-        Log.infof("Analysed %s in %d ms: %d segments, %d flows", ref.key(), System.currentTimeMillis() - t0,
-                analysis.segments().size(), analysis.flows().size());
+        Analysis analysis = new Analyzer(rules()).analyze(snapshot, sources, structure, baseSources, related, relatedSources);
+        Log.infof("Analysed %s in %d ms: %d segments, %d flows, %d existing tests", ref.key(), System.currentTimeMillis() - t0,
+                analysis.segments().size(), analysis.flows().size(), analysis.existingTests().size());
         store.write(analysisFile(ref), analysis);
         return analysis;
+    }
+
+    /**
+     * Old versions of the changed test files (Spec-Diff), by their path in the base version. Missing ones (older
+     * snapshots, an earlier failure) are fetched once here; a file that still cannot be loaded is left out and the
+     * outline shows only its new side.
+     */
+    private Map<String, String> baseSources(PrRef ref, Snapshot snapshot) {
+        Map<String, String> result = new HashMap<>();
+        Path dir = store.baseSourcesDir(ref);
+        List<DiffFile> wanted = wantedBaseSources(ref, snapshot, rules());
+        List<DiffFile> missing = wanted.stream()
+                .filter(f -> !Files.exists(DataStore.resolveInside(dir, Specs.basePath(f)))).toList();
+        if (!missing.isEmpty()) {
+            try {
+                fetchBaseSources(ref, snapshot, missing);
+            } catch (ProviderException e) {
+                Log.warnf("Could not fetch base versions of test files of %s: %s", ref.key(), e.getMessage());
+            }
+        }
+        for (DiffFile f : wanted) {
+            String path = Specs.basePath(f);
+            store.readText(DataStore.resolveInside(dir, path)).ifPresent(s -> result.put(path, s));
+        }
+        return result;
+    }
+
+    /** Changed test files whose base version the Spec-Diff needs; none for a whole repository (it has no base). */
+    private static List<DiffFile> wantedBaseSources(PrRef ref, Snapshot snapshot, Rules rules) {
+        if (ref.number() == 0 || snapshot.pr().baseSha() == null || snapshot.pr().baseSha().isBlank()) {
+            return List.of();
+        }
+        return snapshot.files().stream().filter(f -> Specs.needsBase(rules, f)).toList();
+    }
+
+    /**
+     * Bestehende Tests: the existing test files most likely testing the changed code ({@link
+     * dev.smartcodereview.analysis.RelatedTests}), selected from the repository's file list and loaded at the PR head
+     * into sources-related/ - at the first analysis after loading the PR, and for older snapshots at their next
+     * analysis; a file that cannot be loaded is logged and skipped (tried again at the next analysis). The selection is
+     * written to related.json. null for a whole repository (all files are part of it already).
+     */
+    private RelatedTests relatedTests(PrRef ref, Snapshot snapshot, RepoStructure structure) {
+        if (ref.number() == 0) {
+            return null;
+        }
+        Rules rules = rules();
+        dev.smartcodereview.analysis.RelatedTests.Selection selection = dev.smartcodereview.analysis.RelatedTests
+                .select(rules, snapshot.files(), structure.files() == null ? List.of() : structure.files());
+        Path dir = store.relatedSourcesDir(ref);
+        List<String> missing = selection.files().stream().map(RelatedTestFile::path)
+                .filter(p -> !Files.exists(DataStore.resolveInside(dir, p))).toList();
+        if (!missing.isEmpty()) {
+            try {
+                fetchFiles(ref, missing, snapshot.pr().headSha(), dir);
+            } catch (ProviderException e) {
+                Log.warnf("Could not fetch existing test files of %s: %s", ref.key(), e.getMessage());
+            }
+        }
+        List<RelatedTestFile> files = selection.files().stream()
+                .map(f -> new RelatedTestFile(f.path(), f.reason(), f.sources(), Files.exists(DataStore.resolveInside(dir, f.path()))))
+                .toList();
+        RelatedTests related = new RelatedTests(rules.relatedTests.limit(), selection.candidates(), selection.truncated(),
+                structure.truncated(), files);
+        store.write(prDirFile(ref, "related.json"), related);
+        return related;
     }
 
     /** At most this many API contracts are read per repository. */
     private static final int MAX_CONTRACTS = 10;
 
     /**
-     * Repository directories and API contract operations at the PR head (architecture detection, links through
-     * generated API clients); fetched once, empty if unavailable.
+     * Repository directories, file paths and API contract operations at the PR head (architecture detection, links
+     * through generated API clients, existing tests); fetched once (again when read by an older version), empty if
+     * unavailable.
      */
     private RepoStructure structure(PrRef ref, Snapshot snapshot) {
         Path file = prDirFile(ref, "structure.json");
-        return store.read(file, RepoStructure.class).filter(s -> s.operations() != null).orElseGet(() -> {
+        return store.read(file, RepoStructure.class)
+                .filter(s -> s.operations() != null && (s.files() != null || ref.number() == 0)).orElseGet(() -> {
             try {
                 ReviewProvider provider = provider(ref.provider());
                 String sha = snapshot.pr().headSha();
@@ -231,7 +314,8 @@ public class ReviewService {
                         Log.warnf("API contract %s not readable: %s", path, e.getMessage());
                     }
                 }
-                s = new RepoStructure(s.directories(), s.truncated(), contracts, operations);
+                s = new RepoStructure(s.directories(), s.truncated(), contracts, operations,
+                        s.files() == null ? List.of() : s.files());
                 store.write(file, s);
                 return s;
             } catch (ProviderException e) {
@@ -253,6 +337,14 @@ public class ReviewService {
         }
         List<DiffFile> wanted = wantedSources(snapshot, rules());
         fetchSources(ref, snapshot, wanted);
+        store.deleteTree(store.baseSourcesDir(ref)); // the base may have moved (rebase, new target branch)
+        store.deleteTree(store.relatedSourcesDir(ref)); // existing tests are re-selected and loaded for the new head
+        try {
+            Files.deleteIfExists(prDirFile(ref, "related.json"));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        fetchBaseSources(ref, snapshot, wantedBaseSources(ref, snapshot, rules()));
         store.write(snapshotFile(ref), snapshot);
         Log.infof("Fetched %s: %d files, %d sources", ref.key(), snapshot.files().size(), wanted.size());
         return snapshot;
@@ -292,17 +384,29 @@ public class ReviewService {
     }
 
     private void fetchSources(PrRef ref, Snapshot snapshot, List<DiffFile> wanted) {
+        fetchFiles(ref, wanted.stream().map(DiffFile::path).toList(), snapshot.pr().headSha(), store.sourcesDir(ref));
+    }
+
+    /** Old versions of changed test files at the PR's base commit, stored under sources-base/ (old path). */
+    private void fetchBaseSources(PrRef ref, Snapshot snapshot, List<DiffFile> wanted) {
+        if (wanted.isEmpty()) {
+            return;
+        }
+        fetchFiles(ref, wanted.stream().map(Specs::basePath).toList(), snapshot.pr().baseSha(), store.baseSourcesDir(ref));
+    }
+
+    /** Fetches files at a commit into dir (same relative paths); a file that fails is logged and skipped. */
+    private void fetchFiles(PrRef ref, List<String> paths, String sha, Path dir) {
         ReviewProvider provider = provider(ref.provider());
-        Path sourcesDir = store.sourcesDir(ref);
         Semaphore limit = new Semaphore(8);
         try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
             List<Future<?>> tasks = new ArrayList<>();
-            for (DiffFile f : wanted) {
+            for (String path : paths) {
                 tasks.add(pool.submit(() -> {
                     limit.acquireUninterruptibly();
                     try {
-                        provider.fileContent(ref, f.path(), snapshot.pr().headSha())
-                                .ifPresent(text -> store.writeText(DataStore.resolveInside(sourcesDir, f.path()), text));
+                        provider.fileContent(ref, path, sha)
+                                .ifPresent(text -> store.writeText(DataStore.resolveInside(dir, path), text));
                     } finally {
                         limit.release();
                     }
@@ -528,57 +632,98 @@ public class ReviewService {
     /**
      * The PR's commits and which commit made each changed line (commits.json; recomputed when the head or the
      * attribution algorithm changed). Commit diffs never change, so they are fetched only here. On a provider
-     * error the last result is returned if there is one, else an empty result carrying the error.
+     * error the last result is returned if there is one, else an empty result carrying the error. The findings
+     * (Commit-Bezug der Tests) are recomputed at every call from the attribution and the current analysis, so they
+     * follow a new analysis or new rules without fetching the commits again; the file is rewritten when they changed.
      */
     public Commits commits(PrRef ref) {
         Snapshot snapshot = snapshot(ref);
         Path file = prDirFile(ref, "commits.json");
         synchronized (locks.computeIfAbsent(ref.key() + "#commits", k -> new Object())) {
-            Optional<Commits> cached = store.read(file, Commits.class);
-            if (cached.filter(c -> c.version() == Attribution.VERSION && c.error() == null
-                    && snapshot.pr().headSha().equals(c.headSha())).isPresent()) {
-                return cached.get();
+            Commits attributed = attributed(ref, snapshot, file);
+            List<CommitFinding> findings = commitFindings(ref, snapshot, attributed);
+            if (Objects.equals(findings, attributed.findings())) {
+                return attributed;
             }
-            try {
-                ReviewProvider provider = provider(ref.provider());
-                // whole repository: the newest commits of the branch (older lines stay without commit; blame shows them)
-                List<Commit> commits = ref.number() == 0
-                        ? provider.branchCommits(ref, snapshot.pr().headSha(), REPOSITORY_COMMITS)
-                        : provider.commits(ref);
-                Map<String, List<DiffFile>> diffs = new ConcurrentHashMap<>();
-                Semaphore limit = new Semaphore(6);
-                try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
-                    List<Future<?>> tasks = new ArrayList<>();
-                    for (Commit c : commits) {
-                        tasks.add(pool.submit(() -> {
-                            limit.acquireUninterruptibly();
-                            try {
-                                diffs.put(c.sha(), provider.commitDiff(ref, c.sha()));
-                            } finally {
-                                limit.release();
-                            }
-                        }));
-                    }
-                    for (Future<?> t : tasks) {
+            Commits result = attributed.withFindings(findings);
+            if (result.error() == null && snapshot.pr().headSha().equals(result.headSha())) {
+                store.write(file, result);
+            }
+            return result;
+        }
+    }
+
+    /**
+     * Commit-Bezug der Tests ({@link CommitChecks}) for the current analysis; empty for a whole repository, without
+     * commits, and when the analysis cannot be had (logged - the commits stay usable).
+     */
+    private List<CommitFinding> commitFindings(PrRef ref, Snapshot snapshot, Commits commits) {
+        if (ref.number() == 0 || commits.commits().isEmpty() || !snapshot.pr().headSha().equals(commits.headSha())) {
+            return List.of();
+        }
+        try {
+            Analysis analysis;
+            synchronized (lock(ref)) {
+                analysis = currentAnalysis(ref, snapshot);
+            }
+            Map<String, String> sources = new HashMap<>();
+            Path dir = store.sourcesDir(ref);
+            if (analysis.tests() != null) {
+                analysis.tests().stream().map(Model.TestInfo::path).distinct().forEach(p ->
+                        store.readText(DataStore.resolveInside(dir, p)).ifPresent(s -> sources.put(p, s)));
+            }
+            return CommitChecks.find(rules(), commits, analysis, sources);
+        } catch (RuntimeException e) {
+            Log.warnf("Commit findings of %s not available: %s", ref.key(), e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** The attribution part of commits.json: the stored one if it is current, else computed now (commits() stores it). */
+    private Commits attributed(PrRef ref, Snapshot snapshot, Path file) {
+        Optional<Commits> cached = store.read(file, Commits.class);
+        if (cached.filter(c -> c.version() == Attribution.VERSION && c.error() == null
+                && snapshot.pr().headSha().equals(c.headSha())).isPresent()) {
+            return cached.get();
+        }
+        try {
+            ReviewProvider provider = provider(ref.provider());
+            // whole repository: the newest commits of the branch (older lines stay without commit; blame shows them)
+            List<Commit> commits = ref.number() == 0
+                    ? provider.branchCommits(ref, snapshot.pr().headSha(), REPOSITORY_COMMITS)
+                    : provider.commits(ref);
+            Map<String, List<DiffFile>> diffs = new ConcurrentHashMap<>();
+            Semaphore limit = new Semaphore(6);
+            try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+                List<Future<?>> tasks = new ArrayList<>();
+                for (Commit c : commits) {
+                    tasks.add(pool.submit(() -> {
+                        limit.acquireUninterruptibly();
                         try {
-                            t.get();
-                        } catch (Exception e) {
-                            Log.warnf("Commit diff of %s not available: %s", ref.key(), e.getMessage());
+                            diffs.put(c.sha(), provider.commitDiff(ref, c.sha()));
+                        } finally {
+                            limit.release();
                         }
+                    }));
+                }
+                for (Future<?> t : tasks) {
+                    try {
+                        t.get();
+                    } catch (Exception e) {
+                        Log.warnf("Commit diff of %s not available: %s", ref.key(), e.getMessage());
                     }
                 }
-                long t0 = System.currentTimeMillis();
-                Attribution.Result r = Attribution.compute(snapshot, commits, diffs);
-                Log.infof("Attributed %s to %d commits in %d ms", ref.key(), commits.size(), System.currentTimeMillis() - t0);
-                Commits result = new Commits(Attribution.VERSION, snapshot.pr().headSha(), Instant.now().toString(),
-                        r.ordered(), r.lines(), r.mergedVia(), null);
-                store.write(file, result);
-                return result;
-            } catch (ProviderException e) {
-                Log.warnf("Commits of %s not available: %s", ref.key(), e.getMessage());
-                return cached.orElseGet(() -> new Commits(Attribution.VERSION, snapshot.pr().headSha(), Instant.now().toString(),
-                        List.of(), Map.of(), Map.of(), e.getMessage()));
             }
+            long t0 = System.currentTimeMillis();
+            Attribution.Result r = Attribution.compute(snapshot, commits, diffs);
+            Log.infof("Attributed %s to %d commits in %d ms", ref.key(), commits.size(), System.currentTimeMillis() - t0);
+            Commits result = new Commits(Attribution.VERSION, snapshot.pr().headSha(), Instant.now().toString(),
+                    r.ordered(), r.lines(), r.mergedVia(), null);
+            return result; // written with its findings by commits()
+        } catch (ProviderException e) {
+            Log.warnf("Commits of %s not available: %s", ref.key(), e.getMessage());
+            return cached.orElseGet(() -> new Commits(Attribution.VERSION, snapshot.pr().headSha(), Instant.now().toString(),
+                    List.of(), Map.of(), Map.of(), e.getMessage()));
         }
     }
 

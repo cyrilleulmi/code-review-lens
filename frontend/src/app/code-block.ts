@@ -1,9 +1,34 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { Blame, Comment, Commit, DisplayLine, LineMark, Segment } from './api';
+import { smellBadgeText, smellBadgeTitle, smellDetail, smellText, smellsByLine } from './test-smells';
+import { impactBadge } from './setup-impact';
+import { findingDetail, findingsByLine, lineChipText } from './case-checks';
+import { laterExpectationChip, laterExpectationText, laterExpectationsByLine } from './commit-findings';
+import { ruleChipText, ruleDetail, unmetByLine } from './rule-checks';
+import { assertionDrop, bendsExpectations, describeChange, newlyDisabled } from './expectations';
 import { highlightLines } from './highlight';
+import { mockBadgeTitle } from './mock-boundaries';
+import { HTTP_TAG, httpTitle } from './http-tests';
 import { Icon, SymbolBadge } from './icon';
 import { areaColor, areaLabel, areaOfSegment, langColor, langLabel } from './look';
 import { ReviewStore } from './review.store';
+
+/**
+ * Scrolls to the row of a new-file line inside a rendered code block and flashes it; false when the row is not shown
+ * (block collapsed, line folded into a gap).
+ */
+export function flashLine(block: HTMLElement, line: number): boolean {
+  const row = block.querySelector<HTMLElement>(`.row[data-new="${line}"]`);
+  if (!row) {
+    return false;
+  }
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  row.classList.remove('flash-line');
+  void row.offsetWidth;
+  row.classList.add('flash-line');
+  setTimeout(() => row.classList.remove('flash-line'), 1600);
+  return true;
+}
 
 /** git blame of one display line (IntelliJ "Annotate"). */
 interface Annotation {
@@ -110,14 +135,166 @@ export class CodeBlock {
     });
   });
 
-  /** For test cases: the changed code they reach. */
+  protected readonly httpTag = HTTP_TAG;
+
+  /** For test cases: the changed code they reach (HTTP-Tests: a reach over a real request is tagged). */
   protected readonly covers = computed(() => {
     const t = this.store.tests().get(this.segment().id);
     const segs = this.store.segments();
     return (t?.covers ?? [])
       .filter((c) => segs.has(c.segmentId))
-      .map((c) => ({ id: c.segmentId, name: shortName(segs.get(c.segmentId)!), direct: c.direct }));
+      .map((c) => ({
+        id: c.segmentId, name: shortName(segs.get(c.segmentId)!), direct: c.direct, mocked: !!c.mocked,
+        http: c.http && !c.mocked ? httpTitle(c) : null,
+      }));
   });
+
+  /** Testable changed function: is it reached by a changed test (static)? null for anything else. */
+  protected readonly coverage = computed(() => {
+    const c = this.store.coverage().get(this.segment().id);
+    if (!c) return null;
+    const existing = c.existingTests?.length ?? 0;
+    const label = c.status === 'none' ? 'ohne Test' : c.status === 'indirect' ? 'nur indirekt getestet'
+      : c.status === 'existing' ? 'durch bestehende Tests'
+      : c.directTests.length === 1 ? '1 Test' : `${c.directTests.length} Tests`;
+    const tests = c.status === 'none' ? 'Kein Test erreicht diese Funktion'
+      : c.status === 'indirect' ? `Nur über anderen geänderten Code erreicht (${c.indirectTests.length} ${c.indirectTests.length === 1 ? 'Test' : 'Tests'})`
+      : c.status === 'existing' ? `Kein geänderter Test, aber ${existing} ${existing === 1 ? 'bestehender Test erreicht' : 'bestehende Tests erreichen'} sie`
+      : `${c.directTests.length} ${c.directTests.length === 1 ? 'Test ruft' : 'Tests rufen'} die Funktion direkt auf`
+        + (c.indirectTests.length ? `, ${c.indirectTests.length} indirekt` : '');
+    const old = c.status !== 'existing' && existing ? ` · dazu ${existing} ${existing === 1 ? 'bestehender Test' : 'bestehende Tests'}` : '';
+    const mocked = c.mockedTests?.length ?? 0;
+    const mocks = mocked ? ` · in ${mocked} ${mocked === 1 ? 'Test' : 'Tests'} nur gemockt (zählt nicht)` : '';
+    const branches = `${c.branches} ${c.branches === 1 ? 'Verzweigung' : 'Verzweigungen'}`;
+    return { status: c.status, label, title: `${tests}${old}${mocks} · ${branches} · statisch ermittelt – Klick: Abdeckung zeigen` };
+  });
+
+  /**
+   * Fall- und Effekt-Abgleich: line index -> chips for the open findings on that line («kein Test erwartet
+   * NotFoundException», «Grenze nicht geprüft: 1, 99», «Wirkung ungeprüft: jerseyNumberChangedAt»).
+   */
+  protected readonly caseNotes = computed(() => {
+    const result = new Map<number, { text: string; title: string }[]>();
+    const byLine = findingsByLine(this.store.coverage().get(this.segment().id));
+    if (!byLine.size) {
+      return result;
+    }
+    const testName = this.store.testName();
+    this.segment().lines.forEach((line, i) => {
+      const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
+      if (found) {
+        result.set(i, found.map((f) => ({ text: lineChipText(f), title: findingDetail(f, testName) + ' – statisch ermittelt, Klick: Abdeckung zeigen' })));
+      }
+    });
+    return result;
+  });
+
+  /**
+   * Erwartungs-Regeln: line index -> chips for the unmet rules triggered on that line («Regel: Test für den
+   * verweigerten Zugriff (401/403) fehlt»).
+   */
+  protected readonly ruleNotes = computed(() => {
+    const result = new Map<number, { text: string; title: string }[]>();
+    const byLine = unmetByLine(this.store.ruleChecks(), this.segment().id);
+    if (!byLine.size) {
+      return result;
+    }
+    const testName = this.store.testName();
+    this.segment().lines.forEach((line, i) => {
+      const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
+      if (found) {
+        result.set(i, found.map((c) => ({ text: ruleChipText(c), title: ruleDetail(c, testName) + ' – statisch ermittelt, Klick: Tests zeigen' })));
+      }
+    });
+    return result;
+  });
+
+  /**
+   * Commit-Bezug: line index -> chips on assertions a later commit changed than the one that wrote the test
+   * («Erwartung nachträglich geändert (406522a)»); click shows only that commit.
+   */
+  protected readonly laterNotes = computed(() => {
+    const result = new Map<number, { text: string; title: string; sha: string; warn: boolean }[]>();
+    const byLine = laterExpectationsByLine(this.store.commitFindings(), this.segment().id);
+    if (!byLine.size) {
+      return result;
+    }
+    this.segment().lines.forEach((line, i) => {
+      const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
+      if (found) {
+        result.set(i, found.map((f) => ({
+          text: laterExpectationChip(f),
+          title: `${laterExpectationText(f)}\n${f.detail}\n– Klick: nur diesen Commit zeigen`,
+          sha: f.sha,
+          warn: f.level === 'warn',
+        })));
+      }
+    });
+    return result;
+  });
+
+  /** Shows only the changes of a commit (line chip of the Commit-Bezug). */
+  protected showCommit(sha: string, event: Event): void {
+    event.stopPropagation();
+    this.store.setCommitFilter(sha);
+  }
+
+  /** Test case with Test-Smells: header badge («Smell: keine Assertion»); null when it has none. */
+  protected readonly smellBadge = computed(() => {
+    const smells = this.store.tests().get(this.segment().id)?.smells ?? [];
+    return smells.length ? { text: smellBadgeText(smells), title: smellBadgeTitle(smells) } : null;
+  });
+
+  /**
+   * Changed setup block, fixture or test helper (Wirkung von Setup und Testdaten): header badge «wirkt auf 12 Tests
+   * (10 unverändert)», a warning only when unchanged tests are affected; null without impact.
+   */
+  protected readonly setupBadge = computed(() => impactBadge(this.store.setupImpactsBySegment().get(this.segment().id)));
+
+  /** Test-Smells with a line: line index -> chips at that line. */
+  protected readonly smellNotes = computed(() => {
+    const result = new Map<number, { text: string; title: string }[]>();
+    const byLine = smellsByLine(this.store.tests().get(this.segment().id)?.smells);
+    if (!byLine.size) {
+      return result;
+    }
+    this.segment().lines.forEach((line, i) => {
+      const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
+      if (found) {
+        result.set(i, found.map((s) => ({ text: `Smell: ${smellText(s)}`, title: smellDetail(s) + ' – Klick: Testübersicht zeigen' })));
+      }
+    });
+    return result;
+  });
+
+  /** Test case that mocks changed code (Mock-Grenzen): header badge with the stubbed members; null otherwise. */
+  protected readonly mockWarning = computed(() => {
+    const warnings = this.store.mockWarningsByTest().get(this.segment().id);
+    return warnings?.length ? { title: mockBadgeTitle(warnings) } : null;
+  });
+
+  /** Test case whose expectations changed or that is switched off (Spec-Diff): header badge; null otherwise. */
+  protected readonly expectation = computed(() => {
+    const e = this.store.expectationsBySegment().get(this.segment().id);
+    if (!e) return null;
+    const disabled = newlyDisabled(e) || !!e.disabled;
+    const bends = bendsExpectations(e) || !!assertionDrop(e);
+    if (!disabled && !bends) return null;
+    const details = (e.expectations ?? []).map(describeChange);
+    const drop = assertionDrop(e);
+    if (drop) details.push(`${drop.before} → ${drop.after} Assertions`);
+    if (e.disabled && !newlyDisabled(e)) details.push('war schon vorher deaktiviert');
+    return {
+      label: disabled ? 'deaktiviert' : 'Erwartung geändert',
+      warn: newlyDisabled(e) || bends,
+      title: details.join('\n') + '\n– Musterbasiert erkannt (Spec-Diff)',
+    };
+  });
+
+  protected openCoverage(event: Event): void {
+    event.stopPropagation();
+    this.store.openCoverage();
+  }
 
   /** Tests that reach this code. */
   protected readonly testedBy = computed(() => {

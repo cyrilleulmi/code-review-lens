@@ -1,9 +1,9 @@
 {
-  "$comment": "SmartCodeReview classification rules. Copy to <dataDir>/rules.json to customise; the app re-analyses when the file changes. Rules are evaluated top to bottom, the first match wins. 'paths' rules classify whole files; 'kinds' rules classify segments by symbol kind (class, interface, type, enum, function, method, component, const); 'lines' rules classify one segment (a changed function, type, hunk, ...) when ALL its changed lines match one of 'lines' (blank lines, braces and comments are always allowed) and, if given, at least one line matches 'require'. 'symbol' optionally restricts the name of the enclosing function/class. 'symbols': true keeps splitting matched files into functions/test cases (used for tests, so they can be linked to the code they exercise). 'extras': false keeps segments of a rule out of the architecture and frontend categories. 'lines' rules may also require 'text' (pattern in the segment's code) or 'fileText' (pattern anywhere in the file), e.g. JPA entities. Categories 'domain', 'usecases', 'application', 'adapters' are filled automatically when the repository uses ports & adapters or a layered split with adapter packages; the frontend categories are filled by 'aspects' (first match wins; 'paths', 'kinds', 'symbol', 'text' = pattern in the segment's code, 'fileText' = pattern anywhere in the file, 'special': 'markup'). 'concerns' add cross-cutting categories (security, messaging, transactions, persistence) to frontend and backend segments: every matching concern counts, 'scope' 'frontend'/'backend' restricts a concern to one side. API contracts (openapi*.yaml) are read from the repository: generated clients and server interfaces are linked by operationId. Every category is a place of its own and needs its own ok; categories can be switched off in the UI. Optional per category: 'builds' / 'divides' (shown in the UI: how the category is composed and split into groups); when absent they are derived from the rules.",
+  "$comment": "SmartCodeReview classification rules. Copy to <dataDir>/rules.json to customise; the app re-analyses when the file changes. Rules are evaluated top to bottom, the first match wins. 'paths' rules classify whole files; 'kinds' rules classify segments by symbol kind (class, interface, type, enum, function, method, component, const); 'lines' rules classify one segment (a changed function, type, hunk, ...) when ALL its changed lines match one of 'lines' (blank lines, braces and comments are always allowed) and, if given, at least one line matches 'require'. 'symbol' optionally restricts the name of the enclosing function/class. 'symbols': true keeps splitting matched files into functions/test cases (used for tests, so they can be linked to the code they exercise). 'extras': false keeps segments of a rule out of the architecture and frontend categories. 'lines' rules may also require 'text' (pattern in the segment's code) or 'fileText' (pattern anywhere in the file), e.g. JPA entities. Categories 'domain', 'usecases', 'application', 'adapters' are filled automatically when the repository uses ports & adapters or a layered split with adapter packages; the frontend categories are filled by 'aspects' (first match wins; 'paths', 'kinds', 'symbol', 'text' = pattern in the segment's code, 'fileText' = pattern anywhere in the file, 'special': 'markup'). 'concerns' add cross-cutting categories (security, messaging, transactions, persistence) to frontend and backend segments: every matching concern counts, 'scope' 'frontend'/'backend' restricts a concern to one side. API contracts (openapi*.yaml) are read from the repository: generated clients and server interfaces are linked by operationId. Every category is a place of its own and needs its own ok; categories can be switched off in the UI. Optional per category: 'builds' / 'divides' (shown in the UI: how the category is composed and split into groups); when absent they are derived from the rules. 'needsTests': false on a category means its changed functions are trivial or mechanical and are left out of the coverage view (Abdeckung: which changed functions a changed test reaches); default true. Trivial getters/setters (body only 'return x;' or 'this.x = x;') are left out in every category. Changed expectations in tests (Spec-Diff, 'Geänderte Erwartungen'): 'assertions' = regexes that start an assertion statement in a test body (expect(…), assertEquals(…), assertThat(…), verify(…), t.Errorf(…), RestAssured .statusCode(…)); 'weakAssertions' = assertions that only check existence or truthiness (toBeTruthy, assertNotNull, isNotNull, …); 'disabledTests' = a switched-off test or suite (xit, it.skip, @Disabled, t.Skip, …), searched in the head of a test/suite and the top-level statements of a test. All three are searched in the code with string contents and comments blanked out; a rules file without one of them uses the built-in list.",
   "categories": [
-    { "id": "quick-wins", "label": "Quick wins", "icon": "bolt", "description": "Höchstwahrscheinlich irrelevante oder rein mechanische Änderungen: generierter Code, Übersetzungen, DTOs, Mapper, banale REST-Aufrufe, Imports. Schnell überfliegen und abhaken." },
+    { "id": "quick-wins", "needsTests": false, "label": "Quick wins", "icon": "bolt", "description": "Höchstwahrscheinlich irrelevante oder rein mechanische Änderungen: generierter Code, Übersetzungen, DTOs, Mapper, banale REST-Aufrufe, Imports. Schnell überfliegen und abhaken." },
     { "id": "flows", "label": "Datenflüsse", "icon": "flow", "description": "Geänderte Funktionen, die sich gegenseitig aufrufen – in Aufrufreihenfolge, damit man den Fluss am Stück nachvollziehen kann. Auch über REST (literale URLs oder generierte OpenAPI-Clients) und ab Message-Listenern." },
-    { "id": "api-contract", "label": "API-Verträge", "icon": "contract", "description": "OpenAPI-, Proto- und GraphQL-Verträge: Änderungen betreffen Client und Server gleichzeitig – die Sprünge führen zu den geänderten Aufrufern und Implementierungen der Operation." },
+    { "id": "api-contract", "needsTests": false, "label": "API-Verträge", "icon": "contract", "description": "OpenAPI-, Proto- und GraphQL-Verträge: Änderungen betreffen Client und Server gleichzeitig – die Sprünge führen zu den geänderten Aufrufern und Implementierungen der Operation." },
     { "id": "domain", "label": "Domäne", "icon": "hexagon", "description": "Architektur: fachliche Kernmodelle, Regeln, Entities (bei Schichten-Architektur auch Repository-Interfaces)." },
     { "id": "usecases", "label": "Use Cases", "icon": "target", "description": "Ports & Adapters: Anwendungsfälle, die die Domäne für einen konkreten Ablauf orchestrieren." },
     { "id": "application", "label": "Application Layer", "icon": "layers", "description": "Architektur: Application Services und Ports – Abläufe, Transaktionsgrenzen, Aufrufe externer Systeme." },
@@ -12,7 +12,7 @@
     { "id": "messaging", "label": "Messaging & Events", "icon": "mail", "description": "Listener, Topics, Bestätigung (acknowledge), Wiederholung und Dead-Letter: Parsing, Validierung, Transaktion und Acknowledge als einen Ablauf prüfen." },
     { "id": "transactions", "label": "Transaktionen & Nebenläufigkeit", "icon": "lock", "description": "@Transactional, optimistisches Locking (@Version), Retries, Virtual Threads und parallele Schritte: Reihenfolge, Grenzen und Teilfehler prüfen." },
     { "id": "persistence", "label": "Datenbank & Migrationen", "icon": "data", "description": "Migrationen (Liquibase/Flyway/SQL), JPA-Entities, Repositories und Queries. Migration und Entity derselben Tabelle stehen zusammen.", "divides": "Migrationen und JPA-Entities, die dieselbe Tabelle nennen, kommen in die Gruppe «Tabelle x» und verweisen aufeinander; übrige nach Regel-Gruppe (Migrationen, Repositories & Queries, Entitäten). Datenbankzugriff und -Konfiguration aus anderen Kategorien nach Datei." },
-    { "id": "runtime", "label": "Konfiguration, Build & Betrieb", "icon": "cog", "description": "Profile und application.properties, Abhängigkeiten und Build, Docker, CI, Deployment und Infrastruktur – wirken zur Laufzeit, auch ohne Codeänderung." },
+    { "id": "runtime", "needsTests": false, "label": "Konfiguration, Build & Betrieb", "icon": "cog", "description": "Profile und application.properties, Abhängigkeiten und Build, Docker, CI, Deployment und Infrastruktur – wirken zur Laufzeit, auch ohne Codeänderung." },
     { "id": "fe-routing", "label": "Frontend: Routing & Navigation", "icon": "route", "description": "Routen, Guards, Seiten-Einstiege: Wer kommt wohin, was ist geschützt?" },
     { "id": "fe-state", "label": "Frontend: Zustand & Stores", "icon": "data", "description": "Stores, Reducer, Effects, gemeinsamer Zustand: Woher kommen die Daten im UI, wer ändert sie?" },
     { "id": "fe-api", "label": "Frontend: API-Anbindung", "icon": "globe", "description": "HTTP-Aufrufe ans Backend: URL, Methode, Fehlerbehandlung, Ladezustand." },
@@ -20,8 +20,8 @@
     { "id": "fe-components", "label": "Frontend: Komponenten-Logik", "icon": "component", "description": "Verhalten der UI-Komponenten: Event-Handler, Lifecycle, berechnete Werte." },
     { "id": "fe-templates", "label": "Frontend: Templates & Markup", "icon": "code", "description": "Was der Benutzer sieht: HTML/JSX, Bindings, Bedingungen, Barrierefreiheit." },
     { "id": "logic", "label": "Einzelne Änderungen", "icon": "code", "description": "Geänderte Logik ohne erkennbaren Aufrufzusammenhang zu anderen Änderungen." },
-    { "id": "tests", "extras": false, "label": "Tests", "icon": "test", "description": "Geänderte Tests – mit den Komponenten und Codestellen, die sie (statisch ermittelt) aufrufen." },
-    { "id": "styles", "extras": false, "label": "Styles & Assets", "icon": "palette", "description": "CSS, Bilder, Icons und andere Assets." }
+    { "id": "tests", "extras": false, "needsTests": false, "label": "Tests", "icon": "test", "description": "Geänderte Tests – mit den Komponenten und Codestellen, die sie (statisch ermittelt) aufrufen." },
+    { "id": "styles", "extras": false, "needsTests": false, "label": "Styles & Assets", "icon": "palette", "description": "CSS, Bilder, Icons und andere Assets." }
   ],
   "rules": [
     {
@@ -242,5 +242,563 @@
     {"id": "transactions-code", "category": "transactions", "scope": "backend", "reason": "Transaktion / Nebenläufigkeit", "text": ["@Transactional|TransactionTemplate|PlatformTransactionManager|@Version\\b|OptimisticLock|PessimisticLock|DataIntegrityViolation|@Lock\\(|LockModeType|@Retryable|RetryTemplate|maxAttempts|newVirtualThreadPerTaskExecutor|ExecutorService|CompletableFuture|StructuredTaskScope|\\bsynchronized\\b|@Async\\b|ReentrantLock|Semaphore|ConcurrentHashMap|AtomicInteger|AtomicLong|\\.parallelStream\\(|\\bisolation\\s*=|\\bpropagation\\s*=|rollbackFor|[<>]=?\\s*\\w*(?i:retr(y|ies))\\w*|\\b\\w*(?i:retr(y|ies))\\w*\\s*(\\(|[<>]=?)"]},
     {"id": "persistence-code", "category": "persistence", "scope": "backend", "reason": "Datenbankzugriff", "text": ["@Entity\\b|@Table\\s*\\(|@Column\\b|@JoinColumn|@JoinTable|@OneToMany|@ManyToOne|@ManyToMany|@OneToOne|@Embedded|@Enumerated|@Query\\s*\\(|@Modifying|@NamedQuery|EntityManager|\\.createQuery\\(|\\.createNativeQuery\\(|JdbcTemplate|(?i:repo(sitory)?)\\.(save|saveAll|saveAndFlush|delete\\w*|flush|persist|merge)\\w*\\("]},
     {"id": "persistence-config", "category": "persistence", "reason": "Datenbank-Konfiguration", "paths": ["**/*.properties", "**/*.yml", "**/*.yaml"], "text": ["(?i)liquibase|flyway|datasource|ddl-auto|hibernate|\\bjpa\\b|\\bh2\\b|jdbc"]}
-  ]
+  ],
+  "assertions": [
+    "\\bexpect\\s*\\(",
+    "\\bassert[A-Z]\\w*\\s*(<[^>]*>\\s*)?[({]",
+    "\\bassert\\s*\\(",
+    "\\bassert\\.\\w+\\s*\\(",
+    "\\brequire\\.[A-Z]\\w*\\s*\\(",
+    "\\bverify\\w*\\s*\\(",
+    "\\bt\\.(Error|Errorf|Fatal|Fatalf|Fail|FailNow)\\s*\\(",
+    "\\.statusCode\\s*\\(",
+    "\\.body\\s*\\(\\s*(\"[^\"]*\"\\s*,|(equalTo|is|containsString|hasItems?|notNullValue|nullValue|empty)\\s*\\()",
+    "\\.andExpect\\s*\\(",
+    "\\.expect(Status|Body|Header)\\w*\\s*\\(",
+    "\\.expect(One|None)\\s*\\(",
+    "(?<=\\S)\\s+should(Be|NotBe|Contain|NotContain|Have|NotHave|Equal|NotEqual|Match|Start|End)\\w*\\s+(?=[^\\s({])",
+    "\\.should(Be|NotBe|Contain|NotContain|Have|NotHave|Equal|NotEqual|Match|Start|End)\\w*\\s*\\(",
+    "^\\s*should(Throw|NotThrow)\\w*\\s*[<{(]"
+  ],
+  "weakAssertions": [
+    "\\.(not\\.)?toBeTruthy\\s*\\(",
+    "\\.(not\\.)?toBeFalsy\\s*\\(",
+    "\\.toBeDefined\\s*\\(",
+    "\\.not\\.toBeUndefined\\s*\\(",
+    "\\.not\\.toBeNull\\s*\\(",
+    "\\.toHaveBeenCalled\\s*\\(\\s*\\)",
+    "\\.(length|size\\(\\))\\s*\\)\\s*\\.(toBeGreaterThan|isGreaterThan)\\s*\\(\\s*0\\s*\\)",
+    "\\.(length|size\\(\\))\\s*\\)\\s*\\.isPositive\\s*\\(\\s*\\)",
+    "\\.hasSizeGreaterThan\\s*\\(\\s*0\\s*\\)",
+    "\\bassertNotNull\\s*\\(",
+    "\\bassertTrue\\s*\\(\\s*[\\w$.()\\[\\]]+\\s*!=\\s*null\\s*\\)",
+    "\\bassertTrue\\s*\\(\\s*null\\s*!=",
+    "\\bassertFalse\\s*\\(\\s*[\\w$.()\\[\\]]+\\s*==\\s*null\\s*\\)",
+    "\\bassertFalse\\s*\\([\\w$.()]+\\.isEmpty\\(\\)\\s*\\)",
+    "\\.isNotNull\\s*\\(\\s*\\)",
+    "\\.isNotEmpty\\s*\\(\\s*\\)",
+    "\\.isPresent\\s*\\(\\s*\\)",
+    "\\bassertThat\\s*\\(\\s*[\\w$.()\\[\\]]+\\s*!=\\s*null\\s*\\)\\s*\\.isTrue\\s*\\(",
+    "\\bnotNullValue\\s*\\(",
+    "\\bassert\\.(NotNil|NotEmpty|NotZero)\\s*\\(",
+    "\\brequire\\.(NotNil|NotEmpty|NotZero)\\s*\\(",
+    "\\bverify\\s*\\([^)]*\\)\\s*\\.\\s*\\w+\\s*\\(\\s*any\\w*\\s*\\("
+  ],
+  "disabledTests": [
+    "^\\s*x(it|test|describe|context|specify)\\s*\\(",
+    "^\\s*(it|test|describe|context|suite|specify)\\.(skip|todo)\\b",
+    "@Disabled\\b",
+    "@Ignore\\b",
+    "@Test\\s*\\([^)]*\\benabled\\s*=\\s*false",
+    "^\\s*(t|b)\\.Skip(Now|f)?\\s*\\(",
+    "^\\s*pending\\s*\\(",
+    "^\\s*this\\.skip\\s*\\("
+  ],
+  "testProfile": {
+    "$comment": "Test-Steckbrief (one line per changed test case; docs/05-analyse.md, 5d). All entries are regexes (Java syntax). errorCode: searched in the test itself - its annotations and its body, comments removed, string contents kept. edgeCode: searched only in the inputs of the code under test - the parameter sources (@ValueSource, @CsvSource, @NullSource, @EmptySource, @NullAndEmptySource, the it.each table, a Go test table) and the argument lists '(…)' of the calls to the test's targets (the changed code it calls directly, also inside assertions: expect(valid(null))) and of the 'inputCalls'; literals in fixtures, builders, setup and expected values do not count, and without a target call or parameter source edge comes only from the name. inputCalls: regexes that end at the '(' of a call whose arguments are inputs (HTTP requests: given().body(…), .put(…), http.post(…), fetch(…)). errorName / edgeName: searched in the test name and the names of its enclosing describe blocks, split into lower-case words ('rejectsInvalidNumber' -> 'rejects invalid number', 'TestCreate_Empty' -> 'test create empty'). The first hit decides, in this order: errorCode, errorName -> 'error'; edgeName, edgeCode -> 'edge'; else 'normal'. assertionKinds: every assertion statement of the test body (rules 'assertions') gets the first kind, in this order, with a matching pattern; 'existence' also takes every 'weakAssertions' match; no match = 'other'. mocks: collaborators replaced in the test, searched in the test and its surroundings (fields and annotations of the enclosing classes, setup blocks and code of the enclosing describe blocks, top-level code of the file; not other tests or sibling suites). A string is a regex with a named group: 'type' = the collaborator's name, 'ref' = a variable holding a mock (named after its declared type, else after the variable with a capital first letter), 'module' = a module path (its last segment). An object {pattern, name} adds the fixed name when the pattern occurs. Names lose mock/fake/stub/spy pre- and suffixes; the unit under test (from the test file name) is left out. mockMembers (Mock-Grenzen, docs/05-analyse.md, 5g): regex templates in which {member} stands for the quoted name of a changed function of a mocked collaborator; searched in the same surroundings, they find where the test stubs or references that member (object stubs 'm: jest.fn(', createSpyObj lists, spyOn(obj, 'm'), when(repo.m(, verify(repo).m(, finally any member access '.m'). A match makes a mock warning; the first template with a match gives its line. levels: the first entry whose 'paths' (globs) match the test file, or one of whose 'code' patterns occurs in the surroundings while none of 'unless' does, sets the level; else 'unit'. A rules file without this section, or without one of its keys, uses the built-in value for that key.",
+    "errorCode": [
+      "\\bassertThrows\\w*\\s*\\(",
+      "\\bassertThat(ThrownBy|ExceptionOfType|IllegalArgumentException|IllegalStateException|NullPointerException|IOException)\\s*\\(",
+      "\\bcatchThrowable(OfType)?\\s*\\(",
+      "\\bassertFails(With)?\\s*[<({]",
+      "\\bshouldThrow\\w*\\s*[<({]",
+      "(?<!\\.not)\\.toThrow\\w*\\s*\\(",
+      "\\.rejects\\b",
+      "\\.(expectError|verifyError)\\w*\\s*\\(",
+      "@Test\\s*\\(\\s*expected\\s*=",
+      "\\.expect\\s*\\(\\s*\\w+(Exception|Error)\\.class",
+      "\\bfail\\s*\\([^;]*\\)\\s*;?\\s*\\}\\s*catch\\b",
+      "\\bcatch\\s*(\\([^)]*\\))?\\s*\\{[^}]*\\b(expect|assert\\w*)\\s*\\(",
+      "\\b(assert|require)\\.(Error|ErrorIs|ErrorAs|ErrorContains|EqualError|Panics\\w*)\\s*\\(",
+      "\\berr\\s*==\\s*nil\\s*\\{",
+      "\\b(assertRaises\\w*|pytest\\.raises)\\s*\\(",
+      "\\.thenThrow\\s*\\(|\\bdoThrow\\s*\\(|\\.willThrow\\s*\\(|\\.mockRejectedValue\\w*\\s*\\(|\\.and\\.throwError\\s*\\(|\\bthrowError\\s*\\(",
+      "\\bnew\\s+HttpErrorResponse\\s*\\(|\\.error\\s*\\(\\s*new\\s+\\w*Event\\b",
+      "\\.statusCode\\s*\\(\\s*[45]\\d\\d\\b",
+      "\\b(status|expectStatus)\\s*\\(\\s*\\)\\s*\\.\\s*is(BadRequest|Unauthorized|PaymentRequired|Forbidden|NotFound|MethodNotAllowed|NotAcceptable|Conflict|Gone|PreconditionFailed|PayloadTooLarge|UnsupportedMediaType|UnprocessableEntity|TooManyRequests|InternalServerError|NotImplemented|BadGateway|ServiceUnavailable|GatewayTimeout|4xxClientError|5xxServerError)\\s*\\(",
+      "\\bstatus\\s*:\\s*[45]\\d\\d\\b",
+      "\\.(toBe|toEqual|toStrictEqual|isEqualTo|shouldBe)\\s*\\(\\s*[45]\\d\\d\\s*\\)",
+      "\\.expect\\s*\\(\\s*[45]\\d\\d\\b",
+      "\\bassert(Equals)?\\s*\\(\\s*[45]\\d\\d\\s*,",
+      "\\b(HttpStatus(Code)?|Status)\\.(BAD_REQUEST|UNAUTHORIZED|PAYMENT_REQUIRED|FORBIDDEN|NOT_FOUND|METHOD_NOT_ALLOWED|NOT_ACCEPTABLE|CONFLICT|GONE|PRECONDITION_FAILED|PAYLOAD_TOO_LARGE|UNSUPPORTED_MEDIA_TYPE|UNPROCESSABLE_ENTITY|TOO_MANY_REQUESTS|INTERNAL_SERVER_ERROR|NOT_IMPLEMENTED|BAD_GATEWAY|SERVICE_UNAVAILABLE|GATEWAY_TIMEOUT)\\b",
+      "\\bhttp\\.Status(BadRequest|Unauthorized|PaymentRequired|Forbidden|NotFound|MethodNotAllowed|NotAcceptable|Conflict|Gone|PreconditionFailed|PayloadTooLarge|UnsupportedMediaType|UnprocessableEntity|TooManyRequests|InternalServerError|NotImplemented|BadGateway|ServiceUnavailable|GatewayTimeout)\\b",
+      "\\bexpect\\s*\\([^;\\n]*\\b(errors?|errorMessage|hasErrors?|alert)\\b[^;\\n]*?\\)\\s*\\.(?!not\\b|toBeNull|toBeFalsy|toBeUndefined|toBeFalse|toEqual\\s*\\(\\s*(\\[\\s*\\]|\\{\\s*\\}|null)\\s*\\)|toHaveLength\\s*\\(\\s*0)",
+      "\\bassertThat\\s*\\([^;\\n]*\\b(errors?|errorMessage|hasErrors?|alert)\\b[^;\\n]*?\\)\\s*\\.(?!isNull|isEmpty|isFalse|doesNotContain|hasSize\\s*\\(\\s*0)",
+      "\\b(assertTrue|assertNotNull)\\s*\\([^;\\n]*\\b(errors?|errorMessage|hasErrors?|alert)\\b"
+    ],
+    "errorName": [
+      "(?U)(?<!\\bnot |\\bno |\\bnever |\\bwithout |\\bkein |\\bkeine |\\bohne |\\bnicht )\\b(rejects?|rejected|rejecting|refuses?|refused|fails?|failed|failing|failure|throws?|throwing|thrown|invalid|illegal|errors?|exceptions?|denied|denies|deny|forbidden|unauthori[sz]ed|not found|bad request|conflict|[45]\\d\\d|ungültig\\w*|fehler\\w*|fehlschlag\\w*|schlägt fehl|abgelehnt|lehnt \\w+ ab|wirft|verweiger\\w*|verboten|nicht gefunden|unzulässig\\w*)\\b"
+    ],
+    "edgeName": [
+      "(?U)(?<!\\bnot |\\bnon |\\bnicht )\\b(empty|blank|null|nil|undefined|zero|boundary|boundaries|limits?|max|maximum|min|minimum|edge|overflow|underflow|negative|leer\\w*|grenze\\w*|grenzwert\\w*|grenzfall|maximal\\w*|minimal\\w*)\\b"
+    ],
+    "edgeCode": [
+      "[(,\\[{]\\s*(null|nil|undefined|None)\\s*(?=[,)\\]}])",
+      "[(,\\[{\\\"]\\s*(\\\"\\\"|''|``)\\s*(?=[,)\\]}\\\"])",
+      "[(,\\[]\\s*(\\[\\s*\\]|\\{\\s*\\})\\s*(?=[,)\\]])",
+      "[(,]\\s*((List|Set|Map)\\.of|emptyList|emptySet|emptyMap|listOf|setOf|mapOf|arrayOf)\\s*\\(\\s*\\)",
+      "[(,]\\s*new\\s+(Array|Linked|Hash|Tree)?(List|Set|Map)\\w*\\s*(<[^>]*>)?\\s*\\(\\s*\\)",
+      "[(,]\\s*\\[\\]\\w+\\{\\s*\\}",
+      "\\bCollections\\.empty\\w*\\s*\\(|\\bOptional\\.empty\\s*\\(",
+      "@(NullSource|EmptySource|NullAndEmptySource)\\b",
+      "\\b(Integer|Long|Short|Byte|Double|Float)\\.(MAX_VALUE|MIN_VALUE)\\b|\\bNumber\\.(MAX_SAFE_INTEGER|MIN_SAFE_INTEGER|MAX_VALUE|MIN_VALUE|POSITIVE_INFINITY|NEGATIVE_INFINITY)\\b|\\bmath\\.(MaxInt\\d*|MinInt\\d*|MaxUint\\d*|MaxFloat\\d+|Inf)\\b"
+    ],
+    "inputCalls": [
+      "\\bgiven\\s*\\(\\s*\\)(?:(?!\\.then\\s*\\()[^;])*?\\.body\\s*\\(",
+      "\\.(bodyValue|content|send|queryParams?|formParams?|pathParams?|param|params|multiPart)\\s*\\(",
+      "(?:\\b(?:http|httpClient|client|api|request|mockMvc|webTestClient|restTemplate|testRestTemplate|rest)\\w*\\s*|\\b(?:when|given)\\s*\\(\\s*\\)\\s*|\\b\\w+\\s*\\(\\s*app\\s*\\)\\s*)\\.\\s*(?:get|post|put|patch|delete|head|request|exchange|perform|postForEntity|getForEntity|getForObject)\\s*(?:<[^<>()]*>)?\\s*\\(",
+      "\\b(?:fetch|axios)\\s*\\(",
+      "\\b(?:httptest\\.NewRequest|http\\.NewRequest\\w*)\\s*\\("
+    ],
+    "assertionKinds": {
+      "exception": [
+        "\\bassertThrows\\w*\\s*\\(",
+        "\\bassertThat(ThrownBy|ExceptionOfType|Code)\\s*\\(",
+        "\\bassertDoesNotThrow\\s*\\(",
+        "\\.toThrow\\w*\\s*\\(",
+        "\\.rejects\\b",
+        "\\bshould(Throw|NotThrow)\\w*",
+        "\\bassertFails\\w*",
+        "\\.(expectError|verifyError)\\w*\\s*\\(",
+        "\\b(assert|require)\\.(Error|ErrorIs|ErrorAs|ErrorContains|EqualError|Panics\\w*|NotPanics)\\s*\\(",
+        "\\bisInstanceOf\\s*\\(\\s*\\w*(Exception|Error)\\.class"
+      ],
+      "http": [
+        "\\.statusCode\\s*\\(",
+        "\\b(status|expectStatus)\\s*\\(\\s*\\)",
+        "\\.andExpect\\s*\\(\\s*(status|header|content|jsonPath|redirectedUrl|forwardedUrl)\\b",
+        "\\.expect(Status|Header|Body)\\w*\\s*\\(",
+        "\\.body\\s*\\(",
+        "\\.expect\\s*\\(\\s*[1-5]\\d\\d\\b",
+        "\\b(res|resp|response|httpResponse|rec|recorder|rr|w)\\s*\\.\\s*(status|statusCode|getStatus|getStatusCode|StatusCode|Code|body|getBody|headers?|getHeader\\w*)\\b",
+        "\\.getResponse\\s*\\(\\s*\\)\\s*\\.\\s*(getStatus|getContentAsString|getHeader)",
+        "\\breq\\w*\\.request\\.(method|body|url|urlWithParams|params|headers)\\b",
+        "\\bHttpStatus(Code)?\\.",
+        "\\bhttp\\.Status\\w+"
+      ],
+      "snapshot": [
+        "\\.toMatch(Inline|File)?Snapshot\\s*\\(",
+        "\\.toHaveScreenshot\\s*\\(",
+        "\\.toMatchImageSnapshot\\s*\\(",
+        "\\bApprovals\\.verify\\w*\\s*\\(",
+        "\\bsnaps\\.Match\\w*\\s*\\(",
+        "\\bcupaloy\\."
+      ],
+      "interaction": [
+        "\\bverify\\w*\\s*[({]",
+        "\\bcoVerify\\w*\\s*[({]",
+        "\\bthen\\s*\\(\\s*\\w+\\s*\\)\\s*\\.\\s*should",
+        "\\.toHaveBeenCalled\\w*\\s*\\(",
+        "\\.toHaveBeen(Last|Nth)CalledWith\\s*\\(",
+        "\\.toBeCalled\\w*\\s*\\(",
+        "\\.toHaveReturned\\w*\\s*\\(",
+        "\\.expect(One|None)\\s*\\(",
+        "\\.(AssertExpectations|AssertCalled|AssertNotCalled|AssertNumberOfCalls)\\s*\\(",
+        "\\.(calledWith|calledOnce|calledTwice|callCount)\\b"
+      ],
+      "existence": [
+        "\\.(not\\.)?toBeNull\\s*\\(",
+        "\\.toBeUndefined\\s*\\(",
+        "\\.toBeDefined\\s*\\(",
+        "\\.(not\\.)?toBeTruthy\\s*\\(",
+        "\\.(not\\.)?toBeFalsy\\s*\\(",
+        "\\.(not\\.)?toBeInTheDocument\\s*\\(",
+        "\\bassert(Not)?Null\\s*\\(",
+        "\\.is(Not)?Null\\s*\\(\\s*\\)",
+        "\\.is(Not)?Empty\\s*\\(\\s*\\)",
+        "\\.is(Not)?Present\\s*\\(\\s*\\)",
+        "\\b(assert|require)\\.(Nil|NotNil|Empty|NotEmpty|Zero|NotZero)\\s*\\(",
+        "\\b(notNullValue|nullValue)\\s*\\("
+      ],
+      "equality": [
+        "\\.(not\\.)?(toBe|toEqual|toStrictEqual|toBeCloseTo|toMatchObject|toHaveLength|toHaveProperty|toContain|toContainEqual|toMatch|toHaveText|toHaveTextContent|toHaveValue|toHaveClass|toHaveSize|toBeTrue|toBeFalse|toBeGreaterThan\\w*|toBeLessThan\\w*|toBeInstanceOf)\\s*\\(",
+        "\\bassert(Not)?(Equals|Same|ArrayEquals|IterableEquals|LinesMatch)\\s*\\(",
+        "\\bassert(True|False)\\s*\\(",
+        "\\.(isEqualTo|isNotEqualTo|isSameAs|isNotSameAs|isEqualByComparingTo|usingRecursiveComparison|containsExactly\\w*|containsOnly\\w*|contains|doesNotContain|hasSize|isCloseTo|startsWith|endsWith|matches|isTrue|isFalse|isGreaterThan\\w*|isLessThan\\w*|isBetween|extracting|hasFieldOrPropertyWithValue|isInstanceOf)\\s*\\(",
+        "\\b(assert|require)\\.(Equal|EqualValues|Exactly|NotEqual|JSONEq|YAMLEq|ElementsMatch|Contains|NotContains|Len|InDelta|InEpsilon|Greater\\w*|Less\\w*|True|False|Subset|Same)\\s*\\(",
+        "\\bshould(Be|NotBe|Equal|NotEqual|Contain|NotContain|Have|NotHave|Match|Start|End)\\w*",
+        "\\.(equal|eql|equals|deep\\.equal)\\s*\\(",
+        "\\bassert\\.(strict)?(deep)?(equal|Equal)\\s*\\(",
+        "\\bassertThat\\s*\\([^;]*,\\s*(is|equalTo|contains\\w*|hasSize|hasItems?|not)\\s*\\("
+      ]
+    },
+    "mocks": [
+      "@(?:Mock|MockBean|MockitoBean|InjectMock|InjectSpy|Spy|SpyBean|MockitoSpyBean)\\b(?:\\s*\\([^)]*\\))?\\s+(?:(?:private|protected|public|final|static)\\s+)*(?<type>[A-Z][\\w$]*)",
+      "@(?:MockK|RelaxedMockK|SpyK|MockkBean|Mock|MockBean|MockitoBean|InjectMock)\\b(?:\\s*\\([^)]*\\))?\\s+(?:(?:private|protected|public|internal|lateinit|var|val)\\s+)+[\\w$]+\\s*:\\s*(?<type>[A-Z][\\w$]*)",
+      "\\b(?:Mockito\\.)?(?:mock|spy)\\s*\\(\\s*(?<type>[A-Z][\\w$]*)\\.class",
+      "\\b(?:mock|mockk|spyk)\\s*<\\s*(?<type>[A-Z][\\w$]*)",
+      "\\b(?:when|given)\\s*\\(\\s*(?:this\\.)?(?<ref>[A-Za-z_$][\\w$]*)\\s*\\.\\s*[\\w$]+\\s*\\(",
+      "\\b(?:every|coEvery|verify|coVerify)\\s*\\{\\s*(?<ref>[A-Za-z_$][\\w$]*)\\s*\\.",
+      "\\bverify\\s*\\(\\s*(?:this\\.)?(?<ref>[A-Za-z_$][\\w$]*)\\s*[,)]",
+      "\\.when\\s*\\(\\s*(?:this\\.)?(?<ref>[A-Za-z_$][\\w$]*)\\s*\\)",
+      "\\bjasmine\\.createSpyObj\\s*(?:<[^>]*>)?\\s*\\(\\s*['\\\"`](?<type>[\\w$.-]+)",
+      "\\bjasmine\\.createSpyObj\\s*<\\s*(?<type>[A-Z][\\w$]*)\\s*>",
+      "\\b(?:const|let|var)\\s+(?<type>[\\w$]+)\\s*(?::[^=;]+)?=\\s*(?:jest\\.fn|vi\\.fn|jasmine\\.createSpy|sinon\\.(?:stub|spy|fake))\\s*\\(",
+      "\\b(?:jasmine\\.|jest\\.|vi\\.)?spyOn\\s*\\(\\s*(?:this\\.)?(?<ref>[\\w$]+)\\s*,",
+      "\\bsinon\\.(?:stub|spy|mock)\\s*\\(\\s*(?<ref>[\\w$]+)\\s*[,)]",
+      "\\b(?:vi|jest)\\.(?:mock|doMock)\\s*\\(\\s*['\\\"`](?<module>[^'\\\"`]+)",
+      "\\bprovide\\s*:\\s*(?<type>[A-Z][\\w$]*)\\s*,\\s*use(?:Value|Class|Factory|Existing)\\b",
+      "\\bMock(?:Provider|Component|Directive|Pipe|Module|Service|Instance)\\s*\\(\\s*(?<type>[A-Z][\\w$]*)",
+      "&?\\b(?:[Ff]ake|[Mm]ock|[Ss]tub)(?<type>[A-Z]\\w*)\\s*\\{",
+      "\\b(?:NewMock|mocks\\.New)(?<type>[A-Z]\\w*)\\s*\\(",
+      {"pattern": "\\bHttpTestingController\\b|\\bprovideHttpClientTesting\\s*\\(|\\bHttpClientTestingModule\\b", "name": "HTTP"},
+      {"pattern": "\\b(MockWebServer|WireMock\\w*|MockRestServiceServer|MockAdapter|nock|setupServer)\\b|\\bhttptest\\.NewServer\\b|['\\\"]msw['\\\"]", "name": "HTTP"}
+    ],
+    "mockMembers": [
+      "\\b{member}\\s*[:=]\\s*(?:jest\\.fn|vi\\.fn|jasmine\\.createSpy|sinon\\.(?:stub|spy|fake))\\b",
+      "\\bcreateSpyObj\\s*(?:<[^>]*>)?\\s*\\([^)]*?\\b{member}\\b",
+      "\\bspyOn\\s*\\(\\s*[\\w$.]+\\s*,\\s*['\\\"`]{member}['\\\"`]",
+      "\\bsinon\\.(?:stub|spy)\\s*\\(\\s*[\\w$.]+\\s*,\\s*['\\\"`]{member}['\\\"`]",
+      "\\b(?:when|given)\\s*\\(\\s*[\\w$.]+\\s*\\.\\s*{member}\\s*\\(",
+      "\\.\\s*(?:when|given)\\s*\\(\\s*[\\w$.]+\\s*\\)\\s*\\.\\s*{member}\\s*\\(",
+      "\\b(?:every|coEvery|verify|coVerify)\\s*\\{\\s*[\\w$.]+\\s*\\.\\s*{member}\\b",
+      "\\bverify\\s*\\([^;]*?\\)\\s*\\.\\s*{member}\\s*\\(",
+      "\\b(?:vi|jest)\\.mocked\\s*\\(\\s*(?:[\\w$]+\\.)?{member}\\b",
+      "\\.\\s*EXPECT\\s*\\(\\s*\\)\\s*\\.\\s*{member}\\s*\\(",
+      "\\.\\s*{member}\\b"
+    ],
+    "levels": [
+      {"level": "e2e", "paths": ["**/e2e/**", "**/cypress/**", "**/playwright/**", "**/*.e2e-spec.*", "**/*.e2e.*", "**/*.cy.*"], "code": ["\\bcy\\.(visit|request)\\s*\\(", "['\\\"]@playwright/test['\\\"]", "\\bpage\\.goto\\s*\\(", "\\bbrowser\\.(url|get)\\s*\\(", "\\bSelenide\\b", "\\bWebDriver\\b"]},
+      {"level": "integration", "paths": ["**/*IT.java", "**/*IT.kt", "**/*IntegrationTest.*", "**/integration/**", "**/*.int-spec.*", "**/*.integration.*"], "code": ["@(QuarkusTest|QuarkusIntegrationTest|SpringBootTest|DataJpaTest|DataJdbcTest|DataMongoTest|DataR2dbcTest|JdbcTest|JooqTest|WebMvcTest|WebFluxTest|RestClientTest|AutoConfigureMockMvc|Testcontainers|Container|MicronautTest)\\b", "\\b(PostgreSQL|MySQL|MariaDB|MongoDB|Kafka|Generic|Oracle|MSSQLServer|Redis|Neo4j|RabbitMQ|LocalStack|Elasticsearch)Container\\b", "\\bRestAssured\\b", "\\bgiven\\s*\\(\\s*\\)\\s*\\.", "\\b(MockMvc|WebTestClient|TestRestTemplate)\\b", "['\\\"]supertest['\\\"]", "\\brequest\\s*\\(\\s*app\\b", "\\bdockertest\\b"]},
+      {"level": "integration", "code": ["\\bprovideHttpClient\\s*\\(\\s*\\)"], "unless": ["\\bprovideHttpClientTesting\\s*\\(|\\bHttpClientTestingModule\\b|\\bHttpTestingController\\b"]}
+    ]
+  },
+  "caseMatrix": {
+    "$comment": "Fallmatrix (docs/05-analyse.md, 5e). Columns of a parameter table (@ValueSource/@CsvSource method parameters, it.each callback parameters / object keys / template header, Go struct fields) are 'expected' when their name matches one of expectedNames (regexes, Java syntax, searched in the name) or when the name is used only inside assertions of the test body; else 'input'. nameFields: Go struct fields that name a case (t.Run(tt.name, …)); their value becomes the row name instead of a column. A rules file without this section, or without one of its keys, uses the built-in value for that key.",
+    "expectedNames": [
+      "(?i)^expect(ed)?\\w*$",
+      "(?i)^exp$",
+      "(?i)^want(ed)?\\w*$",
+      "(?i)^(result|outcome|output|out|answer)\\w*$",
+      "(?i)^(http)?status(code)?$",
+      "(?i)^(message|msg|error|err|errorMessage|errMsg)s?$",
+      "(?i)^(is)?(valid|ok|success|accepted|allowed)$",
+      "(?i)^response\\w*$",
+      "(?i)^should\\w*$"
+    ],
+    "nameFields": [
+      "(?i)^(name|desc|description|title|scenario|testName|caseName)$"
+    ]
+  },
+  "relatedTests": {
+    "$comment": "Bestehende Tests (docs/05-analyse.md, 5f). For every changed source file existing, unchanged test files of the repository are loaded and linked to the changed code: named after it (X.spec.ts, XTest.java, XTests.java, XIT.java, x_test.go, ...) in the mirrored test directory or next to it ('mirror'), else the nearest file of that name elsewhere ('name'), plus test files in the mirrored directory whose name starts with it (PlayerResourceSecurityTest, 'prefix'). limit: at most this many files per pull request (mirror before name before prefix, then by path). mirrors: the first occurrence of 'from' (whole path segments) in the directory of a changed file is replaced by 'to' to get its test directory; the directory itself always counts. A rules file without this section, or without one of its keys, uses the built-in value for that key.",
+    "limit": 30,
+    "mirrors": [
+      {"from": "src/main/", "to": "src/test/"},
+      {"from": "main/", "to": "test/"},
+      {"from": "src/", "to": "test/"},
+      {"from": "src/", "to": "tests/"},
+      {"from": "lib/", "to": "test/"}
+    ]
+  },
+  "caseCheck": {
+    "$comment": "Fall- und Effekt-Abgleich (docs/05-analyse.md, 5h): what the code of a changed function can do, compared with what the tests that really reach it check. exceptions: regexes on the code of the whole function (strings and comments blanked) that find an error outcome; the named group 'type' is the exception type (optional: throwError(…), Promise.reject(…), errors.New(…) have none). typedChecks: templates in which {type} stands for the quoted type; a match in the head or body of a reaching test means it expects that exception. anyChecks: tests that expect some error without naming a type (toThrow(), assert.Error, err == nil {); they count for every exception. statuses: exception type -> HTTP status it maps to (also status constants); a type not listed takes a status from its arguments (an integer 400-599 or a constant like HttpStatus.NOT_FOUND). statusChecks: templates with {status} (404), {statusName} (NOT_FOUND, from statusNames) and {statusCamel} (NotFound); a match in a reaching test also checks the exception. effects: what a changed line does beyond its return value, each {kind, pattern} with the named group 'name': 'field' (assignment to a field of an object, a setter setX(…) -> x), 'persist' (save, persist, delete … of a repository or entity), 'message' (publish, emit, send, fire …). Outgoing HTTP calls with a literal URL are found without rules. fieldChecks: templates with {name}, searched in the assertion statements of the reaching tests (strings kept): a member access or getter (.jerseyNumber, .getJerseyNumber()), a JSON path (.body(\"jerseyNumber\", …)) or an object key (toEqual({ jerseyNumber: 7 })) - a variable of the same name (an input) does not count. callChecks: interaction assertions on the call ({name}: verify(repo).save(…), expect(api.publish).toHaveBeenCalled…); they check persist and message effects; readBack: an assertion that reads stored data again (findById, count …) checks a persist effect too. httpChecks: templates with {segment} (the last literal segment of the URL) for assertions on an outgoing HTTP call (expectOne(url), requestTo(url)). A rules file without this section, or without one of its keys, uses the built-in value for that key.",
+    "exceptions": [
+      "\\bthrow\\s+new\\s+(?:[a-z][\\w$]*\\.)*(?<type>[A-Z][\\w$]*)\\s*[(<]",
+      "\\bthrow\\s+(?:[a-z][\\w$]*\\.)*(?<type>[A-Z][\\w$]*)\\s*\\(",
+      "\\braise\\s+(?<type>[A-Z]\\w*)\\b",
+      "\\bthrowError\\s*\\(\\s*(?:\\(\\s*\\)\\s*=>\\s*)?(?:new\\s+(?<type>[A-Z][\\w$]*))?",
+      "\\bPromise\\s*\\.\\s*reject\\s*\\(\\s*(?:new\\s+(?<type>[A-Z][\\w$]*))?",
+      "\\b(?:errors\\.New|fmt\\.Errorf)\\s*\\("
+    ],
+    "typedChecks": [
+      "\\bassertThrows\\w*\\s*\\(\\s*(?:[\\w$]+\\.)*{type}\\s*(?:\\.class|::class)",
+      "\\b(?:isInstanceOf|isExactlyInstanceOf|hasCauseInstanceOf|assertThatExceptionOfType|catchThrowableOfType|expect)\\s*\\(\\s*(?:[\\w$]+\\.)*{type}\\s*(?:\\.class|::class)",
+      "@Test\\s*\\(\\s*expected\\s*=\\s*(?:[\\w$]+\\.)*{type}\\.class",
+      "\\b(?:shouldThrow\\w*|assertFailsWith|assertThrows)\\s*<\\s*(?:[\\w$]+\\.)*{type}\\s*>",
+      "\\.\\s*toThrow(?:Error)?\\s*\\(\\s*{type}\\b",
+      "\\.\\s*toBeInstanceOf\\s*\\(\\s*{type}\\b",
+      "\\bcatch\\s*\\(\\s*(?:final\\s+)?(?:[\\w$]+\\.)*{type}\\s+\\w+\\s*\\)",
+      "\\b(?:assert|require)\\.(?:ErrorIs|ErrorAs)\\s*\\([^)]*{type}",
+      "\\b(?:assertRaises|pytest\\.raises)\\s*\\(\\s*{type}\\b"
+    ],
+    "anyChecks": [
+      "\\.\\s*toThrow(?:Error)?\\s*\\(\\s*(?:\\)|['\"`/])",
+      "\\.\\s*rejects\\s*\\.\\s*(?!toThrow(?:Error)?\\s*\\(\\s*[A-Z])",
+      "\\b(?:assert|require)\\.(?:Error|ErrorContains|EqualError)\\s*\\(",
+      "\\berr\\s*==\\s*nil\\s*\\{",
+      "\\.\\s*(?:expectError|verifyError)\\w*\\s*\\("
+    ],
+    "statusChecks": [
+      "\\.\\s*statusCode\\s*\\(\\s*{status}\\b",
+      "\\b(?:status|expectStatus)\\s*\\(\\s*\\)\\s*\\.\\s*is{statusCamel}\\s*\\(",
+      "\\bstatus\\s*:\\s*{status}\\b",
+      "\\.\\s*(?:toBe|toEqual|toStrictEqual|isEqualTo|shouldBe)\\s*\\(\\s*{status}\\s*\\)",
+      "\\.\\s*expect\\s*\\(\\s*{status}\\b",
+      "\\bassert(?:Equals)?\\s*\\(\\s*{status}\\s*,",
+      "\\b(?:HttpStatus(?:Code)?|Status)\\.{statusName}\\b",
+      "\\bhttp\\.Status{statusCamel}\\b"
+    ],
+    "statuses": {
+      "BadRequestException": 400,
+      "ConstraintViolationException": 400,
+      "NotAuthorizedException": 401,
+      "UnauthorizedException": 401,
+      "ForbiddenException": 403,
+      "AccessDeniedException": 403,
+      "NotFoundException": 404,
+      "NotAllowedException": 405,
+      "NotAcceptableException": 406,
+      "ConflictException": 409,
+      "NotSupportedException": 415,
+      "InternalServerErrorException": 500,
+      "ServiceUnavailableException": 503
+    },
+    "statusNames": {
+      "400": "BAD_REQUEST",
+      "401": "UNAUTHORIZED",
+      "403": "FORBIDDEN",
+      "404": "NOT_FOUND",
+      "405": "METHOD_NOT_ALLOWED",
+      "406": "NOT_ACCEPTABLE",
+      "409": "CONFLICT",
+      "410": "GONE",
+      "412": "PRECONDITION_FAILED",
+      "413": "PAYLOAD_TOO_LARGE",
+      "415": "UNSUPPORTED_MEDIA_TYPE",
+      "422": "UNPROCESSABLE_ENTITY",
+      "429": "TOO_MANY_REQUESTS",
+      "500": "INTERNAL_SERVER_ERROR",
+      "501": "NOT_IMPLEMENTED",
+      "502": "BAD_GATEWAY",
+      "503": "SERVICE_UNAVAILABLE",
+      "504": "GATEWAY_TIMEOUT"
+    },
+    "effects": [
+      {"kind": "field", "pattern": "[\\w$)\\]]\\s*\\.\\s*(?<name>[A-Za-z_$][\\w$]*)\\s*(?:[-+*/%]|\\?\\?|\\|\\||&&)?=(?![=>])"},
+      {"kind": "field", "pattern": "\\.\\s*set(?<name>[A-Z][\\w$]*)\\s*\\("},
+      {"kind": "persist", "pattern": "\\.\\s*(?<name>persist(?:AndFlush|All)?|save(?:All|AndFlush)?|delete(?:All|ById|AllById)?|merge|insert(?:One|Many|All)?|upsert)\\s*\\("},
+      {"kind": "persist", "pattern": "\\b(?:\\w*[Rr]epo(?:sitory)?|em|entityManager|session)\\s*\\.\\s*(?<name>remove|update\\w*|store\\w*)\\s*\\("},
+      {"kind": "message", "pattern": "\\.\\s*(?<name>publish(?:Event)?|emit|send(?:AndForget|Async)?|fire(?:Async)?|convertAndSend|dispatch)\\s*\\("}
+    ],
+    "fieldChecks": [
+      "(?i)\\.\\s*(?:get|set|is|has)?{name}(?![\\w$])",
+      "(?i)['\"`](?:\\$\\.)?(?:[\\w$\\[\\]]+\\.)*{name}['\"`]",
+      "(?i)(?<![\\w$.]){name}\\s*:(?!:)"
+    ],
+    "callChecks": [
+      "\\bverify\\w*\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*\\.\\s*{name}\\s*\\(",
+      "\\b(?:verify|coVerify)\\s*(?:\\([^)]*\\))?\\s*\\{[^}]*\\.\\s*{name}\\s*\\(",
+      "\\.\\s*{name}\\s*\\)\\s*\\.\\s*(?:not\\s*\\.\\s*)?(?:toHaveBeenCalled\\w*|toBeCalled\\w*|toHaveBeenLastCalledWith|toHaveBeenNthCalledWith)\\s*\\(",
+      "\\.\\s*{name}\\s*\\.\\s*(?:calledWith|calledOnce|calledTwice|called|callCount)\\b",
+      "\\bthen\\s*\\(\\s*\\w+\\s*\\)\\s*\\.\\s*should\\w*\\s*\\([^)]*\\)\\s*\\.\\s*{name}\\s*\\("
+    ],
+    "readBack": [
+      "\\bfind\\w*\\s*\\(",
+      "\\bcount\\w*\\s*\\(",
+      "\\bexists\\w*\\s*\\(",
+      "\\blist\\w*\\s*\\(",
+      "\\bget\\w*By\\w*\\s*\\("
+    ],
+    "httpChecks": [
+      "\\.\\s*expect(?:One|None)\\s*\\([^;]*{segment}",
+      "\\brequestTo\\s*\\([^;]*{segment}",
+      "\\b(?:urlEqualTo|urlPathEqualTo|urlMatching|urlPathMatching)\\s*\\([^;]*{segment}",
+      "\\.\\s*toHaveBeenCalledWith\\s*\\([^;]*{segment}"
+    ]
+  },
+  "testRules": [
+    {"$comment": "Erwartungs-Regeln (docs/05-analyse.md, 5i): 'if X changes, expect a test of form Y', checked per pull request (not for a whole repository). Each rule: id, label (German, shown in the UI), when (trigger), expect (what one test must show), hint (German text for the missing test). when - every given key must hold for a changed function, method or class outside the tests: 'changed' = regexes, one occurs in a changed line of the segment (comment-only lines left out); 'text' = regexes, one occurs in the segment's code (the whole symbol with its annotations); 'concern' = a concern category or a list (security, messaging, transactions, persistence); 'endpoint': true = it is a changed HTTP endpoint (JAX-RS/Spring method, Next.js route, Express/Go route registration, implementation of an OpenAPI operation); 'newEndpoint': true = such an endpoint whose declaration line is added; 'kinds' = symbol kinds (method, function, class, component, const, ...); 'paths' = globs on the file. A rule without any of them never applies. Tests that count: the changed and the loaded existing tests that reach the segment for real (directly or via other changed code, also over HTTP: a request of the test to a changed endpoint, see testHttpCalls and testHttpLinks; reaching only a mock of it does not count); for a class also those that reach its changed members. expect - every given key must hold for one of those tests, within a key one entry suffices: 'assertion' = regexes on one of its assertion statements; 'code' = regexes on its code (annotations, body and the same-file helpers it calls; comments removed, strings kept); 'scenario' = Test-Steckbrief scenarios (error, edge, normal); 'level' = levels (unit, integration, e2e); 'http': true = it reaches the triggering endpoint (for 'newEndpoint' rules the new one) directly over HTTP. testHttpCalls: regexes for HTTP requests in test code (RestAssured, MockMvc, WebTestClient, TestRestTemplate, supertest, Playwright, Cypress, fetch, Go httptest) with the named group 'url' (a string literal, optionally followed by '+': the rest of the URL is a value; empty = a request without path, to the base path) and optionally 'method' (missing = GET); path parameters ({id}, :id, ${id}) match any segment; a test with a mocked HTTP backend (HttpTestingController, MockWebServer, WireMock, ...) sends no real request - Angular HttpTestingController.expectOne(url) is an expectation (testHttpLinks), no request. No expect key: a test that reaches the segment for real suffices. A rules.json with this section merges by id: an entry with a built-in id replaces that rule, 'enabled': false switches it off, other entries are added at the end. An entry without id (like this comment) is ignored."},
+    {
+      "id": "auth-denied", "label": "Zugriffsprüfung geändert → Test für verweigerten Zugriff",
+      "when": {"changed": ["@RolesAllowed\\b|@PreAuthorize\\b|@PostAuthorize\\b|@Secured\\b|@PermitAll\\b|@DenyAll\\b|@Authenticated\\b|\\b(?:access|auth|security|permissions?)\\w*\\.(?:require|check|assert|ensure)\\w*\\s*\\(|\\.has(?:Any)?(?:Role|Authority)\\s*\\(|\\bcanActivate\\w*\\b|\\bCanActivateFn\\b|\\bAuthGuard\\b"]},
+      "expect": {"code": [
+        "\\.\\s*statusCode\\s*\\(\\s*40[13]\\b",
+        "\\b(?:status|expectStatus)\\s*\\(\\s*\\)\\s*\\.\\s*is(?:Unauthorized|Forbidden)\\s*\\(",
+        "\\bstatus\\s*:\\s*40[13]\\b",
+        "\\.\\s*(?:toBe|toEqual|toStrictEqual|isEqualTo|shouldBe)\\s*\\(\\s*40[13]\\s*\\)",
+        "\\.\\s*expect\\s*\\(\\s*40[13]\\b",
+        "\\bassert(?:Equals)?\\s*\\(\\s*40[13]\\s*,",
+        "\\b(?:HttpStatus(?:Code)?|Status)\\.(?:UNAUTHORIZED|FORBIDDEN)\\b",
+        "\\bhttp\\.Status(?:Unauthorized|Forbidden)\\b",
+        "\\b\\w*(?:AccessDenied|Forbidden|Unauthori[sz]ed|NotAuthorized|AuthorizationDenied)\\w*(?:Exception|Error)\\b",
+        "\\bexpect\\s*\\([^;]*(?:canActivate|[Gg]uard)[^;]*\\)\\s*\\.\\s*(?:toBeFalse\\s*\\(|toBe\\s*\\(\\s*false\\b|toEqual\\s*\\(\\s*false\\b)",
+        "\\bcreateUrlTree\\s*\\(\\s*\\[\\s*['\"]/?(?:login|forbidden|denied|unauthori[sz]ed)"
+      ]},
+      "hint": "Test für den verweigerten Zugriff (401/403) fehlt"
+    },
+    {
+      "id": "endpoint-http", "label": "Neuer Endpunkt → Test über HTTP",
+      "when": {"newEndpoint": true},
+      "expect": {"http": true},
+      "hint": "Neuer Endpunkt ohne Test über HTTP"
+    },
+    {
+      "id": "validation-boundary", "label": "Validierung geändert → Test mit ungültigem Wert oder Grenzwert",
+      "when": {"changed": ["@(?:Min|Max|Size|Positive|PositiveOrZero|Negative|NegativeOrZero|NotNull|NotBlank|NotEmpty|Pattern|Email|DecimalMin|DecimalMax|Digits|Past|PastOrPresent|Future|FutureOrPresent|Valid)\\b|\\bValidators\\.(?:min|max|minLength|maxLength|required|requiredTrue|pattern|email)\\b"]},
+      "expect": {"scenario": ["error", "edge"]},
+      "hint": "Test mit ungültigem Wert oder Grenzwert fehlt"
+    },
+    {
+      "id": "transaction-integration", "label": "@Transactional geändert → Integrationstest",
+      "when": {"changed": ["@Transactional\\b"]},
+      "expect": {"level": ["integration", "e2e"]},
+      "hint": "Integrationstest für die Transaktion fehlt"
+    },
+    {
+      "id": "listener-test", "label": "Message-Listener geändert → Test, der ihn aufruft",
+      "when": {"text": ["@(?:Incoming|JmsListener|KafkaListener|RabbitListener|SqsListener|EventListener|TransactionalEventListener)\\b|@Observes(?:Async)?\\b"], "kinds": ["method", "function"]},
+      "expect": {},
+      "hint": "Test, der den Listener aufruft, fehlt"
+    }
+  ],
+  "testHttpCalls": [
+    "(?<![\\w$])(?<method>get|post|put|patch|delete|head|options)\\s*\\(\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?|'[^']*'(?:\\s*\\+)?|`[^`]*`(?:\\s*\\+)?)",
+    "\\.\\s*(?<method>get|post|put|patch|delete|head|options)\\s*\\(\\s*\\)\\s*\\.\\s*uri\\s*\\(\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?|'[^']*'(?:\\s*\\+)?)",
+    "\\brequest\\s*\\(\\s*HttpMethod\\.(?<method>[A-Z]+)\\s*,\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?)",
+    "\\.\\s*(?<method>get|post|put|patch|delete)For(?:Entity|Object|Location)\\s*\\(\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?)",
+    "\\.\\s*exchange\\s*\\(\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?)[^,;]*,\\s*HttpMethod\\.(?<method>[A-Z]+)",
+    "\\bcy\\.request\\s*\\(\\s*['\"](?<method>GET|POST|PUT|PATCH|DELETE|HEAD)['\"]\\s*,\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?|'[^']*'(?:\\s*\\+)?|`[^`]*`(?:\\s*\\+)?)",
+    "\\bcy\\.request\\s*\\(\\s*\\{[^}]*?\\bmethod\\s*:\\s*['\"](?<method>\\w+)['\"][^}]*?\\burl\\s*:\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?|'[^']*'(?:\\s*\\+)?|`[^`]*`(?:\\s*\\+)?)",
+    "\\b(?:cy\\.request|fetch)\\s*\\(\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?|'[^']*'(?:\\s*\\+)?|`[^`]*`(?:\\s*\\+)?)(?!\\s*,\\s*\\{[^}]*?\\bmethod\\s*:)",
+    "\\bfetch\\s*\\(\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?|'[^']*'(?:\\s*\\+)?|`[^`]*`(?:\\s*\\+)?)\\s*,\\s*\\{[^}]*?\\bmethod\\s*:\\s*['\"](?<method>\\w+)['\"]",
+    "\\b(?:httptest\\.NewRequest|http\\.NewRequest(?:WithContext)?)\\s*\\(\\s*(?:\\w+\\s*,\\s*)?\"(?<method>[A-Z]+)\"\\s*,\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?)",
+    "\\b(?:httptest\\.NewRequest|http\\.NewRequest(?:WithContext)?)\\s*\\(\\s*(?:\\w+\\s*,\\s*)?http\\.Method(?<method>\\w+)\\s*,\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?)",
+    "\\.\\s*when\\s*\\(\\s*\\)\\s*\\.\\s*(?<method>get|post|put|patch|delete|head|options)\\s*\\(\\s*(?<url>)\\)"
+  ],
+  "testHttpLinks": {
+    "$comment": "HTTP-Tests (docs/05-analyse.md, 5m): a test that sends a real request (rules 'testHttpCalls') to a changed endpoint reaches it directly. bases: regexes for a base path, searched in the test's surroundings (class annotations, fields, setup, helpers) - group 'base' = a literal path (RestAssured basePath, WebTestClient baseUrl), group 'endpointClass' = a class whose class-level @Path/@RequestMapping is the base (Quarkus @TestHTTPEndpoint); the first match wins, it is put in front of every request path of the test that starts with '/' (a request without a path, given().when().get(), then goes to the base itself). expectations: requests a test with a mocked HTTP backend expects, searched in the test itself (not its helpers - loading data in a render() helper is preparation), with the group 'url' (a string literal; globs * and ** stand for any segment) and optionally 'method' (missing = any method); they are no reaches but shown on the REST edge of a flow (both sides checked). expectationMethods: templates with {var} = the variable holding the expected request (const put = httpMock.expectOne(url)) and the group 'method' - the method checked later.",
+    "bases": [
+      "@TestHTTPEndpoint\\s*\\(\\s*(?:\\w+\\.)*?(?<endpointClass>[A-Z]\\w*)(?:\\.class)?\\s*\\)",
+      "\\bbasePath\\s*\\(\\s*\"(?<base>[^\"]*)\"",
+      "\\b(?:RestAssured\\s*\\.\\s*)?basePath\\s*=\\s*\"(?<base>[^\"]*)\"",
+      "\\bbaseUrl\\s*\\(\\s*\"(?:https?://[^/\"]*)?(?<base>/[^\"]*)\""
+    ],
+    "expectations": [
+      "\\.\\s*expectOne\\s*\\(\\s*\\{[^}]*?\\bmethod\\s*:\\s*['\"](?<method>\\w+)['\"][^}]*?\\burl\\s*:\\s*(?<url>'[^']*'|\"[^\"]*\"|`[^`]*`)",
+      "\\.\\s*expectOne\\s*\\(\\s*\\{[^}]*?\\burl\\s*:\\s*(?<url>'[^']*'|\"[^\"]*\"|`[^`]*`)[^}]*?\\bmethod\\s*:\\s*['\"](?<method>\\w+)['\"]",
+      "\\.\\s*expectOne\\s*\\(\\s*(?<url>'[^']*'|\"[^\"]*\"|`[^`]*`)",
+      "\\bcy\\.intercept\\s*\\(\\s*['\"](?<method>GET|POST|PUT|PATCH|DELETE)['\"]\\s*,\\s*(?<url>'[^']*'|\"[^\"]*\"|`[^`]*`)",
+      "\\bcy\\.intercept\\s*\\(\\s*\\{[^}]*?\\bmethod\\s*:\\s*['\"](?<method>\\w+)['\"][^}]*?\\burl\\s*:\\s*(?<url>'[^']*'|\"[^\"]*\"|`[^`]*`)",
+      "\\bcy\\.intercept\\s*\\(\\s*(?<url>'[^']*'|\"[^\"]*\"|`[^`]*`)",
+      "\\bpage\\s*\\.\\s*route\\s*\\(\\s*(?<url>'[^']*'|\"[^\"]*\"|`[^`]*`)",
+      "\\bnock\\s*\\([^)]*\\)(?:\\s*\\.\\s*\\w+\\s*\\([^)]*\\))*?\\s*\\.\\s*(?<method>get|post|put|patch|delete)\\s*\\(\\s*(?<url>'[^']*'|\"[^\"]*\"|`[^`]*`)",
+      "\\b(?:http|rest)\\s*\\.\\s*(?<method>get|post|put|patch|delete)\\s*\\(\\s*(?<url>'[^']*'|\"[^\"]*\"|`[^`]*`)\\s*,\\s*(?:async\\s*)?(?:\\([^)]*\\)|[\\w$]+)\\s*=>",
+      "\\bstubFor\\s*\\(\\s*(?<method>get|post|put|patch|delete)\\s*\\(\\s*url(?:Path)?(?:EqualTo|Matching)\\s*\\(\\s*(?<url>\"[^\"]*\")",
+      "\\brequestTo\\s*\\(\\s*(?<url>\"[^\"]*\")\\s*\\)\\s*\\)\\s*\\.\\s*andExpect\\s*\\(\\s*method\\s*\\(\\s*HttpMethod\\.(?<method>[A-Z]+)",
+      "\\brequestTo\\s*\\(\\s*(?<url>\"[^\"]*\")"
+    ],
+    "expectationMethods": [
+      "(?<![\\w$]){var}\\s*\\.\\s*request\\s*\\.\\s*method\\s*\\)?\\s*\\.\\s*(?:toBe|toEqual|toStrictEqual)\\s*\\(\\s*['\"](?<method>\\w+)['\"]",
+      "(?<![\\w$]){var}\\s*\\.\\s*request\\s*\\.\\s*method\\s*===?\\s*['\"](?<method>\\w+)['\"]"
+    ]
+  },
+  "testSmells": {
+    "$comment": "Test-Smells (docs/05-analyse.md, 5j): changed test cases whose value is doubtful. Each smell has a label (German, short, shown as chip/badge), a hint (German) and \"enabled\" (false switches it off). Missing keys fall back to the built-in rules, per smell and per key. no-assertion: the test has no assertion statement (rules 'assertions'; 'unless' = regexes in the head of the test that make an assertion-less test legitimate, e.g. @Test(expected = ...)). weak-only: all its assertions only check existence/truthiness (rules 'weakAssertions', kind existence). focused: 'patterns' in the head of the test or of an enclosing suite (fit, fdescribe, it.only, ...) - CI would skip all other tests. sleep: 'patterns' = waits in the body (comments and strings blanked) that are never fine; 'timerPatterns' = waits that are fine when the test file uses fake timers ('fakeTimers' = regexes anywhere in the file). mocks-subject: the test replaces the unit under test itself - a mocked collaborator (rules 'testProfile.mocks', also the unit named like the test file) that is the unit or the class of the changed code the test calls, or whose changed code the test calls itself outside stubbing/verification ('stubbing' = regexes on such a line); 'patterns' = self spies (spyOn(component, ...)), 'targetPatterns' = templates with {target} (the name of changed code the test calls) that replace that very method; 'observing' = regexes on that line that only watch the call (callThrough). disabled: a NEW test that is switched off (rules 'disabledTests') - it never runs; for tests of the base version this is the expectation change 'disabled'.",
+    "no-assertion": {
+      "label": "keine Assertion",
+      "hint": "Der Test prüft nichts: er läuft durch, solange nichts wirft. Ein Fehler im Code bleibt unbemerkt.",
+      "unless": ["@Test\\s*\\(\\s*expected\\b", "@Test\\s*\\([^)]*\\bexpectedExceptions\\b", "@ExpectedException\\b"]
+    },
+    "weak-only": {
+      "label": "nur schwache Assertions",
+      "hint": "Alle Assertions prüfen nur, ob etwas existiert oder wahr ist – nicht, welchen Wert es hat."
+    },
+    "focused": {
+      "label": "fokussiert (fit/only)",
+      "hint": "Der Test (oder seine Suite) ist fokussiert: in der CI laufen nur noch fokussierte Tests, alle anderen werden übersprungen.",
+      "patterns": [
+        "(?<![\\w$.])(?:fit|fdescribe|fcontext)\\s*\\(",
+        "\\b(?:it|describe|test|context|suite|specify)\\s*\\.\\s*only\\s*\\(",
+        "@IgnoreRest\\b"
+      ]
+    },
+    "sleep": {
+      "label": "wartet mit sleep",
+      "hint": "Feste Wartezeit im Test: macht ihn langsam und je nach Rechner instabil. Besser auf ein Ereignis oder eine Bedingung warten (Fake-Timer, Awaitility, waitFor).",
+      "patterns": [
+        "\\bThread\\s*\\.\\s*sleep\\s*\\(",
+        "\\bTimeUnit\\s*\\.\\s*\\w+\\s*\\.\\s*sleep\\s*\\(",
+        "\\btime\\s*\\.\\s*[Ss]leep\\s*\\(",
+        "\\bTask\\s*\\.\\s*Delay\\s*\\("
+      ],
+      "timerPatterns": [
+        "(?<![\\w$.])setTimeout\\s*\\(",
+        "\\bwindow\\s*\\.\\s*setTimeout\\s*\\(",
+        "(?<![\\w$.])sleep\\s*\\("
+      ],
+      "fakeTimers": [
+        "\\b(?:jest|vi)\\s*\\.\\s*useFakeTimers\\b",
+        "\\bsinon\\s*\\.\\s*useFakeTimers\\b",
+        "\\bjasmine\\s*\\.\\s*clock\\s*\\(\\s*\\)\\s*\\.\\s*install\\b",
+        "\\bfakeAsync\\s*\\("
+      ]
+    },
+    "mocks-subject": {
+      "label": "mockt die getestete Einheit",
+      "hint": "Der Test ersetzt die Einheit, die er prüfen soll, durch einen Mock oder Spy – er prüft dann den Mock, nicht den Code.",
+      "patterns": [
+        "\\bspyOn\\s*\\(\\s*(?:component|fixture\\s*\\.\\s*componentInstance|sut|underTest|subject|this)\\s*,"
+      ],
+      "targetPatterns": [
+        "\\bspyOn\\s*\\(\\s*[^,()]+,\\s*['\"`]{target}['\"`]",
+        "\\bsinon\\s*\\.\\s*(?:stub|replace)\\s*\\(\\s*[^,()]+,\\s*['\"`]{target}['\"`]",
+        "\\bmocker\\s*\\.\\s*patch\\s*\\.\\s*object\\s*\\(\\s*[^,()]+,\\s*['\"`]{target}['\"`]"
+      ],
+      "observing": ["\\bcallThrough\\b", "\\bcallActual\\b", "\\band\\s*\\.\\s*callFake\\s*\\(\\s*\\)"],
+      "stubbing": [
+        "\\b(?:when|given|verify\\w*|doReturn|doThrow|doNothing|doAnswer|every|coEvery|coVerify|justRun|capture)\\s*[({]",
+        "\\.\\s*(?:mockReturnValue\\w*|mockResolvedValue\\w*|mockImplementation\\w*|mockRejectedValue\\w*|returns|returnValue|thenReturn|thenThrow|thenAnswer|andReturn)\\b"
+      ]
+    },
+    "disabled": {
+      "label": "deaktiviert (neu)",
+      "hint": "Ein neuer Test, der gar nicht läuft (xit, @Disabled, skip): er prüft nichts, solange er ausgeschaltet ist."
+    }
+  },
+  "setupImpact": {
+    "$comment": "Wirkung von Setup und Testdaten (docs/05-analyse.md, 5k): changed setup blocks (beforeEach & co., JUnit @BeforeEach/@AfterAll/... methods), fixtures (top-level constants of test files, fields and suite-level variables with a value) and test helpers (functions, methods and classes of test files that are no tests) with the tests they affect, also unchanged ones. Test files are those of the path rule of category 'tests'. supportPaths: globs of further test-support files (builders, fixtures, fakes, mocks) whose functions, classes and constants count as helpers and fixtures. A rules file without this section, or without one of its keys, uses the built-in value for that key.",
+    "supportPaths": [
+      "**/testing/**",
+      "**/test-utils/**",
+      "**/test-helpers/**",
+      "**/testutils/**",
+      "**/testsupport/**",
+      "**/fixtures/**",
+      "**/__fixtures__/**",
+      "**/__mocks__/**",
+      "**/*.fixture.*",
+      "**/*.fixtures.*",
+      "**/*.mock.*",
+      "**/*.mocks.*",
+      "**/*.stub.*",
+      "**/*.fake.*",
+      "**/TestData*.*",
+      "**/*TestData.*",
+      "**/*Fixtures.*",
+      "**/*Mother.*"
+    ]
+  },
+  "commitChecks": {
+    "$comment": "Commit-Bezug der Tests (docs/05-analyse.md, 7a): findings from the order of the PR's commits, computed with commits.json. fixTitles: regexes (find) on a commit title that make it a fix - a fix that changes source code and no test file is 'Fix ohne Test'. testAdjustTitles: regexes on titles of commits that adjust tests ('fix tests', 'Tests anpassen'); such a commit is never a fix, and an expectation it changes later counts as a strong signal. notCode: globs of files in a code language that are no source code to be tested (build scripts, generated code, tool configuration). Test files are those of the path rule of category 'tests' and the setupImpact.supportPaths. A rules file without this section, or without one of its keys, uses the built-in value for that key.",
+    "fixTitles": [
+      "(?i)\\bfix(e[sd]|ing)?\\b",
+      "(?i)\\bbug(s|fix|fixes)?\\b",
+      "(?i)\\bhotfix(es)?\\b",
+      "(?i)\\brepair(s|ed|ing)?\\b",
+      "(?i)\\bkorrigier\\w*",
+      "(?i)\\bbeheb\\w*|\\bbehoben\\b"
+    ],
+    "testAdjustTitles": [
+      "(?i)\\b(fix|adjust|update|repair|correct|align)(e[sd]|ing|s)?\\s+(\\w+\\s+){0,3}(tests?|specs?|expectations?|assertions?|snapshots?)\\b",
+      "(?i)\\b(make|get|keep)s?\\s+(the\\s+)?(tests?|specs?|build|ci|pipeline)\\s+(pass\\w*|green|work\\w*|run\\w*)",
+      "(?i)\\b(tests?|specs?|erwartungen|assertions?)\\s+(\\w+\\s+){0,2}(anpassen|angepasst|korrigier\\w*|repar\\w*|gefixt|fixen|grün)(?!\\w)",
+      "(?i)\\b(anpassen|korrigieren|reparieren|fixen)\\s+(der\\s+|die\\s+)?(tests?|specs?|erwartungen)\\b"
+    ],
+    "notCode": [
+      "**/build.gradle*",
+      "**/settings.gradle*",
+      "**/*.config.*",
+      "**/*.conf.js",
+      "**/*.generated.*",
+      "**/generated/**",
+      "**/gen/**",
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/build/generated/**",
+      "**/target/generated-sources/**",
+      "**/*.min.js",
+      "**/*.d.ts"
+    ]
+  }
 }

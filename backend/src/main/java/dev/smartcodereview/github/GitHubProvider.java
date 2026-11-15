@@ -158,15 +158,19 @@ public class GitHubProvider implements ReviewProvider {
         JsonNode tree = getJson("/repos/" + ref.owner() + "/" + ref.repo() + "/git/trees/" + sha + "?recursive=1");
         List<String> dirs = new ArrayList<>();
         List<String> contracts = new ArrayList<>();
+        List<String> files = new ArrayList<>();
         tree.path("tree").forEach(n -> {
             String path = n.path("path").asText();
             if ("tree".equals(n.path("type").asText())) {
                 dirs.add(path);
-            } else if ("blob".equals(n.path("type").asText()) && OpenApi.isContract(path)) {
-                contracts.add(path);
+            } else if ("blob".equals(n.path("type").asText())) {
+                files.add(path);
+                if (OpenApi.isContract(path)) {
+                    contracts.add(path);
+                }
             }
         });
-        return new Model.RepoStructure(dirs, tree.path("truncated").asBoolean(false), contracts, null);
+        return new Model.RepoStructure(dirs, tree.path("truncated").asBoolean(false), contracts, null, files);
     }
 
     @Override

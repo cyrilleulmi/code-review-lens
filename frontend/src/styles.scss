@@ -26,6 +26,8 @@
   --ok: #5fb865;
   --ok-border: #3f6e45;
   --ok-head: #26332a;
+  /* needs attention, e.g. changed code without a test */
+  --warn: #e0a84b;
 
   --add-bg: rgba(84, 155, 96, 0.17);
   --add-bg-ok: rgba(84, 155, 96, 0.07);
@@ -33,6 +35,15 @@
   --del-bg: rgba(212, 98, 98, 0.16);
   --del-bg-ok: rgba(212, 98, 98, 0.06);
   --del-fg: #d46c6c;
+
+  /* Mock-Grenzen: what the tests really execute in a flow (step box, connections, legend) */
+  --run-tested: var(--ok);
+  --run-mocked: var(--warn);
+  --run-none: var(--del-fg);
+
+  /* Spec-Diff: status of a test name (new / removed use --add-fg / --del-fg) */
+  --spec-changed: #6ca0f0;
+  --spec-renamed: #c39ae8;
 
   /* git blame annotations: older lines fade out, lines of the PR's own commits are marked */
   --blame-bg: #2a2c31;

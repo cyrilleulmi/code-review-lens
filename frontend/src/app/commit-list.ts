@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { Commit } from './api';
+import { FindingChip, commitChips } from './commit-findings';
 import { Icon } from './icon';
 import { ReviewStore } from './review.store';
 
@@ -10,11 +11,14 @@ interface Row {
   progress: { ok: number; total: number };
   /** merge commit that carries the changes of this side-branch commit */
   via: Commit | null;
+  /** Commit-Bezug der Tests: «Fix ohne Test», «passt Erwartungen an», «Logik ohne Test» */
+  chips: FindingChip[];
 }
 
 /**
  * The commits of the PR (oldest first). Clicking one shows only its changes in all views; the ✓ marks all
- * of its lines. Used in the review tool window and on the overview.
+ * of its lines. Chips name what the order of the commits says about the tests (Commit-Bezug). Used in the review
+ * tool window and on the overview.
  */
 @Component({
   selector: 'app-commit-list',
@@ -56,6 +60,18 @@ interface Row {
                 </span>
               } @else if (r.via) {
                 <span class="meta">via {{ r.via.sha.substring(0, 7) }}</span>
+              }
+              @if (r.chips.length) {
+                <span class="chips">
+                  @for (chip of r.chips; track chip.kind) {
+                    <span class="fchip" [class.warn]="chip.warn" [title]="chip.title">
+                      @if (chip.warn) {
+                        <app-icon name="warning" [size]="10" />
+                      }
+                      {{ chip.label }}
+                    </span>
+                  }
+                </span>
               }
             </span>
             @if (p.total > 0) {
@@ -111,6 +127,16 @@ interface Row {
     .compact .meta { flex: none; }
     .add { color: var(--add-fg); }
     .del { color: var(--del-fg); }
+    .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+    .compact .chips { margin-top: 0; flex-wrap: nowrap; flex: none; }
+    .fchip {
+      display: inline-flex; align-items: center; gap: 3px; height: 15px; padding: 0 6px; border-radius: 8px;
+      border: 1px solid var(--border-strong); color: var(--fg-muted); font-size: 10px; font-weight: 500; white-space: nowrap;
+    }
+    .fchip.warn {
+      border-color: color-mix(in srgb, var(--warn) 50%, transparent); color: var(--warn);
+      background: color-mix(in srgb, var(--warn) 8%, transparent);
+    }
     .cnt { font-size: 11px; color: var(--fg-muted); font-variant-numeric: tabular-nums; flex: none; }
     .okicon { color: var(--ok); }
     .mark {
@@ -130,6 +156,7 @@ export class CommitList {
     const c = this.store.commits();
     const bySha = this.store.commitBySha();
     const counts = this.store.commitLineCount();
+    const findings = this.store.commitFindings();
     return (c?.commits ?? []).map((commit, i) => {
       const via = c?.mergedVia?.[commit.sha];
       return {
@@ -138,6 +165,7 @@ export class CommitList {
         lines: counts.get(commit.sha) ?? 0,
         progress: this.store.commitProgress(commit.sha),
         via: via ? bySha.get(via) ?? null : null,
+        chips: commitChips(findings, commit.sha),
       };
     });
   });

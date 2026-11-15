@@ -1,14 +1,19 @@
 import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, computed, inject, input, linkedSignal } from '@angular/core';
-import { CodeBlock } from './code-block';
+import { CaseMatrixOverview } from './case-matrix';
+import { CodeBlock, flashLine } from './code-block';
+import { CoverageOverview } from './coverage-overview';
+import { RuleCheckOverview } from './rule-check-overview';
 import { Icon } from './icon';
+import { MockWarnings } from './mock-warnings';
 import { ReviewStore, Slot } from './review.store';
+import { SpecLineTarget, SpecOverview } from './spec-overview';
 import { TestOverview } from './test-overview';
 
 /** A list of code blocks: a category, a group (e.g. "Übersetzungen") or a file. */
 @Component({
   selector: 'app-group-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CodeBlock, Icon, TestOverview],
+  imports: [CaseMatrixOverview, CodeBlock, CoverageOverview, Icon, MockWarnings, RuleCheckOverview, SpecOverview, TestOverview],
   template: `
     <div class="view-head">
       <app-icon [name]="icon()" [size]="18" />
@@ -39,6 +44,21 @@ import { TestOverview } from './test-overview';
     }
     @if (slots().length === 0) {
       <p class="empty">Keine Änderungen in dieser Auswahl.</p>
+    }
+    @if (coverage() && store.bundle()?.analysis?.specs?.length && stepIndex() === null) {
+      <app-spec-overview (segmentClick)="openRef($event)" (lineClick)="openLine($event)" />
+    }
+    @if (coverage() && store.bundle()?.analysis?.caseMatrices?.length && stepIndex() === null) {
+      <app-case-matrix (segmentClick)="openRef($event)" />
+    }
+    @if (coverage() && store.bundle()?.analysis?.coverage && stepIndex() === null) {
+      <app-coverage-overview (testClick)="openRef($event)" (lineClick)="openLine($event)" />
+    }
+    @if (coverage() && store.bundle()?.analysis?.ruleChecks && stepIndex() === null) {
+      <app-rule-check-overview (testClick)="openRef($event)" (lineClick)="openLine($event)" />
+    }
+    @if (coverage() && store.bundle()?.analysis?.mockWarnings?.length && stepIndex() === null) {
+      <app-mock-warnings (lineClick)="openLine($event)" (segmentClick)="openRef($event)" />
     }
     @if (testIds().length && stepIndex() === null) {
       <app-test-overview [testIds]="testIds()" (testClick)="scrollTo($event)" />
@@ -100,6 +120,8 @@ export class GroupView {
   readonly scope = input.required<string>();
   /** File view: marks apply to all places of a line. */
   readonly fileView = input(false);
+  /** Show the Spec-Diff, the Fallmatrix, the coverage of the changed code and the mock warnings above the blocks (test category). */
+  readonly coverage = input(false);
 
   protected readonly progress = computed(() => this.store.progressOf(this.slots()));
   /** Step-by-step mode: index of the only block shown, null = off. Reset when the content changes. */
@@ -140,6 +162,10 @@ export class GroupView {
     void el.offsetWidth;
     el.classList.add('flash');
     setTimeout(() => el.classList.remove('flash'), 1400);
+    const line = this.store.takeFocusLine(segmentId);
+    if (line != null) {
+      flashLine(el, line);
+    }
     return true;
   }
 
@@ -169,6 +195,27 @@ export class GroupView {
 
   protected markAll(): void {
     this.store.toggle(this.store.linesOf(this.slots()), this.scope());
+  }
+
+  /**
+   * A line of a test (an assertion in the Spec-Diff): scroll to that row of the block when it is shown here and
+   * expanded, else to the block (or to its place elsewhere).
+   */
+  protected openLine(target: SpecLineTarget): void {
+    const block = (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>(`app-code-block[data-segment="${target.segmentId}"]`);
+    const row = block?.querySelector<HTMLElement>(`.row[data-${target.old ? 'old' : 'new'}="${target.line}"]`);
+    if (!row || this.stepIndex() != null) {
+      if (!target.old) {
+        this.store.focusLine.set({ segmentId: target.segmentId, line: target.line });
+      }
+      this.openRef(target.segmentId);
+      return;
+    }
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.remove('flash-line');
+    void row.offsetWidth;
+    row.classList.add('flash-line');
+    setTimeout(() => row.classList.remove('flash-line'), 1600);
   }
 
   /** A call-site chip outside a flow view: show the called code at its place (flow or group). */

@@ -10,11 +10,13 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { Flow, FlowEdge, FlowStep, Segment } from './api';
-import { CodeBlock } from './code-block';
+import { Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from './api';
+import { CodeBlock, flashLine } from './code-block';
 import { outsideBranch, sameSet } from './flow-focus';
 import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
+import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
+import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
 import { ReviewStore } from './review.store';
 
 interface Node {
@@ -81,6 +83,16 @@ export class FlowView {
   protected readonly hovered = signal<string | null>(null);
   protected readonly indent = INDENT;
 
+  /** Mock-Grenzen: what the tests really execute, per step (segment id) and per edge ("from>to"). */
+  protected readonly runs = computed(() => flowRuns(this.store.flowCoverage().get(this.flow().id)));
+  protected readonly hasRuns = computed(() => this.runs().steps.size > 0);
+  /** A REST edge of this flow is checked from both sides (HTTP-Tests): the legend explains the label. */
+  protected readonly hasBothSides = computed(() => [...this.runs().edges.values()].some(bothSides));
+  protected readonly bothSidesLabel = BOTH_SIDES_LABEL;
+  protected readonly stepLabels = STEP_LABELS;
+  protected readonly edgeLabels = EDGE_LABELS;
+  protected readonly runLegend: StepRunStatus[] = ['tested', 'mocked', 'none'];
+
   /** The flow's place: each step needs an ok here (a step can be part of several flows). */
   protected readonly place = computed(() => 'flows/' + this.flow().id);
   /** Steps hidden by the user (eye / focus). Reset when another flow is shown. */
@@ -124,7 +136,13 @@ export class FlowView {
           ? `M ${x1} ${y1} C ${x1 + 40} ${y1}, ${x1 + 40} ${y2}, ${b.x + NODE_W} ${y2}`
           : `M ${x1} ${y1} C ${x1 + COL_GAP / 2} ${y1}, ${x2 - COL_GAP / 2} ${y2}, ${x2 - 4} ${y2}`;
         const http = e.kind === 'http';
-        return { d, from: e.from, to: e.to, back, http, via: e.via, c, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 4 };
+        const run = this.runs().edges.get(e.from + '>' + e.to);
+        const contract = http ? contractLines(run, e.via, this.store.testName()) : [];
+        const title = [http ? 'HTTP ' + e.via : e.via, ...(run ? [edgeTitle(run, this.store.testName())] : []), ...contract].join('\n');
+        return {
+          d, from: e.from, to: e.to, back, http, via: e.via, c, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 4, run: run?.status ?? null,
+          both: http && bothSides(run), title,
+        };
       });
     const width = Math.max(...nodes.map((n) => n.x + NODE_W), 0) + 48;
     const height = Math.max(...nodes.map((n) => n.y + NODE_H), 0) + 4;
@@ -240,6 +258,21 @@ export class FlowView {
     }
   }
 
+  /** Run status of a step (Mock-Grenzen), null without flow coverage (older analyses). */
+  protected runOf(id: string): StepRunStatus | null {
+    return this.runs().steps.get(id)?.status ?? null;
+  }
+
+  /** Tooltip of a step: which tests run it for real, which only mock it, and the mock warnings on it. */
+  protected runTitle(id: string): string {
+    return stepTitle(this.runs().steps.get(id), this.store.testName(), this.store.mockWarningsBySegment().get(id) ?? []);
+  }
+
+  /** A changed test stubs this step's function (mock warning). */
+  protected mockWarned(id: string): boolean {
+    return this.store.mockWarningsBySegment().has(id);
+  }
+
   protected calledBy(node: Node): string | null {
     const parent = node.step.parentSegmentId;
     if (!parent) {
@@ -326,6 +359,10 @@ export class FlowView {
     void el.offsetWidth;
     el.classList.add('flash');
     setTimeout(() => el.classList.remove('flash'), 1400);
+    const line = this.store.takeFocusLine(segmentId);
+    if (line != null) {
+      flashLine(el, line);
+    }
     return true;
   }
 

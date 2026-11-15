@@ -20,7 +20,10 @@ Alles, was SmartCodeReview lokal weiss, liegt als **lesbare Dateien** in einem V
     └── <github|gitlab>/<owner>/<repo>/<number>/      (GitLab-Gruppen: gruppe~untergruppe; Nummer 0 = ganzes Repository)
         ├── snapshot.json     PR-Metadaten + Diff (eingefroren)
         ├── sources/<pfad>    Quelltext der neuen Version (nur analysierte Dateien)
-        ├── structure.json    Ordner des Repos am PR-Stand (für die Architektur-Erkennung, Cache)
+        ├── sources-base/<pfad>  Alte Version (Basis-Commit) geänderter Testdateien, unter dem alten Pfad (Spec-Diff)
+        ├── sources-related/<pfad>  Bestehende, unveränderte Testdateien (PR-Stand), die den geänderten Code wohl testen
+        ├── related.json      Welche bestehenden Testdateien ausgewählt wurden und warum (Bestehende Tests)
+        ├── structure.json    Ordner und Dateipfade des Repos am PR-Stand (Architektur, bestehende Tests; Cache)
         ├── analysis.json     Segmente, Kategorien, Flüsse, Komponenten (abgeleitet, jederzeit neu berechenbar)
         ├── review.json       ◀ DEINE MARKIERUNGEN (die einzige Datei mit «echtem» Zustand)
         ├── comments.json     Letzter Abruf der GitHub-Kommentare (Cache)
@@ -66,13 +69,17 @@ Alle Dateien sind UTF-8, eingerückt und werden **atomar** geschrieben (temporä
   "commits": [{ "sha": "76ce6d0d…", "title": "Flow connectors: one lane per connection", "author": "Cyrille",
                 "date": "2026-11-13T16:18:00Z", "parents": ["69f7bd1f…"], "additions": 68, "deletions": 22, "files": ["…"] }],
   "lines": { "frontend/src/app/flow-view.ts": { "N186": "76ce6d0d…", "O116": "69f7bd1f…" } },
-  "mergedVia": { "<sha eines Commits aus einem gemergten Seitenzweig>": "<sha des Merge-Commits>" }
+  "mergedVia": { "<sha eines Commits aus einem gemergten Seitenzweig>": "<sha des Merge-Commits>" },
+  "findings": [{ "kind": "expectation-later", "level": "warn", "sha": "406522ac…", "title": "fix tests",
+                 "path": "backend/src/test/java/…/JerseyNumberValidationTest.java", "lineKey": "N62",
+                 "segmentId": "s37", "testSegmentId": "s37", "detail": "Test geschrieben in eec1cd1 …" }]
 }
 ```
 
 * `commits` stehen in Reihenfolge, die ältesten zuerst.
 * `lines` ordnet die Zeilenschlüssel des PR-Diffs (dieselben wie in `lineKeys`) einem Commit zu. Hinzugefügte Zeilen gehören zum Commit, der sie zuletzt geschrieben hat, gelöschte Zeilen zu dem, der sie entfernt hat. Zeilen ohne sichere Zuordnung fehlen.
-* Wird neu berechnet, wenn sich `headSha` oder der Algorithmus (`version`) ändert. Die Datei ist abgeleitet und kann gelöscht werden.
+* `findings` (Commit-Bezug der Tests): was die Reihenfolge der Commits über die Tests sagt – `expectation-later` (eine Assertion eines in diesem PR geschriebenen Tests wurde in einem späteren Commit geändert; `warn`, wenn dieser nur Tests ändert oder «fix tests» heisst), `fix-without-test` (Fix-Commit ändert Code, aber keinen Test), `logic-without-test` (Info: Commit ändert testbaren Code ohne Test, und kein späterer Commit ändert einen Test dafür). `sha`/`title` = der Commit, `path`/`lineKey` = wo es sich zeigt, `testSegmentId` = der Test. `null` in Dateien älterer Versionen, leer für das ganze Repository (Abschnitt 7a in [05-analyse.md](05-analyse.md)).
+* Die Zuordnung wird neu berechnet, wenn sich `headSha` oder der Algorithmus (`version`) ändert. `findings` werden bei jedem Abruf aus der Zuordnung und der aktuellen `analysis.json` neu bestimmt und bei einer Änderung zurückgeschrieben. Die Datei ist abgeleitet und kann gelöscht werden.
 
 ## `analysis.json` (Auszug)
 
@@ -103,7 +110,27 @@ Alle Dateien sind UTF-8, eingerückt und werden **atomar** geschrieben (temporä
 * `layer` (`domain` | `application` | `usecase` | `adapter` | null) und `frontend` (true/false) pro Segment; `architecture.style` = `hexagonal`, wenn das Repo Ports & Adapters nutzt (`evidence` = Ordner).
 * `flows[].edges[].kind`: `call` oder `http` (dann `via` = `PUT /api/players/{}`).
 * `components[]` (`id`, `name`, `paths`, `area`, `segmentIds`) und `componentEdges[]` (`from`, `to`, `calls`, `http`): das Komponentendiagramm.
-* `tests[]`: pro geändertem Testfall die getesteten Komponenten (`how`: `name` = Namenskonvention, `call` = direkt aufgerufen) und die erreichten Segmente (`direct`, sonst `via` = das Segment, über das es erreicht wird; `line` = Aufrufstelle im Test). `testedBy` ist die Rückrichtung.
+* `tests[]`: pro geändertem Testfall die getesteten Komponenten (`how`: `name` = Namenskonvention, `call` = direkt aufgerufen, `http` = per HTTP-Anfrage an einen Endpunkt darin) und die erreichten Segmente (`direct`, sonst `via` = das Segment, über das es erreicht wird; `line` = Aufrufstelle im Test; `mocked` = der Test mockt die Abhängigkeit, zu der es gehört – nur der Mock läuft; `http` = der Weg beginnt mit einer echten HTTP-Anfrage des Tests, `endpoint` = beim direkt erreichten Endpunkt die Anfrage, z. B. `PUT /api/players/{}`; Abschnitt 5m in [05-analyse.md](05-analyse.md)). `testedBy` ist die Rückrichtung (ohne gemockte). `smells[]` (`kind`, `label`, `line`, `code`, `hint`): Test-Smells – Hinweise, dass der Test weniger wert ist, als er aussieht (`no-assertion`, `weak-only`, `focused`, `sleep`, `mocks-subject`, `disabled` für neue Tests); leer, wenn keine (Abschnitt 5j in [05-analyse.md](05-analyse.md)).
+* `coverage[].findings[]` (`kind` `exception`/`boundary`/`effect`/`branches`, `line`, `code`, `label`, `subject`, `checked`, `checkedBy`, `covered`, `missing`): Fall- und Effekt-Abgleich – was der Code kann (Fehlerausgänge, Grenzen, Wirkungen) gegen das, was die Tests prüfen, die ihn wirklich erreichen; `caseMatrices[].boundaries[]` (`segmentId`, `subject`, `label`, `values`, `missing`): Grenzen im Code, den die Tests einer Fallmatrix erreichen (Abschnitt 5h in [05-analyse.md](05-analyse.md)).
+* `ruleChecks[]` (`ruleId`, `label`, `segmentId`, `line`, `code`, `trigger`, `met`, `metBy`, `tests`, `hint`): Erwartungs-Regeln – für jede Regel aus `testRules`, die auf ein geändertes Segment greift (z. B. geänderte Berechtigung, neuer Endpunkt), ob ein Test der erwarteten Form existiert; leer für das ganze Repository. Ein Test, der einen geänderten Endpunkt über HTTP aufruft, erreicht ihn wie über einen Aufruf (Abschnitte 5i und 5m in [05-analyse.md](05-analyse.md)).
+* `setupImpacts[]` (`segmentId`, `kind` `setup`/`fixture`/`helper`, `name`, `line`, `affected[]` mit `path`, `name`, `line`, `segmentId`, `status`, `existing`; `unchangedCount`): Wirkung von Setup und Testdaten – geänderte Setup-Blöcke, Fixtures und Testhilfen mit den Tests, auf die sie wirken, auch unveränderten; leer für das ganze Repository (Abschnitt 5k in [05-analyse.md](05-analyse.md)).
+* `mockWarnings[]` (`test`, `testName`, `path`, `line`, `segmentId`, `member`, `collaborator`): Tests, die eine geänderte Funktion mocken und beim Namen stubben; `flowCoverage[]` (`flowId`, `steps[]` mit `status` `tested`/`mocked`/`none`, `edges[]` mit `tested`/`separate`/`partial`/`none`, bei REST-Verbindungen dazu `clientTests` und `serverTests` – die beiden Seiten des Vertrags): was die Tests in jedem Flow wirklich ausführen (Mock-Grenzen, Abschnitt 5g, und HTTP-Tests, Abschnitt 5m in [05-analyse.md](05-analyse.md)).
+* `existingTests[]`: Testfälle **bestehender, unveränderter** Testdateien, die geänderten Code erreichen (`id` `e1`, `e2` …, `path`, `name`, `line`, `reason`, `covers` wie bei `tests[]`, `profile`). Sie sind keine Segmente – nichts zu markieren. `coverage[].existingTests` verweist auf ihre Ids. `relatedTests` beschreibt die Auswahl (siehe unten).
+
+## `related.json`
+
+Welche bestehenden Testdateien zum PR geladen wurden (Abschnitt 5f in [05-analyse.md](05-analyse.md)); dasselbe steht in `analysis.json` → `relatedTests`. Wird bei jeder Analyse neu geschrieben; die Dateien selbst liegen unter `sources-related/<pfad>` (Stand: Head des PRs). Beim erneuten Laden des PRs werden beide gelöscht und neu bestimmt. Beim ganzen Repository (Nummer 0) gibt es beides nicht.
+
+```json
+{
+  "limit": 30, "candidates": 2, "truncated": false, "listIncomplete": false,
+  "files": [{ "path": "frontend/src/app/auth/current-user.service.spec.ts", "reason": "mirror",
+              "sources": ["frontend/src/app/auth/current-user.service.ts"], "loaded": true }]
+}
+```
+
+* `reason`: `mirror` (nach der geänderten Datei benannt, im gespiegelten Testordner oder daneben), `name` (gleicher Name anderswo, der nächstgelegene), `prefix` (Name beginnt mit dem der geänderten Datei, im gespiegelten Testordner).
+* `truncated`: Es passten mehr als `limit` Dateien (`candidates`); `listIncomplete`: Der Code-Host hat die Dateiliste gekürzt. `loaded: false`: Die Datei konnte nicht geladen werden (wird bei der nächsten Analyse erneut versucht).
 
 `analysis.json` ist **abgeleitet**: löschen oder `POST …/reanalyse` berechnet sie neu. Sie wird auch automatisch neu berechnet, wenn sich `rules.json` oder die Analyzer-Version ändert (`rulesHash`).
 

@@ -19,6 +19,31 @@
     <span class="lines">:{{ seg.startLine }}</span>
   }
   <span class="chip" [class]="'chip cat-' + seg.category" [title]="seg.reason">{{ seg.category === 'logic' ? 'Logik' : seg.category === 'tests' ? (seg.symbolKind === 'test' ? 'Testfall' : 'Test') : seg.group }}</span>
+  @if (coverage(); as cv) {
+    <button type="button" class="cov" [class]="'cov cov-' + cv.status" [title]="cv.title" (click)="openCoverage($event)">
+      <app-icon [name]="cv.status === 'none' ? 'info' : 'test'" [size]="11" /> {{ cv.label }}
+    </button>
+  }
+  @if (expectation(); as ex) {
+    <span class="expect" [class.warn]="ex.warn" [title]="ex.title" (click)="$event.stopPropagation()">
+      <app-icon [name]="ex.warn ? 'warning' : 'info'" [size]="11" /> {{ ex.label }}
+    </span>
+  }
+  @if (setupBadge(); as sb) {
+    <span class="expect" [class.warn]="sb.warn" [title]="sb.title" (click)="$event.stopPropagation()">
+      <app-icon [name]="sb.warn ? 'warning' : 'info'" [size]="11" /> {{ sb.text }}
+    </span>
+  }
+  @if (smellBadge(); as sm) {
+    <span class="expect warn" [title]="sm.title" (click)="$event.stopPropagation()">
+      <app-icon name="warning" [size]="11" /> {{ sm.text }}
+    </span>
+  }
+  @if (mockWarning(); as mw) {
+    <span class="expect warn" [title]="mw.title" (click)="$event.stopPropagation()">
+      <app-icon name="warning" [size]="11" /> mockt geänderten Code
+    </span>
+  }
   @if (calledBy(); as by) {
     <button class="called-by" type="button" [style.--c]="calledByColor()" (click)="$event.stopPropagation(); calledByClick.emit()">
       <app-icon name="arrowLeft" [size]="12" /> {{ by }}
@@ -53,8 +78,9 @@
     @if (covers().length) {
       <span class="lbl"><app-icon name="test" [size]="12" /> Testet:</span>
       @for (c of covers(); track c.id) {
-        <button type="button" class="place" [class.indirect]="!c.direct" (click)="goSegment(c.id, $event)"
-                [title]="c.direct ? 'Direkt aufgerufen' : 'Indirekt erreicht'">{{ c.name }}</button>
+        <button type="button" class="place" [class.indirect]="!c.direct" [class.mocked]="c.mocked" (click)="goSegment(c.id, $event)"
+                [title]="c.mocked ? 'Nur als Mock erreicht – der echte Code läuft in diesem Test nicht' : (c.direct ? 'Direkt aufgerufen' : 'Indirekt erreicht') + (c.http ? ' · ' + c.http : '')">
+          {{ c.name }}@if (c.mocked) {<span class="mock-tag">Mock</span>}@if (c.http) {<span class="http-tag">{{ httpTag }}</span>}</button>
       }
     }
     @if (testedBy().length) {
@@ -74,7 +100,7 @@
       } @else {
         @let byOtherCommit = otherCommit(line);
         <div class="row" [class]="'row t-' + line.type" [class.ok]="line.own && !byOtherCommit && isOk(line)" [class.foreign]="!line.own && line.type !== 'ctx'"
-             [class.other-commit]="byOtherCommit" [class.has-refs]="!!line.refs?.length" [attr.data-new]="line.newLine">
+             [class.other-commit]="byOtherCommit" [class.has-refs]="!!line.refs?.length" [attr.data-new]="line.newLine" [attr.data-old]="line.oldLine">
           @if (annotations(); as an) {
             @let a = an[i];
             @if (a) {
@@ -121,6 +147,26 @@
             @if (halfNotes().get(i); as other) {
               <button type="button" class="half-note" (click)="goElsewhere(line, $event)" [title]="'Bereits akzeptiert in: ' + other.labels + ' – Klick springt dorthin'">
                 <app-icon name="check" [size]="10" /> {{ other.ids.length === 1 ? 'bereits an anderem Ort akzeptiert' : 'bereits an ' + other.ids.length + ' anderen Orten akzeptiert' }}
+              </button>
+            }
+            @for (n of caseNotes().get(i) ?? []; track $index) {
+              <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
+                <app-icon name="warning" [size]="10" /> {{ n.text }}
+              </button>
+            }
+            @for (n of smellNotes().get(i) ?? []; track $index) {
+              <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
+                <app-icon name="warning" [size]="10" /> {{ n.text }}
+              </button>
+            }
+            @for (n of laterNotes().get(i) ?? []; track $index) {
+              <button type="button" class="case-note" [class.info]="!n.warn" (click)="showCommit(n.sha, $event)" [title]="n.title">
+                <app-icon name="commit" [size]="10" /> {{ n.text }}
+              </button>
+            }
+            @for (n of ruleNotes().get(i) ?? []; track $index) {
+              <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
+                <app-icon name="shield" [size]="10" /> {{ n.text }}
               </button>
             }
             @for (ref of line.refs ?? []; track ref.segmentId) {

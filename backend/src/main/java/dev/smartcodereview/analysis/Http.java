@@ -112,22 +112,8 @@ public final class Http {
      * declaration lines, classHead: those of the enclosing class (for the base path).
      */
     public static Endpoint annotated(List<String> methodHead, List<String> classHead) {
-        String base = "";
-        for (String l : classHead) {
-            Matcher m = JAXRS_PATH.matcher(l);
-            if (m.find()) {
-                base = m.group(1);
-                break;
-            }
-            m = SPRING_MAPPING.matcher(l);
-            if (m.find() && m.group(2) != null) {
-                Matcher s = STRING.matcher(m.group(2));
-                if (s.find()) {
-                    base = s.group(1);
-                    break;
-                }
-            }
-        }
+        String classBase = classBase(classHead);
+        String base = classBase == null ? "" : classBase;
         String method = null;
         String path = "";
         boolean endpoint = false;
@@ -160,6 +146,27 @@ public final class Http {
             }
         }
         return endpoint ? new Endpoint(method, normalisePath("/" + base + "/" + path)) : null;
+    }
+
+    /**
+     * The base path a class declares for its endpoints - JAX-RS `@Path("/api/players")`, Spring
+     * `@RequestMapping("/api/players")` - from its annotation and declaration lines, or null.
+     */
+    public static String classBase(List<String> classHead) {
+        for (String l : classHead) {
+            Matcher m = JAXRS_PATH.matcher(l);
+            if (m.find()) {
+                return m.group(1);
+            }
+            m = SPRING_MAPPING.matcher(l);
+            if (m.find() && m.group(2) != null) {
+                Matcher s = STRING.matcher(m.group(2));
+                if (s.find()) {
+                    return s.group(1);
+                }
+            }
+        }
+        return null;
     }
 
     /** Route registrations in a line: Express/Fastify `app.put('/x', …)`, Go `mux.HandleFunc("PUT /x", …)`. */
@@ -235,6 +242,31 @@ public final class Http {
             }
         }
         return true;
+    }
+
+    /**
+     * How exactly a call fits an endpoint it {@link #matches}: the segments (from the end) that are equal, parameters
+     * included - `/api/players/{}` fits `/api/players/{id}` better than `/api/players/me` -, an endpoint with a method
+     * before one for any method. Picks the endpoint a test's request goes to when several match.
+     */
+    public static int exactness(Call call, Endpoint endpoint) {
+        List<String> a = segments(call.path());
+        List<String> b = segments(endpoint.path());
+        int n = 0;
+        for (int i = a.size() - 1, j = b.size() - 1; i >= 0 && j >= 0; i--, j--) {
+            if (a.get(i).equals(b.get(j))) {
+                n++;
+            }
+        }
+        return n * 2 + (endpoint.method() != null ? 1 : 0);
+    }
+
+    /** A request path below a base path (`/api/players` + `/{}` = `/api/players/{}`); "" stands for the base itself. */
+    static String withBase(String base, String path) {
+        if (base == null || base.isBlank() || path.startsWith("{}")) {
+            return path;
+        }
+        return normalisePath("/" + base + "/" + path);
     }
 
     /** `{id}`, `{id: \\d+}`, `:id`, `[id]`, `[...slug]` -> `{}`; Next.js route groups `(group)` are dropped. */

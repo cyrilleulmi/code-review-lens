@@ -18,7 +18,9 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Comparator;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * The local data directory. Plain, pretty-printed JSON and text files so that humans and agents can read
@@ -72,6 +74,30 @@ public class DataStore {
 
     public Path sourcesDir(PrRef ref) {
         return prDir(ref).resolve("sources");
+    }
+
+    /** Old versions (at the PR's base commit) of changed test files, by their path in the base version. */
+    public Path baseSourcesDir(PrRef ref) {
+        return prDir(ref).resolve("sources-base");
+    }
+
+    /** Existing, unchanged test files (at the PR head) loaded for the changed code (Bestehende Tests), by path. */
+    public Path relatedSourcesDir(PrRef ref) {
+        return prDir(ref).resolve("sources-related");
+    }
+
+    /** Deletes a directory with everything in it (no-op if it does not exist). */
+    public void deleteTree(Path dir) {
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        try (Stream<Path> walk = Files.walk(dir)) {
+            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(p);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public <T> Optional<T> read(Path file, Class<T> type) {
