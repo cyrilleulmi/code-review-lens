@@ -88,7 +88,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 16;
+    public static final int VERSION = 17;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -292,7 +292,10 @@ public final class Analyzer {
         List<Component> components = components(works, !evidence.isEmpty(), componentOf);
         return new Analysis(Model.SCHEMA_VERSION, Instant.now().toString(), snapshot.pr().headSha(), fingerprint(rules),
                 segments, categories, flows, tests, architecture, components, componentEdges(edges, componentOf),
-                coverage(works, tests), specs(snapshot.files(), sources, baseSources == null ? Map.of() : baseSources, works));
+                coverage(works, tests),
+                // the whole repository has no base: every test would be "added", a huge outline without information
+                snapshot.pr().number() == 0 ? List.of()
+                        : specs(snapshot.files(), sources, baseSources == null ? Map.of() : baseSources, works));
     }
 
     /** Spec-Diff: the test names of every changed test file, old against new version (see {@link Specs}). */
