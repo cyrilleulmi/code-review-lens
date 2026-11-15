@@ -28,6 +28,7 @@ import { AcceptStatus, Acceptance, accept, acceptedElsewhere, acceptedIn, status
 import { laterExpectationsByTest } from './commit-findings';
 import { groupWarnings, testNamer } from './mock-boundaries';
 import { reloadMessage } from './reload-message';
+import { serverText, t } from './i18n';
 
 export type Selection =
   | { kind: 'overview' }
@@ -260,7 +261,9 @@ export class ReviewStore {
     for (const c of this.bundle()?.analysis.categories ?? []) {
       for (const g of c.groups) {
         const fileGroup = c.id === 'logic' || c.id === 'tests';
-        const label = g.flowId ? `Flow: ${g.label}` : `${c.label} › ${fileGroup ? g.label.substring(g.label.lastIndexOf('/') + 1) : g.label}`;
+        const label = g.flowId
+          ? t('Flow: {name}', { name: serverText(g.label) })
+          : `${serverText(c.label)} › ${fileGroup ? g.label.substring(g.label.lastIndexOf('/') + 1) : serverText(g.label)}`;
         const selection: Selection = g.flowId ? { kind: 'flow', id: g.flowId } : { kind: 'group', id: g.id };
         map.set(g.id, { id: g.id, label, categoryId: c.id, selection });
       }
@@ -371,7 +374,7 @@ export class ReviewStore {
 
   open(pr: PrKey, selection: Selection = { kind: 'overview' }, commit: string | null = null): void {
     this.pendingCommit = commit;
-    this.loading.set(`Lade ${prLabel(pr)} …`);
+    this.loading.set(t('Lade {pr} …', { pr: prLabel(pr) }));
     this.error.set(null);
     this.api.bundle(pr).subscribe({
       next: (b) => this.applyBundle(b, selection),
@@ -404,7 +407,7 @@ export class ReviewStore {
     if (!key) {
       return;
     }
-    this.loading.set(`Lade ${this.provider().noun} neu von ${this.provider().label} …`);
+    this.loading.set(t('Lade {noun} neu von {host} …', { noun: this.provider().noun, host: this.provider().label }));
     const previousHead = this.bundle()?.pr.headSha;
     this.api.reload(key).subscribe({
       next: (b) => {
@@ -423,11 +426,11 @@ export class ReviewStore {
     if (!key) {
       return;
     }
-    this.loading.set('Analysiere …');
+    this.loading.set(t('Analysiere …'));
     this.api.reanalyse(key).subscribe({
       next: (b) => {
         this.applyBundle(b, this.selection());
-        this.notify('Analyse neu berechnet');
+        this.notify(t('Analyse neu berechnet'));
       },
       error: (e) => {
         this.loading.set(null);
@@ -485,7 +488,7 @@ export class ReviewStore {
       this.select({ kind: 'overview' });
     }
     this.api.saveSettings({ disabledCategories: [...next] }).subscribe({
-      error: (e) => this.error.set('Einstellung nicht gespeichert: ' + errorMessage(e)),
+      error: (e) => this.error.set(t('Einstellung nicht gespeichert: {error}', { error: errorMessage(e) })),
     });
   }
 
@@ -524,7 +527,7 @@ export class ReviewStore {
         this.commitsLoading.set(false);
         this.commits.set(c);
         if (c.error) {
-          this.notify('Commits nicht verfügbar: ' + c.error);
+          this.notify(t('Commits nicht verfügbar: {error}', { error: serverText(c.error) }));
         }
         const pending = this.pendingCommit;
         this.pendingCommit = null;
@@ -537,7 +540,7 @@ export class ReviewStore {
       },
       error: (e) => {
         this.commitsLoading.set(false);
-        this.notify('Commits nicht verfügbar: ' + errorMessage(e));
+        this.notify(t('Commits nicht verfügbar: {error}', { error: errorMessage(e) }));
       },
     });
   }
@@ -630,7 +633,7 @@ export class ReviewStore {
         put(null);
         if (!this.blameErrorShown) {
           this.blameErrorShown = true;
-          this.notify('Blame nicht verfügbar: ' + errorMessage(e));
+          this.notify(t('Blame nicht verfügbar: {error}', { error: errorMessage(e) }));
         }
       },
     });
@@ -840,7 +843,7 @@ export class ReviewStore {
     this.api.mark(key, lines, ok, scope).subscribe({
       next: (state) => this.applyState(state),
       error: (e) => {
-        this.error.set('Markierung nicht gespeichert: ' + errorMessage(e));
+        this.error.set(t('Markierung nicht gespeichert: {error}', { error: errorMessage(e) }));
         this.refreshState();
       },
     });
@@ -892,11 +895,11 @@ export class ReviewStore {
     this.api.postComment(key, comment).subscribe({
       next: (c) => {
         this.comments.set([...this.comments(), c]);
-        this.notify(`Kommentar auf ${this.provider().label} veröffentlicht`);
+        this.notify(t('Kommentar auf {host} veröffentlicht', { host: this.provider().label }));
         done(true);
       },
       error: (e) => {
-        this.error.set('Kommentar fehlgeschlagen: ' + errorMessage(e));
+        this.error.set(t('Kommentar fehlgeschlagen: {error}', { error: errorMessage(e) }));
         done(false);
       },
     });

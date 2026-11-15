@@ -1,4 +1,5 @@
 import { Segment } from './api';
+import { t } from './i18n';
 
 /**
  * Visual distinctions shared by blocks and diagrams: a colour per connection, per layer (area) and per
@@ -30,7 +31,7 @@ const AREAS: Record<string, { label: string; token: string }> = {
 };
 
 export function areaLabel(area: string | null | undefined): string {
-  return area ? AREAS[area]?.label ?? area : '';
+  return area ? (AREAS[area] ? t(AREAS[area].label) : area) : '';
 }
 
 export function areaColor(area: string | null | undefined): string {

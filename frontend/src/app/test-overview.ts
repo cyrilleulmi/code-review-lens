@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { Segment, TestSmell } from './api';
 import { Icon, SymbolBadge } from './icon';
+import { t } from './i18n';
 import { ReviewStore } from './review.store';
 import {
   ProfileColumn,
@@ -43,6 +44,7 @@ type ViewMode = 'list' | 'table';
 
 const VIEW_KEY = 'scr.testOverview.view';
 
+/** German, translated with t(). */
 const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[] = [
   { id: 'name', label: 'Test', tip: 'Suite › Testname' },
   { id: 'targets', label: 'Prüft', tip: 'Geänderter Code, den der Test direkt aufruft oder per HTTP anfragt (sonst die Komponente aus dem Dateinamen)' },
@@ -68,20 +70,20 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
     <section class="box">
       <header>
         <app-icon name="test" [size]="15" class="head-icon" />
-        <b>Testübersicht</b>
-        <span class="hint">{{ rows().length }} {{ rows().length === 1 ? 'Testfall' : 'Testfälle' }} · statisch ermittelt aus dem Testcode</span>
+        <b>{{ t('Testübersicht') }}</b>
+        <span class="hint">{{ t(rows().length === 1 ? '{n} Testfall' : '{n} Testfälle', { n: rows().length }) }} · {{ t('statisch ermittelt aus dem Testcode') }}</span>
         @if (tableRows().length) {
-          <span class="toggle" role="group" aria-label="Darstellung">
+          <span class="toggle" role="group" [attr.aria-label]="t('Darstellung')">
             <button type="button" [class.on]="mode() === 'list'" [attr.aria-pressed]="mode() === 'list'" (click)="setMode('list')"
-                    title="Pro Test: Steckbrief, Komponenten und erreichter Code">Liste</button>
+                    [title]="t('Pro Test: Steckbrief, Komponenten und erreichter Code')">{{ t('Liste') }}</button>
             <button type="button" [class.on]="mode() === 'table'" [attr.aria-pressed]="mode() === 'table'" (click)="setMode('table')"
-                    title="Alle Tests als sortierbare Tabelle mit Zusammenfassung">Tabelle</button>
+                    [title]="t('Alle Tests als sortierbare Tabelle mit Zusammenfassung')">{{ t('Tabelle') }}</button>
           </span>
         }
       </header>
       @if (mode() === 'table' && tableRows().length) {
         <p class="summary">
-          <span class="total">{{ summary().total }} {{ summary().total === 1 ? 'Test' : 'Tests' }}</span>
+          <span class="total">{{ t(summary().total === 1 ? '{n} Test' : '{n} Tests', { n: summary().total }) }}</span>
           @for (group of summary().groups; track $index) {
             <span class="sep">·</span>
             @for (part of group; track part.text) {
@@ -89,12 +91,12 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
                 <span class="comma">,</span>
               }
               <button type="button" class="sumpart" [class.on]="isFilter(part.filter)" [attr.aria-pressed]="isFilter(part.filter)"
-                      (click)="toggleFilter(part.filter)" [title]="isFilter(part.filter) ? 'Filter aufheben' : 'Nur diese Tests zeigen'">{{ part.text }}</button>
+                      (click)="toggleFilter(part.filter)" [title]="isFilter(part.filter) ? t('Filter aufheben') : t('Nur diese Tests zeigen')">{{ part.text }}</button>
             }
           }
           @if (filter()) {
-            <button type="button" class="clear" (click)="filter.set(null)" title="Alle Tests zeigen">
-              <app-icon name="close" [size]="11" /> Filter aufheben
+            <button type="button" class="clear" (click)="filter.set(null)" [title]="t('Alle Tests zeigen')">
+              <app-icon name="close" [size]="11" /> {{ t('Filter aufheben') }}
             </button>
           }
         </p>
@@ -104,8 +106,8 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
               <tr>
                 @for (c of columns; track c.id) {
                   <th [class.num]="c.num" [attr.aria-sort]="sort()?.column === c.id ? (sort()!.desc ? 'descending' : 'ascending') : null">
-                    <button type="button" (click)="sortBy(c.id)" [title]="c.tip + ' – klicken zum Sortieren'">
-                      {{ c.label }}
+                    <button type="button" (click)="sortBy(c.id)" [title]="t(c.tip) + ' – ' + t('klicken zum Sortieren')">
+                      {{ t(c.label) }}
                       <span class="arrow">{{ sort()?.column === c.id ? (sort()!.desc ? '▼' : '▲') : '' }}</span>
                     </button>
                   </th>
@@ -116,10 +118,10 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
               @for (r of shownRows(); track r.id) {
                 @let p = r.profile;
                 <tr tabindex="0" (click)="testClick.emit(r.id)" (keydown.enter)="testClick.emit(r.id)">
-                  <td class="tname" [title]="r.name + ' – zum Test springen'">{{ r.name }}</td>
+                  <td class="tname" [title]="r.name + ' – ' + t('zum Test springen')">{{ r.name }}</td>
                   <td class="code" [title]="r.targets.join(', ')">{{ r.targets.join(', ') || '–' }}</td>
-                  <td><span [class]="'scenario sc-' + p.scenario" [title]="r.parts.scenario?.tip ?? ''">{{ scenarioLabels[p.scenario] }}</span></td>
-                  <td [title]="r.parts.level?.tip ?? ''">{{ levelLabels[p.level] }}</td>
+                  <td><span [class]="'scenario sc-' + p.scenario" [title]="r.parts.scenario?.tip ?? ''">{{ t(scenarioLabels[p.scenario]) }}</span></td>
+                  <td [title]="r.parts.level?.tip ?? ''">{{ t(levelLabels[p.level]) }}</td>
                   <td class="num" [title]="r.parts.assertions?.tip ?? ''">
                     <span [class.zero]="!p.assertions">{{ p.assertions }}</span>
                     @if (kindsOf(r); as kinds) {
@@ -137,53 +139,53 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="8" class="none">Kein Test passt auf den Filter.</td></tr>
+                <tr><td colspan="8" class="none">{{ t('Kein Test passt auf den Filter.') }}</td></tr>
               }
             </tbody>
           </table>
         </div>
       } @else {
-        @for (t of rows(); track t.id) {
+        @for (tc of rows(); track tc.id) {
           <div class="test">
-            <button type="button" class="name" (click)="testClick.emit(t.id)" title="Zum Testcode">
-              <app-symbol-badge kind="test" /> {{ t.name }}
+            <button type="button" class="name" (click)="testClick.emit(tc.id)" [title]="t('Zum Testcode')">
+              <app-symbol-badge kind="test" /> {{ tc.name }}
             </button>
-            @if (t.parts.length || t.smells.length) {
+            @if (tc.parts.length || tc.smells.length) {
               <div class="profile">
-                @for (part of t.parts; track part.key) {
+                @for (part of tc.parts; track part.key) {
                   @if (!$first) {
                     <span class="sep">·</span>
                   }
                   @if (part.key === 'scenario') {
-                    <span [class]="'scenario sc-' + t.scenario" [title]="part.tip">{{ part.text }}</span>
+                    <span [class]="'scenario sc-' + tc.scenario" [title]="part.tip">{{ part.text }}</span>
                   } @else {
-                    <span class="part" [class.zero]="part.key === 'assertions' && !t.assertions" [title]="part.tip">{{ part.text }}</span>
+                    <span class="part" [class.zero]="part.key === 'assertions' && !tc.assertions" [title]="part.tip">{{ part.text }}</span>
                   }
                 }
-                @for (s of t.smells; track s.kind) {
+                @for (s of tc.smells; track s.kind) {
                   <span class="smell" [title]="detail(s)">{{ text(s) }}</span>
                 }
               </div>
             }
-            <span class="lbl">Komponenten</span>
+            <span class="lbl">{{ t('Komponenten') }}</span>
             <div class="vals">
-              @for (s of t.subjects; track s.name) {
+              @for (s of tc.subjects; track s.name) {
                 <button type="button" class="subject" [disabled]="!s.path" (click)="s.path && openFile(s.path)"
-                        [title]="(s.how === 'name' ? 'Aus dem Namen der Testdatei' : s.how === 'http' ? 'Der Test schickt eine HTTP-Anfrage an einen geänderten Endpunkt darin' : 'Der Test ruft geänderten Code darin auf') + (s.path ? ' · ' + s.path : '')">
+                        [title]="(s.how === 'name' ? t('Aus dem Namen der Testdatei') : s.how === 'http' ? t('Der Test schickt eine HTTP-Anfrage an einen geänderten Endpunkt darin') : t('Der Test ruft geänderten Code darin auf')) + (s.path ? ' · ' + s.path : '')">
                   <app-icon [name]="s.path ? 'file' : 'info'" [size]="12" /> {{ s.name }}
                   @if (!s.inPr) {
-                    <em>nicht im PR geändert</em>
+                    <em>{{ t('nicht im PR geändert') }}</em>
                   }
                 </button>
               } @empty {
-                <span class="none">keine erkannt</span>
+                <span class="none">{{ t('keine erkannt') }}</span>
               }
             </div>
-            <span class="lbl">Abgedeckt</span>
+            <span class="lbl">{{ t('Abgedeckt') }}</span>
             <div class="vals">
-              @for (c of t.covers; track c.segment.id) {
+              @for (c of tc.covers; track c.segment.id) {
                 <button type="button" class="cover" [class.indirect]="!c.direct" [class.done]="c.done" (click)="store.reveal(c.segment.id)"
-                        [title]="c.segment.path + (c.httpTitle ? ' · ' + c.httpTitle : '') + ' – zum Code springen'">
+                        [title]="c.segment.path + (c.httpTitle ? ' · ' + c.httpTitle : '') + ' – ' + t('zum Code springen')">
                   <app-symbol-badge [kind]="c.segment.symbolKind" />
                   <span class="sym">{{ c.segment.symbol ?? fileOf(c.segment.path) }}</span>
                   <span class="where">{{ fileOf(c.segment.path) }}:{{ range(c.segment) }}</span>
@@ -193,7 +195,7 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
                   }
                 </button>
               } @empty {
-                <span class="none">Keine geänderte Codestelle erreicht – der Test ruft nur unveränderten Code auf.</span>
+                <span class="none">{{ t('Keine geänderte Codestelle erreicht – der Test ruft nur unveränderten Code auf.') }}</span>
               }
             </div>
           </div>
@@ -281,6 +283,7 @@ export class TestOverview {
   readonly testIds = input.required<string[]>();
   readonly testClick = output<string>();
 
+  protected readonly t = t;
   protected readonly columns = COLUMNS;
   protected readonly scenarioLabels = SCENARIO_LABELS;
   protected readonly levelLabels = LEVEL_LABELS;
@@ -363,7 +366,7 @@ export class TestOverview {
 
   /** «Gleichheit, HTTP» for the assertions cell, null when there are none. */
   protected kindsOf(r: TableRow): string | null {
-    const kinds = assertionKinds(r.profile).map((k) => ASSERTION_LABELS[k.kind]);
+    const kinds = assertionKinds(r.profile).map((k) => t(ASSERTION_LABELS[k.kind]));
     return kinds.length ? kinds.join(', ') : null;
   }
 

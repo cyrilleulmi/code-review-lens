@@ -13,6 +13,7 @@ import {
 } from './case-matrices';
 import { boundaryNote } from './case-checks';
 import { Icon } from './icon';
+import { serverText, t } from './i18n';
 import { ReviewStore } from './review.store';
 
 interface MatrixView {
@@ -39,14 +40,14 @@ interface MatrixView {
     <section class="box">
       <header>
         <app-icon name="test" [size]="15" class="head-icon" />
-        <b>Fallmatrix (ähnliche Tests)</b>
-        <span class="hint">Eingabe → Erwartung – kopierte und parametrisierte Tests als Tabelle</span>
+        <b>{{ t('Fallmatrix (ähnliche Tests)') }}</b>
+        <span class="hint">{{ t('Eingabe → Erwartung – kopierte und parametrisierte Tests als Tabelle') }}</span>
       </header>
       <p class="summary">
         <span class="total">{{ summary().text }}</span>
         @if (summary().warn; as w) {
           <span class="sep">·</span>
-          <span class="warnsum" title="Gleiche Eingaben in mehreren Tests – derselbe Fall wird mehrfach geprüft">{{ w }}</span>
+          <span class="warnsum" [title]="t('Gleiche Eingaben in mehreren Tests – derselbe Fall wird mehrfach geprüft')">{{ w }}</span>
         }
       </p>
       @for (v of views(); track v.matrix.id) {
@@ -54,19 +55,19 @@ interface MatrixView {
         <div class="matrix">
           <div class="mhead">
             <span class="mtitle" [title]="m.title">{{ m.title }}</span>
-            <span class="kind">{{ kindLabels[m.kind] }}</span>
+            <span class="kind">{{ t(kindLabels[m.kind]) }}</span>
             @if (v.duplicates) {
-              <span class="mwarn"><app-icon name="warning" [size]="11" /> {{ v.duplicates }} doppelt</span>
+              <span class="mwarn"><app-icon name="warning" [size]="11" /> {{ t('{n} doppelt', { n: v.duplicates }) }}</span>
             }
             <span class="file" [title]="m.path">{{ fileOf(m.path) }}</span>
           </div>
           @if (m.template) {
             <button type="button" class="tpl-toggle" (click)="toggle(m.id)" [attr.aria-expanded]="isOpen(m.id)"
-                    title="Der gemeinsame Code der Tests; ‹n› ist die Spalte n">
-              <app-icon [name]="isOpen(m.id) ? 'chevronDown' : 'chevronRight'" [size]="11" /> Vorlage
+                    [title]="t('Der gemeinsame Code der Tests; ‹n› ist die Spalte n')">
+              <app-icon [name]="isOpen(m.id) ? 'chevronDown' : 'chevronRight'" [size]="11" /> {{ t('Vorlage') }}
             </button>
             @if (isOpen(m.id)) {
-              <pre class="template"><code>@for (p of v.parts; track $index) {@if (p.column === null) {<span>{{ p.text }}</span>} @else {<span class="slot" [class.exp]="p.expected" [title]="m.columns[p.column]?.label ?? ''">{{ p.text }}</span>}}</code></pre>
+              <pre class="template"><code>@for (p of v.parts; track $index) {@if (p.column === null) {<span>{{ p.text }}</span>} @else {<span class="slot" [class.exp]="p.expected" [title]="serverText(m.columns[p.column]?.label)">{{ p.text }}</span>}}</code></pre>
             }
           }
           <div class="scroll">
@@ -75,8 +76,8 @@ interface MatrixView {
                 <tr>
                   <th class="tname">Test</th>
                   @for (c of m.columns; track $index) {
-                    <th [class.exp]="c.role === 'expected'" [class.sep]="$index === v.split" [title]="(c.role === 'input' ? 'Eingabe: ' : 'Erwartung: ') + c.label">
-                      <span class="slotno">‹{{ $index + 1 }}›</span> {{ c.label }}
+                    <th [class.exp]="c.role === 'expected'" [class.sep]="$index === v.split" [title]="(c.role === 'input' ? t('Eingabe') : t('Erwartung')) + ': ' + serverText(c.label)">
+                      <span class="slotno">‹{{ $index + 1 }}›</span> {{ serverText(c.label) }}
                     </th>
                   }
                   <th class="note-head"></th>
@@ -88,7 +89,7 @@ interface MatrixView {
                       tabindex="0" (click)="open(m, r.row)" (keydown.enter)="open(m, r.row)" [title]="tip(r.row, r.block)">
                     <td class="tname">{{ r.row.name }}</td>
                     @for (value of r.row.values; track $index) {
-                      <td class="val" [class.sep]="$index === v.split" [class.missing]="value === null" [title]="value ?? 'nicht geprüft'">{{ cell(value) }}</td>
+                      <td class="val" [class.sep]="$index === v.split" [class.missing]="value === null" [title]="value ?? t('nicht geprüft')">{{ cell(value) }}</td>
                     }
                     <td class="note">
                       @if (r.note) {
@@ -101,9 +102,9 @@ interface MatrixView {
               @if (v.split > 0) {
                 <tfoot>
                   <tr>
-                    <td class="tname covered-lbl">geprüft</td>
+                    <td class="tname covered-lbl">{{ t('geprüft') }}</td>
                     @for (c of m.columns; track $index) {
-                      <td class="covered" [class.sep]="$index === v.split" [title]="c.role === 'input' ? 'Abgedeckte Werte: ' + covered(c) : ''">{{ covered(c) }}</td>
+                      <td class="covered" [class.sep]="$index === v.split" [title]="c.role === 'input' ? t('Abgedeckte Werte: {values}', { values: covered(c) }) : ''">{{ covered(c) }}</td>
                     }
                     <td></td>
                   </tr>
@@ -113,7 +114,7 @@ interface MatrixView {
           </div>
           @for (b of v.boundaries; track $index) {
             <button type="button" class="bnote" [class.missing]="b.missing" (click)="segmentClick.emit(b.segmentId)"
-                    title="Grenzwerte aus den Vergleichen im geprüften Code (statisch) – Klick: zum Code">
+                    [title]="t('Grenzwerte aus den Vergleichen im geprüften Code (statisch) – Klick: zum Code')">
               <app-icon [name]="b.missing ? 'warning' : 'check'" [size]="11" /> {{ b.text }}
             </button>
           }
@@ -182,6 +183,8 @@ export class CaseMatrixOverview {
   readonly segmentClick = output<string>();
 
   protected readonly kindLabels = KIND_LABELS;
+  protected readonly t = t;
+  protected readonly serverText = serverText;
   /** Matrices whose template is expanded. */
   private readonly opened = signal<ReadonlySet<string>>(new Set());
 

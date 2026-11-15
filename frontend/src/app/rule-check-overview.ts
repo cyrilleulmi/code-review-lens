@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
 import { RuleCheck, Segment } from './api';
 import { Icon, SymbolBadge } from './icon';
+import { serverText, t } from './i18n';
 import { ReviewStore } from './review.store';
 import { ruleDetail, rulesSummary, sortChecks } from './rule-checks';
 import { SpecLineTarget } from './spec-overview';
@@ -26,28 +27,28 @@ interface RuleRow {
     <section class="box">
       <header>
         <app-icon name="shield" [size]="15" class="head-icon" />
-        <b>Erwartete Tests (Regeln)</b>
-        <span class="hint">musterbasiert: wenn X geändert wird, braucht es einen Test der Form Y</span>
+        <b>{{ t('Erwartete Tests (Regeln)') }}</b>
+        <span class="hint">{{ t('musterbasiert: wenn X geändert wird, braucht es einen Test der Form Y') }}</span>
         @if (summary(); as s) {
           <span class="sum" [class.warn]="unmet().length > 0">
             <app-icon [name]="unmet().length ? 'warning' : 'check'" [size]="12" /> {{ s }}</span>
         }
       </header>
       @if (rows().length === 0) {
-        <p class="empty">Keine Erwartungs-Regel greift für die Änderungen.</p>
+        <p class="empty">{{ t('Keine Erwartungs-Regel greift für die Änderungen.') }}</p>
       }
       @for (r of unmet(); track r.check.ruleId + r.check.segmentId) {
         <div class="row open" role="button" tabindex="0" (click)="openLine(r)" (keydown.enter)="openLine(r)"
-             [title]="r.detail + ' – zur auslösenden Zeile springen'">
+             [title]="r.detail + ' – ' + t('zur auslösenden Zeile springen')">
           <app-icon name="warning" [size]="12" class="mark" />
-          <span class="label">{{ r.check.label }}</span>
+          <span class="label">{{ serverText(r.check.label) }}</span>
           <span class="name"><app-symbol-badge [kind]="r.segment.symbolKind" /> <span class="sym">{{ r.segment.symbol ?? fileOf(r.segment.path) }}</span></span>
           <span class="where">{{ fileOf(r.segment.path) }}{{ r.check.line != null ? ':' + r.check.line : '' }}</span>
-          <span class="text">{{ r.check.hint }}
+          <span class="text">{{ serverText(r.check.hint) }}
             @if (r.check.tests.length) {
-              <span class="muted">· {{ r.check.tests.length }} {{ r.check.tests.length === 1 ? 'Test erreicht' : 'Tests erreichen' }} den Code, keiner zeigt das</span>
+              <span class="muted">· {{ t(r.check.tests.length === 1 ? '{n} Test erreicht den Code, keiner zeigt das' : '{n} Tests erreichen den Code, keiner zeigt das', { n: r.check.tests.length }) }}</span>
             } @else {
-              <span class="muted">· kein Test erreicht den Code</span>
+              <span class="muted">· {{ t('kein Test erreicht den Code') }}</span>
             }
           </span>
         </div>
@@ -55,21 +56,21 @@ interface RuleRow {
       @if (met().length) {
         <button type="button" class="group-head" (click)="showMet.set(!showMet())" [attr.aria-expanded]="showMet()">
           <app-icon [name]="showMet() ? 'chevronDown' : 'chevronRight'" [size]="12" />
-          <app-icon name="check" [size]="12" class="ok" /> Erfüllt <span class="n">{{ met().length }}</span>
+          <app-icon name="check" [size]="12" class="ok" /> {{ t('Erfüllt') }} <span class="n">{{ met().length }}</span>
         </button>
         @if (showMet()) {
           @for (r of met(); track r.check.ruleId + r.check.segmentId) {
             <div class="row" role="button" tabindex="0" (click)="openLine(r)" (keydown.enter)="openLine(r)"
-                 [title]="r.detail + ' – zur auslösenden Zeile springen'">
+                 [title]="r.detail + ' – ' + t('zur auslösenden Zeile springen')">
               <app-icon name="check" [size]="12" class="mark ok" />
-              <span class="label">{{ r.check.label }}</span>
+              <span class="label">{{ serverText(r.check.label) }}</span>
               <span class="name"><app-symbol-badge [kind]="r.segment.symbolKind" /> <span class="sym">{{ r.segment.symbol ?? fileOf(r.segment.path) }}</span></span>
               <span class="where">{{ fileOf(r.segment.path) }}{{ r.check.line != null ? ':' + r.check.line : '' }}</span>
               <span class="tests">
-                @for (t of r.tests; track t.id) {
-                  <button type="button" class="test" [disabled]="!t.changed" (click)="$event.stopPropagation(); t.changed && testClick.emit(t.id)"
-                          [title]="t.changed ? 'Zum Test springen' : 'Bestehender Test, nicht im PR'">
-                    <app-symbol-badge kind="test" /> <span class="tname">{{ t.name }}</span>
+                @for (tt of r.tests; track tt.id) {
+                  <button type="button" class="test" [disabled]="!tt.changed" (click)="$event.stopPropagation(); tt.changed && testClick.emit(tt.id)"
+                          [title]="tt.changed ? t('Zum Test springen') : t('Bestehender Test, nicht im PR')">
+                    <app-symbol-badge kind="test" /> <span class="tname">{{ tt.name }}</span>
                   </button>
                 }
               </span>
@@ -125,6 +126,8 @@ export class RuleCheckOverview {
   /** A check was clicked: its trigger line. */
   readonly lineClick = output<SpecLineTarget>();
   protected readonly showMet = signal(false);
+  protected readonly t = t;
+  protected readonly serverText = serverText;
 
   private readonly rows = computed(() => {
     const segs = this.store.segments();

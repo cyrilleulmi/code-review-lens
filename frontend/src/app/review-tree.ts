@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { CommitList } from './commit-list';
 import { Icon, SymbolBadge } from './icon';
+import { serverText, t } from './i18n';
 import { ReviewStore, Selection, Slot } from './review.store';
 
 type Tab = 'categories' | 'flows' | 'files' | 'commits';
@@ -34,6 +35,7 @@ interface TreeNode {
 })
 export class ReviewTree {
   protected readonly store = inject(ReviewStore);
+  protected readonly t = t;
   protected readonly tab = signal<Tab>('categories');
   private readonly collapsed = signal<ReadonlySet<string>>(new Set());
 
@@ -43,7 +45,7 @@ export class ReviewTree {
     const segs = this.store.segments();
     return this.store.categories().map((c) => ({
       id: 'c:' + c.id,
-      label: c.label,
+      label: serverText(c.label),
       icon: c.icon,
       depth: 0,
       css: 'cat-' + c.id,
@@ -53,9 +55,9 @@ export class ReviewTree {
       children: c.groups.map((g) => ({
         id: 'g:' + g.id,
         // file groups (single changes, tests, architecture/frontend categories): file name, folder as hint
-        label: !g.flowId && g.label.includes('/') ? g.label.substring(g.label.lastIndexOf('/') + 1) : g.label,
-        hint: g.flowId ? g.description ?? undefined : g.label.includes('/') ? shortDir(g.label) : undefined,
-        title: g.label,
+        label: !g.flowId && g.label.includes('/') ? g.label.substring(g.label.lastIndexOf('/') + 1) : serverText(g.label),
+        hint: g.flowId ? serverText(g.description) || undefined : g.label.includes('/') ? shortDir(g.label) : undefined,
+        title: g.label.includes('/') ? g.label : serverText(g.label),
         icon: g.flowId ? 'flow' : c.id === 'logic' || c.id === 'tests' ? 'file' : 'folder',
         depth: 1,
         selection: (g.flowId ? { kind: 'flow', id: g.flowId } : { kind: 'group', id: g.id }) as Selection,
@@ -66,7 +68,7 @@ export class ReviewTree {
           return {
             id: `s:${g.id}:${id}`,
             label: s.symbol ?? s.path.substring(s.path.lastIndexOf('/') + 1),
-            hint: s.symbol ? s.path.substring(s.path.lastIndexOf('/') + 1) : `Zeile ${s.lineKeys[0]?.substring(1) ?? ''}`,
+            hint: s.symbol ? s.path.substring(s.path.lastIndexOf('/') + 1) : t('Zeile {line}', { line: s.lineKeys[0]?.substring(1) ?? '' }),
             symbolKind: s.symbolKind,
             depth: 2,
             selection: (g.flowId ? { kind: 'flow', id: g.flowId } : { kind: 'group', id: g.id }) as Selection,
@@ -85,7 +87,7 @@ export class ReviewTree {
     const segs = this.store.segments();
     return b.analysis.flows.map((f) => ({
       id: 'f:' + f.id,
-      label: f.title,
+      label: serverText(f.title),
       icon: 'flow',
       depth: 0,
       selection: { kind: 'flow', id: f.id } as Selection,

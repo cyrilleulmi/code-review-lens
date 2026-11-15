@@ -169,6 +169,7 @@ Das UI ist eine einzige Angular-Anwendung ohne Router-Bibliothek; der Zustand li
 | `code-block.*` | Ein Segment an einem Ort: Gutter (Blame, Häkchen, Zeilennummern, Kommentar), Highlighting, Aufruf-Chips, Hinweise. |
 | `acceptance.ts` | Spiegel von `LineAcceptance.java`. |
 | `look.ts`, `styles.scss` | Farb-Tokens (Schichten, Sprachen, Kanten); keine Hex-Werte in Komponenten. |
+| `i18n.*` | Sprache des UI (Deutsch / Englisch) als Signal: `t('deutscher Text')` übersetzt UI-Texte (`i18n.en.ts`), `serverText()` die deutschen Texte aus dem Backend nur für die Anzeige (`i18n.server.en.ts`). |
 
 **Slot** = ein Segment an einem Ort. Fortschritt, «Block ok» und Commit-Filter rechnen alle über Slots; dadurch wirkt ein Filter (z. B. «nur Commit 3») in allen Ansichten gleich.
 
@@ -324,7 +325,9 @@ Fachliche Konfiguration (Kategorien, Regeln, Aspekte, Querschnittsthemen) liegt 
 
 ### UI-Gestaltung
 
-IntelliJ New UI Dark. Farben nur als Tokens in `styles.scss` (Paletten `--edge-n`, `--area-*`, `--lang-*`, Blame-Tokens), Bezeichnungen und Zuordnung in `look.ts`. UI-Texte und Doku auf Deutsch (Schweizer Schreibweise), Code und Commit-Messages auf Englisch.
+IntelliJ New UI Dark. Farben nur als Tokens in `styles.scss` (Paletten `--edge-n`, `--area-*`, `--lang-*`, Blame-Tokens), Bezeichnungen und Zuordnung in `look.ts`. Doku auf Deutsch (Schweizer Schreibweise), Code und Commit-Messages auf Englisch.
+
+UI-Sprache: Deutsch (Quellsprache) und Englisch, umschaltbar ohne Neuladen. Jeder UI-Text steht deutsch im Code und ist zugleich der Schlüssel seiner Übersetzung (`t('Übersicht')` → `i18n.en.ts`). Das Backend bleibt einsprachig deutsch: Gruppen-Ids werden aus deutschen Bezeichnungen gebildet, Markierungen hängen an diesen Ids, und Agenten lesen die Dateien. Darum übersetzt das UI Backend-Texte erst bei der Anzeige (`serverText`, feste Texte und Muster für zusammengesetzte Meldungen in `i18n.server.en.ts`); unbekannte Texte, etwa aus einer eigenen `rules.json`, erscheinen unverändert.
 
 ## 10. Architekturentscheide
 

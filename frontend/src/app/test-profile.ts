@@ -1,8 +1,10 @@
 import { AssertionKind, TestLevel, TestProfile, TestScenario, TestSmell } from './api';
 import { smellsSummary } from './test-smells';
+import { locale, t } from './i18n';
 
 /** Test-Steckbrief: labels, the one-line profile, the summary over all tests, filtering and sorting of the table. */
 
+/** Labels in German, translated with t(). */
 export const SCENARIO_LABELS: Record<TestScenario, string> = { error: 'Fehlerfall', edge: 'Grenzfall', normal: 'Normalfall' };
 export const LEVEL_LABELS: Record<TestLevel, string> = { unit: 'Unit', integration: 'Integration', e2e: 'E2E' };
 export const ASSERTION_LABELS: Record<AssertionKind, string> = {
@@ -29,16 +31,16 @@ export interface ProfilePart {
 /** «Fehlerfall · Integration · 3 Assertions (Gleichheit, HTTP) · Mocks: PlayerRepository, HTTP · 4 Fälle» as parts. */
 export function profileParts(p: TestProfile): ProfilePart[] {
   const parts: ProfilePart[] = [
-    { key: 'scenario', text: SCENARIO_LABELS[p.scenario], tip: scenarioTip(p) },
-    { key: 'level', text: LEVEL_LABELS[p.level], tip: levelTip(p) },
+    { key: 'scenario', text: t(SCENARIO_LABELS[p.scenario]), tip: scenarioTip(p) },
+    { key: 'level', text: t(LEVEL_LABELS[p.level]), tip: levelTip(p) },
     { key: 'assertions', text: assertionText(p), tip: assertionTip(p) },
   ];
   if (p.mocks.length) {
     parts.push({
       key: 'mocks',
       text: `Mocks: ${p.mocks.join(', ')}`,
-      tip: `Ersetzte Abhängigkeiten – im Test, im Setup (beforeEach, Felder) oder in der umschliessenden Klasse/Suite: ${p.mocks.join(', ')}`
-        + (p.mocks.includes('HTTP') ? '\nHTTP = Backend gemockt (HttpTestingController, MockWebServer, …)' : ''),
+      tip: t('Ersetzte Abhängigkeiten – im Test, im Setup (beforeEach, Felder) oder in der umschliessenden Klasse/Suite: {mocks}', { mocks: p.mocks.join(', ') })
+        + (p.mocks.includes('HTTP') ? '\n' + t('HTTP = Backend gemockt (HttpTestingController, MockWebServer, …)') : ''),
     });
   }
   if (p.parameterized) {
@@ -49,22 +51,22 @@ export function profileParts(p: TestProfile): ProfilePart[] {
 
 export function scenarioTip(p: TestProfile): string {
   const what = {
-    error: 'Fehlerfall: der Test erwartet einen Fehler (Exception, HTTP-Status ≥ 400, Fehlermeldung)',
-    edge: 'Grenzfall: leere, null- oder Grenzwerte als Eingabe',
-    normal: 'Normalfall: weder Fehler- noch Grenzfall erkannt',
+    error: t('Fehlerfall: der Test erwartet einen Fehler (Exception, HTTP-Status ≥ 400, Fehlermeldung)'),
+    edge: t('Grenzfall: leere, null- oder Grenzwerte als Eingabe'),
+    normal: t('Normalfall: weder Fehler- noch Grenzfall erkannt'),
   }[p.scenario];
-  return what + reasonText(p.scenarioBy === 'name' ? 'am Testnamen' : 'im Code', p.scenarioBy ? p.scenarioReason : null);
+  return what + reasonText(p.scenarioBy === 'name' ? t('am Testnamen') : t('im Code'), p.scenarioBy ? p.scenarioReason : null);
 }
 
 export function levelTip(p: TestProfile): string {
   if (p.level === 'unit') {
-    return 'Unit: kein Hinweis auf Integration oder E2E (Annotation, Testcontainers, echte HTTP-Aufrufe, Pfad)';
+    return t('Unit: kein Hinweis auf Integration oder E2E (Annotation, Testcontainers, echte HTTP-Aufrufe, Pfad)');
   }
-  return LEVEL_LABELS[p.level] + reasonText(p.levelBy === 'path' ? 'am Pfad' : 'im Code', p.levelReason);
+  return t(LEVEL_LABELS[p.level]) + reasonText(p.levelBy === 'path' ? t('am Pfad') : t('im Code'), p.levelReason);
 }
 
 function reasonText(where: string, reason: string | null): string {
-  return reason ? ` – erkannt ${where}: «${reason}»` : '';
+  return reason ? t(' – erkannt {where}: «{reason}»', { where, reason }) : '';
 }
 
 /** Kinds with their count, most frequent first (fixed order among equals). */
@@ -76,30 +78,30 @@ export function assertionKinds(p: TestProfile): { kind: AssertionKind; n: number
 
 /** «3 Assertions (Gleichheit, HTTP)», «1 Assertion (Interaktion)», «keine Assertion». */
 export function assertionText(p: TestProfile): string {
-  if (!p.assertions) return 'keine Assertion';
-  const kinds = assertionKinds(p).map((k) => ASSERTION_LABELS[k.kind]);
-  return `${p.assertions} ${p.assertions === 1 ? 'Assertion' : 'Assertions'}` + (kinds.length ? ` (${kinds.join(', ')})` : '');
+  if (!p.assertions) return t('keine Assertion');
+  const kinds = assertionKinds(p).map((k) => t(ASSERTION_LABELS[k.kind]));
+  return t(p.assertions === 1 ? '{n} Assertion' : '{n} Assertions', { n: p.assertions }) + (kinds.length ? ` (${kinds.join(', ')})` : '');
 }
 
 function assertionTip(p: TestProfile): string {
   if (!p.assertions) {
-    return 'Keine Assertion im Testrumpf erkannt – geprüft wird höchstens in Hilfsfunktionen, oder der Test prüft nichts';
+    return t('Keine Assertion im Testrumpf erkannt – geprüft wird höchstens in Hilfsfunktionen, oder der Test prüft nichts');
   }
-  return `Assertions im Testrumpf: ${assertionKinds(p).map((k) => `${k.n}× ${ASSERTION_LABELS[k.kind]}`).join(', ')}`;
+  return t('Assertions im Testrumpf: {kinds}', { kinds: assertionKinds(p).map((k) => `${k.n}× ${t(ASSERTION_LABELS[k.kind])}`).join(', ') });
 }
 
 /** «4 Fälle», «1 Fall», «parametrisiert» (number unknown). */
 export function casesText(p: TestProfile): string {
   if (!p.parameterized) return '';
-  if (p.cases == null) return 'parametrisiert';
-  return p.cases === 1 ? '1 Fall' : `${p.cases} Fälle`;
+  if (p.cases == null) return t('parametrisiert');
+  return t(p.cases === 1 ? '{n} Fall' : '{n} Fälle', { n: p.cases });
 }
 
 function casesTip(p: TestProfile): string {
-  const source = p.casesSource ? ` aus ${p.casesSource}` : '';
+  const source = p.casesSource ? t(' aus {source}', { source: p.casesSource }) : '';
   return p.cases == null
-    ? `Parametrisiert${source} – die Anzahl Fälle ist statisch nicht bestimmbar`
-    : `Parametrisiert: läuft ${p.cases}× mit verschiedenen Werten${source}`;
+    ? t('Parametrisiert{source} – die Anzahl Fälle ist statisch nicht bestimmbar', { source })
+    : t('Parametrisiert: läuft {n}× mit verschiedenen Werten{source}', { n: p.cases, source });
 }
 
 // ------------------------------------------------------------------ summary and filter
@@ -134,15 +136,15 @@ export function profileSummary(profiles: TestProfile[], smelly = 0): ProfileSumm
       .filter((c) => c.n > 0)
       .sort((a, b) => b.n - a.n);
   const groups: SummaryPart[][] = [
-    count(SCENARIO_ORDER, (p) => p.scenario).map((c) => ({ text: `${c.n} ${SCENARIO_LABELS[c.value]}`, filter: { kind: 'scenario', value: c.value } })),
-    count(LEVEL_ORDER, (p) => p.level).map((c) => ({ text: `${c.n} ${LEVEL_LABELS[c.value]}`, filter: { kind: 'level', value: c.value } })),
+    count(SCENARIO_ORDER, (p) => p.scenario).map((c) => ({ text: `${c.n} ${t(SCENARIO_LABELS[c.value])}`, filter: { kind: 'scenario', value: c.value } })),
+    count(LEVEL_ORDER, (p) => p.level).map((c) => ({ text: `${c.n} ${t(LEVEL_LABELS[c.value])}`, filter: { kind: 'level', value: c.value } })),
   ];
   const parameterized = profiles.filter((p) => p.parameterized);
   if (parameterized.length) {
     const known = parameterized.filter((p) => p.cases != null);
     const cases = known.reduce((sum, p) => sum + p.cases!, 0);
-    const casesPart = !known.length ? '' : ` (${known.length < parameterized.length ? 'mind. ' : ''}${cases} ${cases === 1 ? 'Fall' : 'Fälle'})`;
-    groups.push([{ text: `${parameterized.length} parametrisiert${casesPart}`, filter: { kind: 'parameterized' } }]);
+    const casesPart = !known.length ? '' : ` (${known.length < parameterized.length ? t('mind.') + ' ' : ''}${t(cases === 1 ? '{n} Fall' : '{n} Fälle', { n: cases })})`;
+    groups.push([{ text: t('{n} parametrisiert', { n: parameterized.length }) + casesPart, filter: { kind: 'parameterized' } }]);
   }
   const smells = smellsSummary(smelly);
   if (smells) {
@@ -221,7 +223,8 @@ export function sortRows(rows: ProfileRow[], sort: ProfileSort | null): ProfileR
     .sort((a, b) => {
       const x = key(a.r, sort.column);
       const y = key(b.r, sort.column);
-      const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'de');
+      const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), locale())
+;
       return c !== 0 ? sign * c : a.i - b.i;
     })
     .map((e) => e.r);

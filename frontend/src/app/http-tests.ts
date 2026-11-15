@@ -1,4 +1,5 @@
 import { EdgeCoverage, TestCoverage, TestProfile } from './api';
+import { t } from './i18n';
 
 /**
  * HTTP-Tests in words: a test that sends a real HTTP request to a changed endpoint reaches it directly, and what the
@@ -9,7 +10,7 @@ import { EdgeCoverage, TestCoverage, TestProfile } from './api';
 /** The short tag on a chip of a reach over HTTP. */
 export const HTTP_TAG = 'HTTP';
 
-/** The label of a REST edge whose contract both sides check. */
+/** The label of a REST edge whose contract both sides check (German, translated with t()). */
 export const BOTH_SIDES_LABEL = 'beidseitig geprüft';
 
 /** The reach of a segment in a test's covers when it goes over HTTP; null otherwise (also for a mocked reach). */
@@ -21,17 +22,19 @@ export function httpCover(covers: TestCoverage[] | null | undefined, segmentId: 
 /** Tooltip part of a reach over HTTP: the request for the endpoint itself, the way for what it calls. */
 export function httpTitle(c: TestCoverage): string {
   return c.direct
-    ? `über HTTP: der Test schickt ${c.endpoint ? c.endpoint + ' ' : 'eine Anfrage '}an diesen Endpunkt`
-    : 'über HTTP: der Test ruft einen geänderten Endpunkt auf, der diese Funktion erreicht';
+    ? (c.endpoint
+      ? t('über HTTP: der Test schickt {endpoint} an diesen Endpunkt', { endpoint: c.endpoint })
+      : t('über HTTP: der Test schickt eine Anfrage an diesen Endpunkt'))
+    : t('über HTTP: der Test ruft einen geänderten Endpunkt auf, der diese Funktion erreicht');
 }
 
 /** How a test reaches a segment, for its link list: «direkt über HTTP: PUT /api/x/{} · Testzeile 7», «über update (HTTP)». */
 export function reachText(c: { direct: boolean; line: number | null; via: string | null; http?: boolean; endpoint?: string | null }): string {
-  const line = c.line ? ' · Testzeile ' + c.line : '';
+  const line = c.line ? ' · ' + t('Testzeile {line}', { line: c.line }) : '';
   if (c.direct) {
-    return c.http ? `direkt über HTTP${c.endpoint ? ': ' + c.endpoint : ''}${line}` : 'direkt' + line;
+    return c.http ? `${t('direkt über HTTP')}${c.endpoint ? ': ' + c.endpoint : ''}${line}` : t('direkt') + line;
   }
-  return 'über ' + c.via + (c.http ? ' (HTTP)' : '');
+  return t('über {via}', { via: c.via }) + (c.http ? ' (HTTP)' : '');
 }
 
 /**
@@ -63,17 +66,17 @@ export function contractLines(edge: EdgeCoverage | null | undefined, request: st
   if (!client.length && !server.length) return [];
   const lines: string[] = [];
   if (client.length && server.length) {
-    lines.push(`${BOTH_SIDES_LABEL}: Frontend erwartet ${request}, Backend-Test ruft ihn auf`);
+    lines.push(`${t(BOTH_SIDES_LABEL)}: ${t('Frontend erwartet {request}, Backend-Test ruft ihn auf', { request })}`);
   } else if (client.length) {
-    lines.push(`nur Frontend geprüft: erwartet ${request}, kein Backend-Test ruft ihn über HTTP auf`);
+    lines.push(t('nur Frontend geprüft: erwartet {request}, kein Backend-Test ruft ihn über HTTP auf', { request }));
   } else {
-    lines.push(`nur Backend geprüft: ein Test ruft ${request} über HTTP auf, kein Frontend-Test erwartet die Anfrage`);
+    lines.push(t('nur Backend geprüft: ein Test ruft {request} über HTTP auf, kein Frontend-Test erwartet die Anfrage', { request }));
   }
-  if (client.length) lines.push(`Frontend (erwartet die Anfrage): ${list(client.map(name))}`);
-  if (server.length) lines.push(`Backend (ruft über HTTP auf): ${list(server.map(name))}`);
+  if (client.length) lines.push(t('Frontend (erwartet die Anfrage): {tests}', { tests: list(client.map(name)) }));
+  if (server.length) lines.push(t('Backend (ruft über HTTP auf): {tests}', { tests: list(server.map(name)) }));
   return lines;
 }
 
 function list(names: string[], max = 4): string {
-  return names.length <= max ? names.join(', ') : `${names.slice(0, max).join(', ')} und ${names.length - max} weitere`;
+  return names.length <= max ? names.join(', ') : t('{list} und {n} weitere', { list: names.slice(0, max).join(', '), n: names.length - max });
 }

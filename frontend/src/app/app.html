@@ -2,7 +2,7 @@
 <header class="toolbar">
   <div class="logo" title="SmartCodeReview">SC</div>
   @if (b) {
-    <button type="button" class="widget project" (click)="store.select({ kind: 'overview' })" title="Übersicht">
+    <button type="button" class="widget project" (click)="store.select({ kind: 'overview' })" [title]="t('Übersicht')">
       <span class="avatar-sq">{{ b.pr.repo.charAt(0).toUpperCase() }}</span>
       {{ b.pr.repo }}
     </button>
@@ -14,26 +14,27 @@
     </span>
     @if (store.activeCommit(); as ac) {
       <span class="widget commit" [title]="ac.message">
-        <button type="button" class="tb-btn small" (click)="store.stepCommit(-1)" title="Vorheriger Commit"><app-icon name="arrowLeft" [size]="13" /></button>
+        <button type="button" class="tb-btn small" (click)="store.stepCommit(-1)" [title]="t('Vorheriger Commit')"><app-icon name="arrowLeft" [size]="13" /></button>
         <app-icon name="commit" [size]="14" />
         <span class="no">{{ store.commitNo().get(ac.sha) }}/{{ store.commits()?.commits?.length }}</span>
         <span class="sha">{{ ac.sha.substring(0, 7) }}</span>
         <span class="t">{{ ac.title }}</span>
-        <button type="button" class="tb-btn small" (click)="store.stepCommit(1)" title="Nächster Commit"><app-icon name="arrowRight" [size]="13" /></button>
-        <button type="button" class="tb-btn small" (click)="store.setCommitFilter(null)" title="Alle Commits zeigen"><app-icon name="close" [size]="12" /></button>
+
+        <button type="button" class="tb-btn small" (click)="store.stepCommit(1)" [title]="t('Nächster Commit')"><app-icon name="arrowRight" [size]="13" /></button>
+        <button type="button" class="tb-btn small" (click)="store.setCommitFilter(null)" [title]="t('Alle Commits zeigen')"><app-icon name="close" [size]="12" /></button>
       </span>
     } @else if (store.sinceReviewActive()) {
       @let sp = store.sinceReviewProgress();
-      <span class="widget commit" title="Nur Zeilen, die seit deinem letzten Review neu sind oder sich geändert haben">
+      <span class="widget commit" [title]="t('Nur Zeilen, die seit deinem letzten Review neu sind oder sich geändert haben')">
         <app-icon name="refresh" [size]="14" />
-        <span class="t">Neu seit Review {{ store.reloadInfo()?.fromHeadSha?.substring(0, 7) }}</span>
+        <span class="t">{{ t('Neu seit Review {sha}', { sha: store.reloadInfo()?.fromHeadSha?.substring(0, 7) }) }}</span>
         <span class="no">{{ sp.ok }}/{{ sp.total }}</span>
-        <button type="button" class="tb-btn small" (click)="store.setCommitFilter(null)" title="Alle Änderungen zeigen"><app-icon name="close" [size]="12" /></button>
+        <button type="button" class="tb-btn small" (click)="store.setCommitFilter(null)" [title]="t('Alle Änderungen zeigen')"><app-icon name="close" [size]="12" /></button>
       </span>
     }
     @if (store.isRepo()) {
-      <span class="pr-title" title="Das ganze Repository am Stand des Default-Branches, analysiert wie ein Pull Request, in dem jede Datei neu ist">
-        Ganzes Repository @ {{ b.pr.headSha.substring(0, 7) }}</span>
+      <span class="pr-title" [title]="t('Das ganze Repository am Stand des Default-Branches, analysiert wie ein Pull Request, in dem jede Datei neu ist')">
+        {{ t('Ganzes Repository') }} @ {{ b.pr.headSha.substring(0, 7) }}</span>
     } @else {
       <span class="pr-title" [title]="b.pr.title">{{ store.provider().sigil }}{{ b.pr.number }} {{ b.pr.title }}</span>
     }
@@ -44,29 +45,33 @@
   @if (b) {
     @if (!store.isRepo()) {
       <button type="button" class="tb-btn" (click)="store.openRepository()"
-              title="Ganzes Repository analysieren: alle Dateien des Default-Branches wie einen Pull Request reviewen">
+              [title]="t('Ganzes Repository analysieren: alle Dateien des Default-Branches wie einen Pull Request reviewen')">
         <app-icon name="folder" />
       </button>
     }
     <button type="button" class="tb-btn" [class.on]="store.annotate()" (click)="store.toggleAnnotate()"
-            title="Annotieren mit Git Blame: Commit, Autor und Datum jeder Zeile">
+            [title]="t('Annotieren mit Git Blame: Commit, Autor und Datum jeder Zeile')">
       <app-icon name="annotate" />
     </button>
     <button type="button" class="tb-btn" [class.on]="store.collapseDone()" (click)="store.collapseDone.set(!store.collapseDone())"
-            title="Vollständig markierte Blöcke einklappen">
+            [title]="t('Vollständig markierte Blöcke einklappen')">
       <app-icon [name]="store.collapseDone() ? 'collapse' : 'expand'" />
     </button>
-    <button type="button" class="tb-btn" (click)="store.reanalyse()" title="Neu analysieren (Regeln aus rules.json)">
+    <button type="button" class="tb-btn" (click)="store.reanalyse()" [title]="t('Neu analysieren (Regeln aus rules.json)')">
       <app-icon name="analyse" />
     </button>
-    <button type="button" class="tb-btn" (click)="store.reload()" [title]="'Von ' + store.provider().label + ' neu laden'">
+    <button type="button" class="tb-btn" (click)="store.reload()" [title]="t('Von {host} neu laden', { host: store.provider().label })">
       <app-icon name="refresh" />
     </button>
-    <a class="tb-btn" [href]="b.pr.url" target="_blank" rel="noopener" [title]="'Auf ' + store.provider().label + ' öffnen'"><app-icon name="external" /></a>
-    <button type="button" class="tb-btn" (click)="store.close()" [title]="store.provider().noun + ' schliessen'"><app-icon name="close" /></button>
+    <a class="tb-btn" [href]="b.pr.url" target="_blank" rel="noopener" [title]="t('Auf {host} öffnen', { host: store.provider().label })"><app-icon name="external" /></a>
+    <button type="button" class="tb-btn" (click)="store.close()" [title]="t('{noun} schliessen', { noun: store.provider().noun })"><app-icon name="close" /></button>
   } @else {
-    <button type="button" class="tb-btn" (click)="store.loadPrs()" title="Pull Requests neu laden"><app-icon name="refresh" /></button>
+    <button type="button" class="tb-btn" (click)="store.loadPrs()" [title]="t('Pull Requests neu laden')"><app-icon name="refresh" /></button>
   }
+  <div class="seg-switch" role="group" [attr.aria-label]="t('Sprache')" [title]="t('Sprache')">
+    <button type="button" [class.on]="lang() === 'de'" [attr.aria-pressed]="lang() === 'de'" (click)="setLang('de')">DE</button>
+    <button type="button" [class.on]="lang() === 'en'" [attr.aria-pressed]="lang() === 'en'" (click)="setLang('en')">EN</button>
+  </div>
   @for (a of store.me()?.accounts ?? []; track a.provider) {
     @if (a.user; as u) {
       <span class="user" [title]="a.label + ': ' + u.login">
@@ -79,11 +84,11 @@
 </header>
 
 <div class="main">
-  <nav class="stripe" aria-label="Tool-Fenster">
-    <button type="button" [class.active]="tool() === 'prs'" (click)="toggleTool('prs')" title="Pull Requests (Alt+1)">
+  <nav class="stripe" [attr.aria-label]="t('Tool-Fenster')">
+    <button type="button" [class.active]="tool() === 'prs'" (click)="toggleTool('prs')" [title]="t('Pull Requests (Alt+1)')">
       <app-icon name="pr" [size]="18" />
     </button>
-    <button type="button" [class.active]="tool() === 'review'" (click)="toggleTool('review')" [disabled]="!b" title="Review (Alt+2)">
+    <button type="button" [class.active]="tool() === 'review'" (click)="toggleTool('review')" [disabled]="!b" [title]="t('Review (Alt+2)')">
       <app-icon name="review" [size]="18" />
     </button>
   </nav>
@@ -91,9 +96,9 @@
   @if (tool()) {
     <aside class="tool" [style.width.px]="toolWidth()">
       <div class="tool-head">
-        <span>{{ tool() === 'prs' ? 'Pull/Merge Requests' : 'Review' }}</span>
+        <span>{{ tool() === 'prs' ? t('Pull/Merge Requests') : t('Review') }}</span>
         <span class="spacer"></span>
-        <button type="button" class="tb-btn small" (click)="tool.set(null)" title="Ausblenden"><app-icon name="close" [size]="13" /></button>
+        <button type="button" class="tb-btn small" (click)="tool.set(null)" [title]="t('Ausblenden')"><app-icon name="close" [size]="13" /></button>
       </div>
       <div class="tool-body">
         @if (tool() === 'prs') {
@@ -101,7 +106,7 @@
         } @else if (b) {
           <app-review-tree />
         } @else {
-          <p class="tool-empty">Öffne zuerst einen Pull Request.</p>
+          <p class="tool-empty">{{ t('Öffne zuerst einen Pull Request.') }}</p>
         }
       </div>
     </aside>
@@ -131,8 +136,8 @@
             <div class="view-head">
               <app-icon name="test" [size]="18" />
               <div class="titles">
-                <h1>Abdeckung</h1>
-                <p>Welche geänderten Funktionen ein geänderter Test erreicht – und welche nicht. Ohne geänderte Tests steht hier alles unter «Ohne Test».</p>
+                <h1>{{ t('Abdeckung') }}</h1>
+                <p>{{ t('Welche geänderten Funktionen ein geänderter Test erreicht – und welche nicht. Ohne geänderte Tests steht hier alles unter «Ohne Test».') }}</p>
               </div>
             </div>
             <app-coverage-overview (testClick)="store.reveal($event)" (lineClick)="store.revealLine($event.segmentId, $event.line)" />
@@ -150,11 +155,11 @@
       <div class="welcome">
         <div class="mark">SC</div>
         <h1>SmartCodeReview</h1>
-        <p>Reviews nach Bedeutung statt nach Dateien: zuerst die Quick wins abhaken, dann die Datenflüsse am Stück lesen.</p>
+        <p>{{ t('Reviews nach Bedeutung statt nach Dateien: zuerst die Quick wins abhaken, dann die Datenflüsse am Stück lesen.') }}</p>
         @if (store.loading(); as l) {
           <p class="loading"><span class="spinner"></span> {{ l }}</p>
         } @else {
-          <p class="hint">Wähle links einen Pull/Merge Request oder füge eine URL ein · <kbd>Alt</kbd>+<kbd>1</kbd> Pull Requests · <kbd>Alt</kbd>+<kbd>2</kbd> Review</p>
+          <p class="hint">{{ t('Wähle links einen Pull/Merge Request oder füge eine URL ein') }} · <kbd>Alt</kbd>+<kbd>1</kbd> Pull Requests · <kbd>Alt</kbd>+<kbd>2</kbd> Review</p>
         }
       </div>
     }
@@ -166,21 +171,21 @@
 
 <footer class="status">
   @if (b) {
-    <span title="Lokale Daten (für Agenten lesbar)"><app-icon name="data" [size]="12" /> {{ b.dataPath }}</span>
+    <span [title]="t('Lokale Daten (für Agenten lesbar)')"><app-icon name="data" [size]="12" /> {{ b.dataPath }}</span>
     <span>Snapshot {{ b.pr.headSha.substring(0, 7) }}</span>
     <span class="spacer"></span>
-    @let t = store.totalProgress();
-    <span class="prog"><span class="bar"><span [style.width.%]="t.total ? (t.ok / t.total) * 100 : 0"></span></span>
-      {{ t.ok }}/{{ t.total }} Zeilen ok</span>
+    @let tp = store.totalProgress();
+    <span class="prog"><span class="bar"><span [style.width.%]="tp.total ? (tp.ok / tp.total) * 100 : 0"></span></span>
+      {{ t('{ok}/{total} Zeilen ok', { ok: tp.ok, total: tp.total }) }}</span>
   } @else {
     <span>{{ store.me()?.dataDir ?? '' }}</span>
     <span class="spacer"></span>
   }
   @if (store.me()?.version; as v) {
-    <span title="SmartCodeReview-Version">v{{ v }}</span>
+    <span [title]="t('SmartCodeReview-Version')">v{{ v }}</span>
   }
   @for (a of store.me()?.accounts ?? []; track a.provider) {
-    <span [class.offline]="!a.user" [title]="a.error ?? a.host"><app-icon [name]="a.provider" [size]="12" /> {{ a.user?.login ?? 'kein Token' }}</span>
+    <span [class.offline]="!a.user" [title]="a.error ? serverText(a.error) : a.host"><app-icon [name]="a.provider" [size]="12" /> {{ a.user?.login ?? t('kein Token') }}</span>
   }
 </footer>
 
@@ -190,6 +195,6 @@
     <button type="button" (click)="store.error.set(null)"><app-icon name="close" [size]="12" /></button>
   </div>
 }
-@if (store.toast(); as t) {
-  <div class="toast"><app-icon name="check" [size]="14" /> {{ t }}</div>
+@if (store.toast(); as toast) {
+  <div class="toast"><app-icon name="check" [size]="14" /> {{ toast }}</div>
 }

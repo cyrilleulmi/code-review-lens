@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, HostListener, Injector, afterNextRender, computed, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
 import { isTestsView, prLabel } from './api';
+import { applyLang, lang, serverText, setLang, t } from './i18n';
 import { CoverageOverview } from './coverage-overview';
 import { RuleCheckOverview } from './rule-check-overview';
 import { ScrollMemory, viewKey } from './scroll-memory';
@@ -53,40 +54,46 @@ export class App {
     const cats = b.analysis.categories;
     switch (sel.kind) {
       case 'overview':
-        return { kind: 'overview', crumbs: ['Übersicht'] };
+        return { kind: 'overview', crumbs: [t('Übersicht')] };
       case 'category': {
         const c = cats.find((x) => x.id === sel.id)!;
+        const label = serverText(c.label);
         return {
-          kind: 'group', title: c.label, description: c.description, details: c, icon: c.icon,
-          slots: this.store.slotsFor(sel), scope: `category:${c.id}`, crumbs: [c.label], coverage: isTestsView(c),
+          kind: 'group', title: label, description: serverText(c.description), details: c, icon: c.icon,
+          slots: this.store.slotsFor(sel), scope: `category:${c.id}`, crumbs: [label], coverage: isTestsView(c),
         };
       }
       case 'group': {
         const c = cats.find((x) => x.groups.some((g) => g.id === sel.id))!;
         const g = c.groups.find((x) => x.id === sel.id)!;
         return {
-          kind: 'group', title: g.label, description: g.description ?? c.description, details: c, icon: c.id === 'logic' || c.id === 'tests' ? 'file' : c.icon,
-          slots: this.store.slotsFor(sel), scope: `group:${g.id}`, crumbs: [c.label, g.label],
+          kind: 'group', title: serverText(g.label), description: serverText(g.description ?? c.description), details: c,
+          icon: c.id === 'logic' || c.id === 'tests' ? 'file' : c.icon,
+          slots: this.store.slotsFor(sel), scope: `group:${g.id}`, crumbs: [serverText(c.label), serverText(g.label)],
         };
       }
       case 'flow': {
         const f = b.analysis.flows.find((x) => x.id === sel.id)!;
-        return { kind: 'flow', crumbs: ['Datenflüsse', f.title] };
+        return { kind: 'flow', crumbs: [t('Datenflüsse'), serverText(f.title)] };
       }
       case 'file': {
         const f = b.files.find((x) => x.path === sel.path);
         return {
           kind: 'group', title: sel.path, icon: 'file',
           description: f ? `${statusLabel(f.status)} · +${f.additions} −${f.deletions}` : null,
-          slots: this.store.slotsFor(sel), scope: `file:${sel.path}`, crumbs: ['Dateien', ...sel.path.split('/')],
+          slots: this.store.slotsFor(sel), scope: `file:${sel.path}`, crumbs: [t('Dateien'), ...sel.path.split('/')],
         };
       }
       case 'coverage':
-        return { kind: 'coverage', crumbs: ['Abdeckung'] };
+        return { kind: 'coverage', crumbs: [t('Abdeckung')] };
     }
   });
 
   protected readonly prLabel = prLabel;
+  protected readonly t = t;
+  protected readonly serverText = serverText;
+  protected readonly lang = lang;
+  protected readonly setLang = setLang;
   private dragStart: { x: number; width: number } | null = null;
 
   private readonly injector = inject(Injector);
@@ -99,7 +106,9 @@ export class App {
   });
 
   constructor() {
+    applyLang();
     this.store.init();
+
     // Remember where each view is scrolled to (a plain listener: scrolling needs no change detection).
     effect((onCleanup) => {
       const el = this.scroller()?.nativeElement;
@@ -183,5 +192,7 @@ function readWidth(): number {
 }
 
 function statusLabel(status: string): string {
-  return ({ added: 'Neu', removed: 'Gelöscht', modified: 'Geändert', renamed: 'Umbenannt' } as Record<string, string>)[status] ?? status;
+  const labels: Record<string, string> = { added: t('Neu'), removed: t('Gelöscht'), modified: t('Geändert'), renamed: t('Umbenannt') };
+  return labels[status] ?? status;
+
 }

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, output } from '@angular/core';
 import { MockWarning } from './api';
 import { Icon, SymbolBadge } from './icon';
+import { t } from './i18n';
 import { lineOwner } from './mock-boundaries';
 import { ReviewStore } from './review.store';
 import { SpecLineTarget } from './spec-overview';
@@ -25,17 +26,17 @@ interface WarningRow {
       <section class="box">
         <header>
           <app-icon name="warning" [size]="15" class="head-icon" />
-          <b>Mocks auf geändertem Code</b>
-          <span class="hint">{{ rows().length }} · diese Tests ersetzen eine geänderte Funktion durch einen Mock und prüfen so ihr altes Verhalten</span>
+          <b>{{ t('Mocks auf geändertem Code') }}</b>
+          <span class="hint">{{ rows().length }} · {{ t('diese Tests ersetzen eine geänderte Funktion durch einen Mock und prüfen so ihr altes Verhalten') }}</span>
         </header>
         @for (r of rows(); track r.warning.test + r.warning.segmentId) {
           <div class="row" [class.static]="!r.changed" role="button" [attr.tabindex]="r.changed ? 0 : null"
                (click)="open(r)" (keydown.enter)="open(r)"
-               [title]="r.changed ? 'Zur Stelle im Test springen' : 'Bestehender Test, nicht im PR: ' + r.warning.path + ':' + r.warning.line">
+               [title]="r.changed ? t('Zur Stelle im Test springen') : t('Bestehender Test, nicht im PR: {where}', { where: r.warning.path + ':' + r.warning.line })">
             <span class="test"><app-symbol-badge kind="test" /> <span class="tname">{{ r.warning.testName }}</span></span>
-            <span class="arrow">mockt</span>
+            <span class="arrow">{{ t('mockt') }}</span>
             <button type="button" class="member" (click)="$event.stopPropagation(); segmentClick.emit(r.warning.segmentId)"
-                    title="Zur geänderten Funktion springen">{{ r.warning.collaborator }}.{{ r.warning.member }}</button>
+                    [title]="t('Zur geänderten Funktion springen')">{{ r.warning.collaborator }}.{{ r.warning.member }}</button>
             <span class="where">{{ r.where }}</span>
           </div>
         }
@@ -70,6 +71,7 @@ interface WarningRow {
 })
 export class MockWarnings {
   protected readonly store = inject(ReviewStore);
+  protected readonly t = t;
   /** The stub line of a changed test was clicked. */
   readonly lineClick = output<SpecLineTarget>();
   /** The mocked changed function was clicked (segment id). */

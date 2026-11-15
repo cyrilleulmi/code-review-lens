@@ -1,11 +1,11 @@
 @let seg = segment();
-<header class="head clickable" (click)="toggleCollapsed($event)" [title]="collapsed() ? 'Ausklappen' : 'Einklappen'">
+<header class="head clickable" (click)="toggleCollapsed($event)" [title]="collapsed() ? t('Ausklappen') : t('Einklappen')">
   <app-icon [name]="collapsed() ? 'chevronRight' : 'chevronDown'" [size]="12" class="fold" />
   @if (step(); as n) {
     <span class="step-no">{{ n }}</span>
   }
   @if (areaText()) {
-    <span class="area-tag" [style.--t]="areaColor(area())" title="Schicht">{{ areaText() }}</span>
+    <span class="area-tag" [style.--t]="areaColor(area())" [title]="t('Schicht')">{{ areaText() }}</span>
   }
   @if (lang().label) {
     <span class="lang-tag" [style.--t]="lang().color">{{ lang().label }}</span>
@@ -18,7 +18,7 @@
   @if (seg.startLine) {
     <span class="lines">:{{ seg.startLine }}</span>
   }
-  <span class="chip" [class]="'chip cat-' + seg.category" [title]="seg.reason">{{ seg.category === 'logic' ? 'Logik' : seg.category === 'tests' ? (seg.symbolKind === 'test' ? 'Testfall' : 'Test') : seg.group }}</span>
+  <span class="chip" [class]="'chip cat-' + seg.category" [title]="serverText(seg.reason)">{{ seg.category === 'logic' ? t('Logik') : seg.category === 'tests' ? (seg.symbolKind === 'test' ? t('Testfall') : t('Test')) : serverText(seg.group) }}</span>
   @if (coverage(); as cv) {
     <button type="button" class="cov" [class]="'cov cov-' + cv.status" [title]="cv.title" (click)="openCoverage($event)">
       <app-icon [name]="cv.status === 'none' ? 'info' : 'test'" [size]="11" /> {{ cv.label }}
@@ -41,7 +41,7 @@
   }
   @if (mockWarning(); as mw) {
     <span class="expect warn" [title]="mw.title" (click)="$event.stopPropagation()">
-      <app-icon name="warning" [size]="11" /> mockt geänderten Code
+      <app-icon name="warning" [size]="11" /> {{ t('mockt geänderten Code') }}
     </span>
   }
   @if (calledBy(); as by) {
@@ -51,42 +51,42 @@
   }
   <span class="spacer"></span>
   @if (blameLoading()) {
-    <span class="hint"><span class="spinner"></span> Blame …</span>
+    <span class="hint"><span class="spinner"></span> {{ t('Blame …') }}</span>
   }
   @if (collapsed()) {
-    <span class="hint">eingeklappt</span>
+    <span class="hint">{{ t('eingeklappt') }}</span>
   }
   <span class="count" [class.complete]="allOk()">{{ progress().ok }}/{{ progress().total }}</span>
   <button type="button" class="ok-btn" [class.on]="allOk()" (click)="toggleBlock($event)"
-          [title]="allOk() ? 'Markierung entfernen' : place() || places().length === 0 ? 'Ganzen Block als ok markieren' : 'Block an allen ' + places().length + ' Orten als ok markieren'">
-    <app-icon name="check" [size]="14" /> {{ allOk() ? 'Ok' : 'Block ok' }}
+          [title]="allOk() ? t('Markierung entfernen') : place() || places().length === 0 ? t('Ganzen Block als ok markieren') : t('Block an allen {n} Orten als ok markieren', { n: places().length })">
+    <app-icon name="check" [size]="14" /> {{ allOk() ? t('Ok') : t('Block ok') }}
   </button>
 </header>
 
 @if (places().length || covers().length || testedBy().length) {
   <div class="links">
     @if (places().length) {
-      <span class="lbl" title="Dieser Block erscheint an mehreren Orten; jeder Ort braucht ein eigenes Ok">
-        <app-icon name="layers" [size]="12" /> {{ places().length }} Orte:</span>
+      <span class="lbl" [title]="t('Dieser Block erscheint an mehreren Orten; jeder Ort braucht ein eigenes Ok')">
+        <app-icon name="layers" [size]="12" /> {{ t('{n} Orte:', { n: places().length }) }}</span>
       @for (p of places(); track p.id) {
         <button type="button" class="place" [class.current]="p.current" [class.done]="p.done" (click)="goPlace(p.id, $event)"
-                [title]="p.current ? 'Hier' : 'Dorthin springen'">
+                [title]="p.current ? t('Hier') : t('Dorthin springen')">
           <app-icon [name]="p.done ? 'check' : 'circle'" [size]="11" /> {{ p.label }}
         </button>
       }
     }
     @if (covers().length) {
-      <span class="lbl"><app-icon name="test" [size]="12" /> Testet:</span>
+      <span class="lbl"><app-icon name="test" [size]="12" /> {{ t('Testet:') }}</span>
       @for (c of covers(); track c.id) {
         <button type="button" class="place" [class.indirect]="!c.direct" [class.mocked]="c.mocked" (click)="goSegment(c.id, $event)"
-                [title]="c.mocked ? 'Nur als Mock erreicht – der echte Code läuft in diesem Test nicht' : (c.direct ? 'Direkt aufgerufen' : 'Indirekt erreicht') + (c.http ? ' · ' + c.http : '')">
+                [title]="c.mocked ? t('Nur als Mock erreicht – der echte Code läuft in diesem Test nicht') : t(c.direct ? 'Direkt aufgerufen' : 'Indirekt erreicht') + (c.http ? ' · ' + c.http : '')">
           {{ c.name }}@if (c.mocked) {<span class="mock-tag">Mock</span>}@if (c.http) {<span class="http-tag">{{ httpTag }}</span>}</button>
       }
     }
     @if (testedBy().length) {
-      <span class="lbl"><app-icon name="test" [size]="12" /> Getestet von:</span>
-      @for (t of testedBy(); track t.id) {
-        <button type="button" class="place test" (click)="goSegment(t.id, $event)">{{ t.name }}</button>
+      <span class="lbl"><app-icon name="test" [size]="12" /> {{ t('Getestet von:') }}</span>
+      @for (tb of testedBy(); track tb.id) {
+        <button type="button" class="place test" (click)="goSegment(tb.id, $event)">{{ tb.name }}</button>
       }
     }
   </div>
@@ -96,7 +96,7 @@
   <div class="code" role="table">
     @for (line of seg.lines; track $index; let i = $index) {
       @if (line.type === 'gap') {
-        <div class="gap">⋯ {{ line.text ?? (line.gapSize + ' unveränderte Zeilen') }}</div>
+        <div class="gap">⋯ {{ line.text ? serverText(line.text) : t('{n} unveränderte Zeilen', { n: line.gapSize }) }}</div>
       } @else {
         @let byOtherCommit = otherCommit(line);
         <div class="row" [class]="'row t-' + line.type" [class.ok]="line.own && !byOtherCommit && isOk(line)" [class.foreign]="!line.own && line.type !== 'ctx'"
@@ -123,13 +123,13 @@
               @let other = elsewhere(line);
               <button type="button" class="check" [class.on]="isOk(line)" [class.part]="isHalf(line)"
                       (click)="toggleLine(i, $event)"
-                      [title]="other ? 'Halb akzeptiert: bereits akzeptiert in ' + other.labels + '. Klick: auch hier akzeptieren' : m ? (place() ? 'Hier als ok markieren (' + m.ok + '/' + m.of + ' Orte ok)' : 'An allen ' + m.of + ' Orten als ok markieren (' + m.ok + '/' + m.of + ' ok)') : 'Als ok markieren (Shift-Klick: Bereich)'">
+                      [title]="other ? t('Halb akzeptiert: bereits akzeptiert in {places}. Klick: auch hier akzeptieren', { places: other.labels }) : m ? (place() ? t('Hier als ok markieren ({ok}/{of} Orte ok)', { ok: m.ok, of: m.of }) : t('An allen {of} Orten als ok markieren ({ok}/{of} ok)', { ok: m.ok, of: m.of })) : t('Als ok markieren (Shift-Klick: Bereich)')">
                 @if (isOk(line)) {
                   <app-icon name="check" [size]="11" />
                 }
               </button>
               @if (m && !place()) {
-                <span class="multi" [class.done]="m.ok === m.of" [title]="'Zeile ist ' + m.of + ' Orten zugewiesen, ' + m.ok + ' davon ok – Sprünge oben im Block'">{{ m.of }}</span>
+                <span class="multi" [class.done]="m.ok === m.of" [title]="t('Zeile ist {of} Orten zugewiesen, {ok} davon ok – Sprünge oben im Block', { ok: m.ok, of: m.of })">{{ m.of }}</span>
               }
             }
           </span>
@@ -137,7 +137,7 @@
           <span class="g-num">{{ line.newLine ?? '' }}</span>
           <span class="g-act">
             @if (line.inDiff && line.key && !store.isRepo()) {
-              <button type="button" class="add-comment" (click)="openEditor(line)" [title]="'Kommentar auf ' + store.provider().label">
+              <button type="button" class="add-comment" (click)="openEditor(line)" [title]="t('Kommentar auf {host}', { host: store.provider().label })">
                 <app-icon name="comment" [size]="12" />
               </button>
             }
@@ -145,8 +145,8 @@
           <span class="g-sign">{{ line.type === 'add' ? '+' : line.type === 'del' ? '−' : '' }}</span>
           <span class="src"><code [innerHTML]="html()[i]"></code>
             @if (halfNotes().get(i); as other) {
-              <button type="button" class="half-note" (click)="goElsewhere(line, $event)" [title]="'Bereits akzeptiert in: ' + other.labels + ' – Klick springt dorthin'">
-                <app-icon name="check" [size]="10" /> {{ other.ids.length === 1 ? 'bereits an anderem Ort akzeptiert' : 'bereits an ' + other.ids.length + ' anderen Orten akzeptiert' }}
+              <button type="button" class="half-note" (click)="goElsewhere(line, $event)" [title]="t('Bereits akzeptiert in: {places} – Klick springt dorthin', { places: other.labels })">
+                <app-icon name="check" [size]="10" /> {{ other.ids.length === 1 ? t('bereits an anderem Ort akzeptiert') : t('bereits an {n} anderen Orten akzeptiert', { n: other.ids.length }) }}
               </button>
             }
             @for (n of caseNotes().get(i) ?? []; track $index) {
@@ -170,44 +170,44 @@
               </button>
             }
             @for (ref of line.refs ?? []; track ref.segmentId) {
-              <button type="button" class="ref" [style.--c]="refColor(ref.segmentId)" (click)="refClick.emit(ref.segmentId)" [title]="'Springe zu ' + ref.symbol">
+              <button type="button" class="ref" [style.--c]="refColor(ref.segmentId)" (click)="refClick.emit(ref.segmentId)" [title]="t('Springe zu {name}', { name: serverText(ref.symbol) })">
                 <app-icon name="arrowRight" [size]="11" />
                 @if (stepOf()[ref.segmentId]; as n) {
                   <b>{{ n }}</b>
                 }
-                {{ ref.symbol }}
+                {{ serverText(ref.symbol) }}
               </button>
             }
           </span>
         </div>
 
         @if (showThreads(line)) {
-          @for (t of threads().get(line.key!) ?? []; track t.root.id) {
+          @for (th of threads().get(line.key!) ?? []; track th.root.id) {
             <div class="thread">
-              @for (c of [t.root].concat(t.replies); track c.id) {
+              @for (c of [th.root].concat(th.replies); track c.id) {
                 <div class="comment">
                   @if (c.avatarUrl) {
                     <img [src]="c.avatarUrl" alt="" />
                   }
                   <div>
                     <div class="meta"><b>{{ c.author }}</b> · {{ time(c.createdAt) }}
-                      <a [href]="c.url" target="_blank" rel="noopener" [title]="'Auf ' + store.provider().label + ' öffnen'"><app-icon name="external" [size]="11" /></a>
+                      <a [href]="c.url" target="_blank" rel="noopener" [title]="t('Auf {host} öffnen', { host: store.provider().label })"><app-icon name="external" [size]="11" /></a>
                     </div>
                     <div class="body">{{ c.body }}</div>
                   </div>
                 </div>
               }
-              @if (replyTo() === t.root.id) {
+              @if (replyTo() === th.root.id) {
                 <div class="editor">
-                  <textarea rows="3" placeholder="Antwort … (Ctrl+Enter: senden, Esc: abbrechen)" [value]="draft()"
+                  <textarea rows="3" [placeholder]="t('Antwort … (Ctrl+Enter: senden, Esc: abbrechen)')" [value]="draft()"
                             (input)="input($event)" (keydown)="keydown($event, null)" autofocus></textarea>
                   <div class="actions">
-                    <button type="button" class="btn" (click)="cancel()">Abbrechen</button>
-                    <button type="button" class="btn primary" [disabled]="sending() || !draft().trim()" (click)="submit(null)">Antworten</button>
+                    <button type="button" class="btn" (click)="cancel()">{{ t('Abbrechen') }}</button>
+                    <button type="button" class="btn primary" [disabled]="sending() || !draft().trim()" (click)="submit(null)">{{ t('Antworten') }}</button>
                   </div>
                 </div>
               } @else {
-                <button type="button" class="reply" (click)="openReply(t)">Antworten</button>
+                <button type="button" class="reply" (click)="openReply(th)">{{ t('Antworten') }}</button>
               }
             </div>
           }
@@ -216,12 +216,12 @@
         @if (editorKey() === line.key && line.key) {
           <div class="thread new">
             <div class="editor">
-              <textarea rows="3" placeholder="Kommentar zu Zeile {{ line.newLine ?? line.oldLine }} – wird sofort auf {{ store.provider().label }} veröffentlicht (Ctrl+Enter)"
+              <textarea rows="3" [placeholder]="t('Kommentar zu Zeile {line} – wird sofort auf {host} veröffentlicht (Ctrl+Enter)', { line: line.newLine ?? line.oldLine, host: store.provider().label })"
                         [value]="draft()" (input)="input($event)" (keydown)="keydown($event, line)" autofocus></textarea>
               <div class="actions">
-                <button type="button" class="btn" (click)="cancel()">Abbrechen</button>
+                <button type="button" class="btn" (click)="cancel()">{{ t('Abbrechen') }}</button>
                 <button type="button" class="btn primary" [disabled]="sending() || !draft().trim()" (click)="submit(line)">
-                  {{ sending() ? 'Sende …' : 'Kommentieren' }}
+                  {{ sending() ? t('Sende …') : t('Kommentieren') }}
                 </button>
               </div>
             </div>

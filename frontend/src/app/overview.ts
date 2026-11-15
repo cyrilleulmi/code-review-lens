@@ -5,6 +5,7 @@ import { findingSummary, findingTotals } from './commit-findings';
 import { expectationTotals, expectationWarning } from './expectations';
 import { ComponentDiagram } from './component-diagram';
 import { Icon } from './icon';
+import { locale, serverText, t } from './i18n';
 import { unmetWarning } from './rule-checks';
 import { countWithSmells, smellsSummary } from './test-smells';
 import { countUnchangedAffected, setupTileText } from './setup-impact';
@@ -21,6 +22,8 @@ import { ReviewStore } from './review.store';
 export class Overview {
   protected readonly store = inject(ReviewStore);
   protected readonly ownerLabel = ownerLabel;
+  protected readonly t = t;
+  protected readonly serverText = serverText;
   protected readonly draft = signal('');
   protected readonly sending = signal(false);
 
@@ -30,21 +33,25 @@ export class Overview {
     const findings = this.store.commitFindings();
     const text = findingSummary(findings);
     if (!text) return null;
-    const t = findingTotals(findings);
-    return { text, warn: t.warn > 0, commits: t.commits };
+    const totals = findingTotals(findings);
+    return { text, warn: totals.warn > 0, commits: totals.commits };
   });
   protected readonly allCategories = computed(() =>
     this.store.bundle()!.analysis.categories.map((c) => {
       const ids = c.groups.flatMap((g) => g.segmentIds);
       const tests = isTestsView(c) ? this.store.bundle()!.analysis.tests ?? [] : [];
-      const covered = new Set(tests.flatMap((t) => t.covers.map((x) => x.segmentId))).size;
+      const covered = new Set(tests.flatMap((x) => x.covers.map((cv) => cv.segmentId))).size;
       return {
         ...c,
         segmentCount: new Set(ids).size,
         progress: this.store.progressOf(this.store.slotsFor({ kind: 'category', id: c.id })),
         stats: tests.length
-          ? `${tests.length} Testfälle · erreichen ${covered} geänderte Codestellen`
-          : `${c.groups.length} ${isFlowView(c) ? 'Flows' : 'Gruppen'} · ${new Set(ids).size} Blöcke`,
+          ? t('{n} Testfälle · erreichen {covered} geänderte Codestellen', { n: tests.length, covered })
+          : t(isFlowView(c) ? '{n} Flows · {blocks} Blöcke' : '{n} Gruppen · {blocks} Blöcke', { n: c.groups.length, blocks: new Set(ids).size }),
+        tooltip: [
+          c.builds ? t('Aufbau: {text}', { text: serverText(c.builds) }) : '',
+          c.divides ? t('Unterteilung: {text}', { text: serverText(c.divides) }) : '',
+        ].filter((x) => x).join('\n\n'),
         enabled: !this.store.disabledCategories().has(c.id),
         // tests bent to fit the code: changed/removed/weakened assertions, switched-off tests (Spec-Diff)
         warning: isTestsView(c) ? expectationWarning(expectationTotals(this.store.bundle()!.analysis.specs ?? [])) : null,
@@ -113,6 +120,6 @@ export class Overview {
   }
 
   protected time(iso: string): string {
-    return new Date(iso).toLocaleString('de-CH', { dateStyle: 'short', timeStyle: 'short' });
+    return new Date(iso).toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' });
   }
 }

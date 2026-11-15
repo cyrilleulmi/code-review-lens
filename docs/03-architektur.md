@@ -83,6 +83,8 @@ Angular 22, standalone Komponenten, Signals, zoneless, `OnPush`.
 | `component-diagram.ts` | Komponentendiagramm der Übersicht: Spalten nach Schicht, Aufruf- und REST-Kanten, Fokus pro Komponente, Tests/isolierte ein-/ausblenden. |
 | `test-overview.ts` | Testübersicht: pro Testfall die Komponenten und die abgedeckten Codestellen (direkt / über …), mit Sprüngen. |
 | `code-block.*` | Ein Segment an einem Ort: Gutter mit Häkchen (ortsbezogen), alte/neue Zeilennummer, Diff-Farben, Highlighting, Inline-Kommentare, Aufruf-Chips, Leiste mit allen Orten und Test-Verknüpfungen, einklappbar. Optional Blame-Spalte (Datum/Zeit, Autor, Nummer des PR-Commits); in der Commit-Ansicht sind Änderungen anderer Commits abgeblendet. |
-| `highlight.ts` | highlight.js; neue und alte Version werden je als zusammenhängender Text hervorgehoben (korrekt bei mehrzeiligen Kommentaren/Strings) und dann pro Zeile verteilt. |
+| `i18n.ts` | Sprache des UI (Signal `lang`, Umschalter in der Toolbar): `t()` für UI-Texte mit den englischen Texten in `i18n.en.ts`, `serverText()` für Texte aus dem Backend (`i18n.server.en.ts`). Deutsch ist Quellsprache und Schlüssel. |
+| `highlight.ts` |
+ highlight.js; neue und alte Version werden je als zusammenhängender Text hervorgehoben (korrekt bei mehrzeiligen Kommentaren/Strings) und dann pro Zeile verteilt. |
 
 Build-Ausgabe geht direkt nach `backend/src/main/resources/META-INF/resources`, Quarkus liefert sie aus.

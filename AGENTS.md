@@ -6,7 +6,11 @@ design decisions are in `docs/` (German): architecture overview `docs/09`, requi
 
 ## Rules
 
-- **Language:** UI texts and docs are German (Swiss spelling: «ss», never «ß»). Code, comments, commit messages: English.
+- **Language:** Docs are German (Swiss spelling: «ss», never «ß»). The UI is German and English: German is the source
+  language, every UI text goes through `t('…')` (`frontend/src/app/i18n.ts`) with its English text in `i18n.en.ts`
+  (British spelling, GitHub/GitLab/IntelliJ terms). Texts the backend sends stay German in files and API and are shown
+  through `serverText()`; add the English for new or changed ones to `i18n.server.en.ts` (`i18n.spec.ts` checks it).
+  Code, comments, commit messages: English.
 - **No AI in the analysis.** Categorisation and flows are pattern-based and deterministic (`backend/.../analysis/`).
   New heuristics go into `default-rules.json` when they can be expressed as rules.
 - **Bump `Analyzer.VERSION`** whenever analysis output changes, so cached `analysis.json` files are recomputed.

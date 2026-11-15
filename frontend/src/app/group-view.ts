@@ -4,6 +4,7 @@ import { CodeBlock, flashLine } from './code-block';
 import { CoverageOverview } from './coverage-overview';
 import { RuleCheckOverview } from './rule-check-overview';
 import { Icon } from './icon';
+import { serverText, t } from './i18n';
 import { MockWarnings } from './mock-warnings';
 import { ReviewStore, Slot } from './review.store';
 import { SpecLineTarget, SpecOverview } from './spec-overview';
@@ -24,26 +25,26 @@ import { TestOverview } from './test-overview';
         }
       </div>
       <span class="spacer"></span>
-      <span class="progress-text" [title]="fileView() ? 'Eine Zeile zählt, wenn sie an allen ihren Orten ok ist' : ''">
-        {{ progress().ok }}/{{ progress().total }} Zeilen ok</span>
+      <span class="progress-text" [title]="fileView() ? t('Eine Zeile zählt, wenn sie an allen ihren Orten ok ist') : ''">
+        {{ t('{ok}/{total} Zeilen ok', { ok: progress().ok, total: progress().total }) }}</span>
       <button type="button" class="btn" [class.success]="done()" (click)="markAll()"
-              [title]="fileView() ? 'Markiert die Zeilen an allen Orten, an denen sie vorkommen' : ''">
-        <app-icon name="check" [size]="14" /> {{ fileView() ? 'Alles überall als ok markieren' : 'Alles als ok markieren' }}
+              [title]="fileView() ? t('Markiert die Zeilen an allen Orten, an denen sie vorkommen') : ''">
+        <app-icon name="check" [size]="14" /> {{ fileView() ? t('Alles überall als ok markieren') : t('Alles als ok markieren') }}
       </button>
     </div>
     @if (details(); as d) {
       <details class="cat-details">
-        <summary>Wie entsteht diese Kategorie?</summary>
+        <summary>{{ t('Wie entsteht diese Kategorie?') }}</summary>
         @if (d.builds) {
-          <p><b>Aufbau:</b> {{ d.builds }}</p>
+          <p><b>{{ t('Aufbau:') }}</b> {{ serverText(d.builds) }}</p>
         }
         @if (d.divides) {
-          <p><b>Unterteilung:</b> {{ d.divides }}</p>
+          <p><b>{{ t('Unterteilung:') }}</b> {{ serverText(d.divides) }}</p>
         }
       </details>
     }
     @if (slots().length === 0) {
-      <p class="empty">Keine Änderungen in dieser Auswahl.</p>
+      <p class="empty">{{ t('Keine Änderungen in dieser Auswahl.') }}</p>
     }
     @if (coverage() && store.bundle()?.analysis?.specs?.length && stepIndex() === null) {
       <app-spec-overview (segmentClick)="openRef($event)" (lineClick)="openLine($event)" />
@@ -66,21 +67,21 @@ import { TestOverview } from './test-overview';
     @if (slots().length > 1) {
       <div class="focus-bar">
         @if (stepIndex() === null) {
-          <button type="button" class="ftool" (click)="startSteps()" title="Immer nur einen Block zeigen, mit «Ok & weiter»">
-            <app-icon name="play" [size]="13" /> Einzeln durchgehen
+          <button type="button" class="ftool" (click)="startSteps()" [title]="t('Immer nur einen Block zeigen, mit «Ok & weiter»')">
+            <app-icon name="play" [size]="13" /> {{ t('Einzeln durchgehen') }}
           </button>
-          <button type="button" class="ftool" (click)="store.setCollapsedAll(true)"><app-icon name="collapse" [size]="13" /> Alle einklappen</button>
-          <button type="button" class="ftool" (click)="store.setCollapsedAll(false)"><app-icon name="expand" [size]="13" /> Alle ausklappen</button>
+          <button type="button" class="ftool" (click)="store.setCollapsedAll(true)"><app-icon name="collapse" [size]="13" /> {{ t('Alle einklappen') }}</button>
+          <button type="button" class="ftool" (click)="store.setCollapsedAll(false)"><app-icon name="expand" [size]="13" /> {{ t('Alle ausklappen') }}</button>
           <span class="spacer"></span>
-          <span class="hint">Klick auf einen Blocktitel klappt ihn ein oder aus</span>
+          <span class="hint">{{ t('Klick auf einen Blocktitel klappt ihn ein oder aus') }}</span>
         } @else {
           @let i = stepIndex()!;
-          <span class="step-info">Block <b>{{ i + 1 }}</b> von {{ slots().length }}</span>
-          <button type="button" class="ftool" [disabled]="i === 0" (click)="step(-1)"><app-icon name="arrowLeft" [size]="13" /> Zurück</button>
-          <button type="button" class="ftool primary" (click)="okAndNext()"><app-icon name="check" [size]="13" /> Ok &amp; weiter</button>
-          <button type="button" class="ftool" [disabled]="i === slots().length - 1" (click)="step(1)">Weiter <app-icon name="arrowRight" [size]="13" /></button>
+          <span class="step-info">{{ t('Block') }} <b>{{ i + 1 }}</b> {{ t('von') }} {{ slots().length }}</span>
+          <button type="button" class="ftool" [disabled]="i === 0" (click)="step(-1)"><app-icon name="arrowLeft" [size]="13" /> {{ t('Zurück') }}</button>
+          <button type="button" class="ftool primary" (click)="okAndNext()"><app-icon name="check" [size]="13" /> {{ t('Ok & weiter') }}</button>
+          <button type="button" class="ftool" [disabled]="i === slots().length - 1" (click)="step(1)">{{ t('Weiter') }} <app-icon name="arrowRight" [size]="13" /></button>
           <span class="spacer"></span>
-          <button type="button" class="ftool" (click)="stepIndex.set(null)"><app-icon name="close" [size]="13" /> Beenden</button>
+          <button type="button" class="ftool" (click)="stepIndex.set(null)"><app-icon name="close" [size]="13" /> {{ t('Beenden') }}</button>
         }
       </div>
     }
@@ -109,6 +110,8 @@ import { TestOverview } from './test-overview';
 })
 export class GroupView {
   protected readonly store = inject(ReviewStore);
+  protected readonly t = t;
+  protected readonly serverText = serverText;
   private readonly host = inject(ElementRef<HTMLElement>);
 
   readonly title = input.required<string>();
@@ -189,7 +192,7 @@ export class GroupView {
       this.step(1);
     } else {
       this.stepIndex.set(null);
-      this.store.notify('Alle Blöcke durchgearbeitet');
+      this.store.notify(t('Alle Blöcke durchgearbeitet'));
     }
   }
 

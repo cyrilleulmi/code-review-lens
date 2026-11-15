@@ -1,4 +1,5 @@
 import { TestSmell } from './api';
+import { serverText, t } from './i18n';
 
 /**
  * Test-Smells: pure helpers for the test overview (chips, summary, filter), the header badge and the line chips of a
@@ -7,29 +8,29 @@ import { TestSmell } from './api';
 
 /** «keine Assertion» as chip text in the profile line and table. */
 export function smellText(s: TestSmell): string {
-  return s.label;
+  return serverText(s.label);
 }
 
 /** The badge in the header of a test: «Smell: keine Assertion», several joined by «, ». */
 export function smellBadgeText(smells: TestSmell[]): string {
-  return `Smell: ${smells.map((s) => s.label).join(', ')}`;
+  return `Smell: ${smells.map((s) => serverText(s.label)).join(', ')}`;
 }
 
 /** Tooltip of one smell: its hint, the line it shows at, and how it was found. */
 export function smellDetail(s: TestSmell): string {
-  const where = s.code ? `\n${s.line != null ? `Zeile ${s.line}: ` : ''}${s.code}` : '';
-  return `${s.hint}${where}\n– Musterbasiert erkannt (Test-Smells)`;
+  const where = s.code ? `\n${s.line != null ? t('Zeile {line}', { line: s.line }) + ': ' : ''}${s.code}` : '';
+  return `${serverText(s.hint)}${where}\n${t('– Musterbasiert erkannt (Test-Smells)')}`;
 }
 
 /** Tooltip of the header badge: every smell with its hint. */
 export function smellBadgeTitle(smells: TestSmell[]): string {
-  return smells.map((s) => `${s.label}: ${s.hint}`).join('\n') + '\n– Musterbasiert erkannt (Test-Smells)';
+  return smells.map((s) => `${serverText(s.label)}: ${serverText(s.hint)}`).join('\n') + '\n' + t('– Musterbasiert erkannt (Test-Smells)');
 }
 
 /** «5 Tests mit Smells», «1 Test mit Smells» (the summary part and the tests tile); null when no test has one. */
 export function smellsSummary(testsWithSmells: number): string | null {
   if (testsWithSmells <= 0) return null;
-  return `${testsWithSmells} ${testsWithSmells === 1 ? 'Test' : 'Tests'} mit Smells`;
+  return t(testsWithSmells === 1 ? '{n} Test mit Smells' : '{n} Tests mit Smells', { n: testsWithSmells });
 }
 
 export function hasSmells(smells: TestSmell[] | undefined | null): boolean {

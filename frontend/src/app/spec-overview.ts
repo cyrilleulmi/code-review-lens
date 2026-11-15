@@ -7,6 +7,7 @@ import {
   unchangedAffectedText,
 } from './setup-impact';
 import { Icon } from './icon';
+import { serverText, t } from './i18n';
 import { ReviewStore } from './review.store';
 
 /** A line of a test to show: the segment of the test and the line in the new (or, old: in the base) file. */
@@ -46,6 +47,7 @@ interface SpecFileView {
   warning: string | null;
 }
 
+/** Labels in German, translated with t(). */
 const MARKS: Record<SpecStatus, { mark: string; label: string }> = {
   added: { mark: '+', label: 'neu' },
   changed: { mark: '~', label: 'geändert' },
@@ -78,8 +80,8 @@ function noteworthy(e: SpecEntry): boolean {
     <section class="box">
       <header>
         <app-icon name="test" [size]="15" class="head-icon" />
-        <b>Spezifikation (Testnamen)</b>
-        <span class="hint">was die geänderten Tests festlegen – Testnamen der alten gegen die neue Version</span>
+        <b>{{ t('Spezifikation (Testnamen)') }}</b>
+        <span class="hint">{{ t('was die geänderten Tests festlegen – Testnamen der alten gegen die neue Version') }}</span>
       </header>
       <p class="summary">
         @for (p of summary(); track p.status) {
@@ -88,40 +90,40 @@ function noteworthy(e: SpecEntry): boolean {
           }
           <span [class]="'s-' + p.status"><b>{{ p.mark }}{{ p.n }}</b> {{ p.label }}</span>
         } @empty {
-          Keine Testfälle in den geänderten Testdateien erkannt.
+          {{ t('Keine Testfälle in den geänderten Testdateien erkannt.') }}
         }
         @if (warning(); as w) {
           <span class="sep">·</span>
-          <span class="warnsum" title="Bestehende Tests erwarten jetzt etwas anderes oder weniger, oder sind ausgeschaltet – musterbasiert erkannt (Assertions, Matcher, xit/skip/@Disabled)">{{ w }}</span>
+          <span class="warnsum" [title]="t('Bestehende Tests erwarten jetzt etwas anderes oder weniger, oder sind ausgeschaltet – musterbasiert erkannt (Assertions, Matcher, xit/skip/@Disabled)')">{{ w }}</span>
         }
         @if (affectedSummary(); as a) {
           <span class="sep">·</span>
-          <span class="warnsum" title="Unveränderte Tests, deren Setup, Testdaten oder Testhilfen der PR ändert – sie prüfen jetzt vielleicht etwas anderes">{{ a }}</span>
+          <span class="warnsum" [title]="t('Unveränderte Tests, deren Setup, Testdaten oder Testhilfen der PR ändert – sie prüfen jetzt vielleicht etwas anderes')">{{ a }}</span>
         }
       </p>
       @if (impacts().length) {
         <div class="impacts">
-          <p class="ihead">Wirkung von Setup und Testdaten</p>
+          <p class="ihead">{{ t('Wirkung von Setup und Testdaten') }}</p>
           @for (i of visibleImpacts(); track i.segmentId + '#' + i.name + '#' + i.line) {
             @let ikey = 'impact#' + i.segmentId + '#' + i.name + '#' + i.line;
             <div class="impact" [class.warn]="warns(i)">
               <button type="button" class="itoggle" (click)="toggleDetails(ikey, $event)" [attr.aria-expanded]="isExpanded(ikey)"
-                      [title]="isExpanded(ikey) ? 'Betroffene Tests ausblenden' : 'Betroffene Tests zeigen'">
+                      [title]="isExpanded(ikey) ? t('Betroffene Tests ausblenden') : t('Betroffene Tests zeigen')">
                 <app-icon [name]="isExpanded(ikey) ? 'chevronDown' : 'chevronRight'" [size]="11" />
               </button>
               <app-icon [name]="warns(i) ? 'warning' : 'info'" [size]="12" class="iicon" />
               <button type="button" class="itext" [class.link]="hasSegment(i.segmentId)" (click)="openImpact(i)"
-                      [title]="hasSegment(i.segmentId) ? 'Zum geänderten Setup bzw. zu den Testdaten springen' : ''">{{ notice(i) }}</button>
+                      [title]="hasSegment(i.segmentId) ? t('Zum geänderten Setup bzw. zu den Testdaten springen') : ''">{{ notice(i) }}</button>
             </div>
             @if (isExpanded(ikey)) {
               <div class="iaffected">
-                @for (t of i.affected; track t.path + '#' + t.line) {
-                  <div class="atest" [class.link]="hasSegment(t.segmentId)"
-                       [attr.role]="hasSegment(t.segmentId) ? 'button' : null" [attr.tabindex]="hasSegment(t.segmentId) ? 0 : null"
-                       (click)="openAffected(t)" (keydown.enter)="openAffected(t)" [title]="t.path + ':' + t.line">
-                    <span class="astatus" [class]="'astatus s-' + t.status">{{ statusOf(t) }}</span>
-                    <span class="name">{{ t.name }}</span>
-                    <span class="where">{{ fileOf(t.path) }}:{{ t.line }}</span>
+                @for (at of i.affected; track at.path + '#' + at.line) {
+                  <div class="atest" [class.link]="hasSegment(at.segmentId)"
+                       [attr.role]="hasSegment(at.segmentId) ? 'button' : null" [attr.tabindex]="hasSegment(at.segmentId) ? 0 : null"
+                       (click)="openAffected(at)" (keydown.enter)="openAffected(at)" [title]="at.path + ':' + at.line">
+                    <span class="astatus" [class]="'astatus s-' + at.status">{{ statusOf(at) }}</span>
+                    <span class="name">{{ at.name }}</span>
+                    <span class="where">{{ fileOf(at.path) }}:{{ at.line }}</span>
                   </div>
                 }
               </div>
@@ -129,8 +131,8 @@ function noteworthy(e: SpecEntry): boolean {
           }
           @if (quietImpacts() > 0) {
             <button type="button" class="more" (click)="quietImpactsShown.set(!quietImpactsShown())">
-              {{ quietImpactsShown() ? 'nur Wirkung auf unveränderte Tests zeigen'
-                : quietImpacts() + (quietImpacts() === 1 ? ' weitere Änderung wirkt' : ' weitere Änderungen wirken') + ' nur auf neue oder geänderte Tests' }}
+              {{ quietImpactsShown() ? t('nur Wirkung auf unveränderte Tests zeigen')
+                : t(quietImpacts() === 1 ? '{n} weitere Änderung wirkt nur auf neue oder geänderte Tests' : '{n} weitere Änderungen wirken nur auf neue oder geänderte Tests', { n: quietImpacts() }) }}
             </button>
           }
         </div>
@@ -146,19 +148,19 @@ function noteworthy(e: SpecEntry): boolean {
             <span class="fwarn">{{ f.warning }}</span>
           }
           @if (f.affected) {
-            <span class="fwarn" title="Unveränderte Tests dieser Datei, deren Setup, Testdaten oder Testhilfen der PR ändert">{{ f.affected }}</span>
+            <span class="fwarn" [title]="t('Unveränderte Tests dieser Datei, deren Setup, Testdaten oder Testhilfen der PR ändert')">{{ f.affected }}</span>
           }
           @if (f.file.status === 'added') {
-            <span class="ftag s-added">neue Datei</span>
+            <span class="ftag s-added">{{ t('neue Datei') }}</span>
           } @else if (f.file.status === 'removed') {
-            <span class="ftag s-removed">gelöscht</span>
+            <span class="ftag s-removed">{{ t('gelöscht') }}</span>
           } @else if (f.file.previousPath && f.file.previousPath !== f.file.path) {
-            <span class="ftag s-renamed" [title]="'vorher: ' + f.file.previousPath">umbenannt</span>
+            <span class="ftag s-renamed" [title]="t('vorher: {name}', { name: f.file.previousPath })">{{ t('umbenannt') }}</span>
           }
         </button>
         @if (isOpen(f.file.path)) {
           @if (!f.file.baseAvailable) {
-            <p class="note"><app-icon name="info" [size]="12" /> Basisversion nicht verfügbar – nur neue Seite</p>
+            <p class="note"><app-icon name="info" [size]="12" /> {{ t('Basisversion nicht verfügbar – nur neue Seite') }}</p>
           }
           @for (r of visible(f); track $index) {
             @let e = r.entry;
@@ -170,12 +172,12 @@ function noteworthy(e: SpecEntry): boolean {
               <span class="mark">{{ marks[e.status].mark }}</span>
               <span class="name">{{ e.name }}</span>
               @if (e.status === 'renamed' && e.previousName) {
-                <span class="prev">vorher: {{ e.previousName }}</span>
+                <span class="prev">{{ t('vorher: {name}', { name: e.previousName }) }}</span>
               }
               @if (r.marks.length) {
                 <button type="button" class="xmarks" [class.warn]="r.warn" [class.static]="!r.changes.length"
                         [attr.aria-expanded]="r.changes.length ? isExpanded(key) : null"
-                        [title]="r.changes.length ? (isExpanded(key) ? 'Details ausblenden' : 'Alte und neue Assertions zeigen') : 'War schon in der Basisversion deaktiviert'"
+                        [title]="r.changes.length ? (isExpanded(key) ? t('Details ausblenden') : t('Alte und neue Assertions zeigen')) : t('War schon in der Basisversion deaktiviert')"
                         (click)="toggleDetails(key, $event)" (keydown.enter)="$event.stopPropagation()">
                   @if (r.warn) {
                     <app-icon name="warning" [size]="11" />
@@ -191,7 +193,7 @@ function noteworthy(e: SpecEntry): boolean {
               @if (r.affectedBy; as by) {
                 <button type="button" class="xmarks warn setup-mark" [title]="markTitle(by)"
                         (click)="openImpact(by[0], $event)" (keydown.enter)="$event.stopPropagation()">
-                  <app-icon name="warning" [size]="11" /> Setup geändert
+                  <app-icon name="warning" [size]="11" /> {{ t('Setup geändert') }}
                 </button>
               }
               @if (r.later.length) {
@@ -213,30 +215,30 @@ function noteworthy(e: SpecEntry): boolean {
               <div class="xdetails" [style.padding-left.px]="38 + e.depth * 18">
                 @for (c of r.changes; track $index) {
                   <div class="xchange">
-                    <span class="xkind" [class.warn]="c.kind !== 'added' && c.kind !== 'enabled'">{{ kindLabels[c.kind] }}</span>
+                    <span class="xkind" [class.warn]="c.kind !== 'added' && c.kind !== 'enabled'">{{ t(kindLabels[c.kind]) }}</span>
                     @if (c.oldText != null) {
                       <div class="xline del" [class.link]="clickable(r)" (click)="openLine(f.file, r, c.oldLine, true)"
-                           [title]="clickable(r) ? 'Alte Zeile ' + c.oldLine + ' im Testcode zeigen' : 'Alte Zeile ' + c.oldLine">
+                           [title]="clickable(r) ? t('Alte Zeile {line} im Testcode zeigen', { line: c.oldLine }) : t('Alte Zeile {line}', { line: c.oldLine })">
                         <span class="xno">{{ c.oldLine }}</span><span class="xsign">−</span><code>{{ c.oldText }}</code>
                       </div>
                     }
                     @if (c.newText != null) {
                       <div class="xline add" [class.link]="clickable(r)" (click)="openLine(f.file, r, c.newLine, false)"
-                           [title]="clickable(r) ? 'Zeile ' + c.newLine + ' im Testcode zeigen' : 'Zeile ' + c.newLine">
+                           [title]="clickable(r) ? t('Zeile {line} im Testcode zeigen', { line: c.newLine }) : t('Zeile {line}', { line: c.newLine })">
                         <span class="xno">{{ c.newLine }}</span><span class="xsign">+</span><code>{{ c.newText }}</code>
                       </div>
                     }
                   </div>
                 }
                 @if (r.entry.assertionsBefore != null && r.entry.assertionsAfter != null) {
-                  <p class="xcount">Assertions: {{ r.entry.assertionsBefore }} vorher → {{ r.entry.assertionsAfter }} jetzt</p>
+                  <p class="xcount">{{ t('Assertions: {before} vorher → {after} jetzt', { before: r.entry.assertionsBefore, after: r.entry.assertionsAfter }) }}</p>
                 }
               </div>
             }
           }
           @if (f.unchanged > 0) {
             <button type="button" class="more" (click)="toggleUnchanged(f.file.path)" [style.padding-left.px]="14">
-              {{ showsUnchanged(f.file.path) ? 'unveränderte ausblenden' : f.unchanged + ' unveränderte anzeigen' }}
+              {{ showsUnchanged(f.file.path) ? t('unveränderte ausblenden') : t('{n} unveränderte anzeigen', { n: f.unchanged }) }}
             </button>
           }
         }
@@ -337,6 +339,7 @@ function noteworthy(e: SpecEntry): boolean {
 })
 export class SpecOverview {
   protected readonly store = inject(ReviewStore);
+  protected readonly t = t;
   /** An entry with a code block was clicked (segment id). */
   readonly segmentClick = output<string>();
   /** A line of an assertion was clicked: show that line of the test's code block. */
@@ -364,7 +367,7 @@ export class SpecOverview {
 
   /** Tooltip of the marker «Setup geändert» on an unchanged test. */
   protected markTitle(by: SetupImpact[]): string {
-    return markerTitle(by) + (this.hasSegment(by[0].segmentId) ? '\nKlick: zum geänderten Setup springen' : '');
+    return markerTitle(by) + (this.hasSegment(by[0].segmentId) ? '\n' + t('Klick: zum geänderten Setup springen') : '');
   }
 
   /** path -> line key -> segment id, to find the deleted lines of a removed entry. */
@@ -440,7 +443,7 @@ export class SpecOverview {
       status,
       n: counts.get(status)!,
       mark: status === 'unchanged' ? '' : MARKS[status].mark,
-      label: MARKS[status].label,
+      label: t(MARKS[status].label),
     }));
   });
 
@@ -492,7 +495,7 @@ export class SpecOverview {
   }
 
   protected laterTitle(r: SpecRow): string {
-    return r.later.map((f) => f.detail).join('\n\n') + '\n– aus der Reihenfolge der Commits (Commit-Bezug). Klick: zur Assertion springen';
+    return r.later.map((f) => serverText(f.detail)).join('\n\n') + '\n' + t('– aus der Reihenfolge der Commits (Commit-Bezug). Klick: zur Assertion springen');
   }
 
   /** Expectation changed by a later commit: show the assertion line in the test's code block. */
@@ -542,13 +545,13 @@ export class SpecOverview {
   protected tooltip(r: SpecRow): string {
     const e = r.entry;
     const path = [...e.suites, e.name].join(' › ');
-    const status = MARKS[e.status].label;
-    const where = e.status === 'removed' ? `alte Zeile ${e.oldLine}` : `Zeile ${e.line}`;
-    const action = this.clickable(r) ? (e.status === 'removed' ? ' – in der Dateiansicht zeigen' : ' – zum Testcode springen') : '';
+    const status = t(MARKS[e.status].label);
+    const where = e.status === 'removed' ? t('alte Zeile {line}', { line: e.oldLine }) : t('Zeile {line}', { line: e.line });
+    const action = this.clickable(r) ? ' – ' + (e.status === 'removed' ? t('in der Dateiansicht zeigen') : t('zum Testcode springen')) : '';
     const asserts = e.kind !== 'test' ? ''
-      : e.assertionsBefore != null && e.assertionsAfter != null ? `\n${e.assertionsBefore} → ${e.assertionsAfter} Assertions`
-      : e.assertionsAfter != null ? `\n${e.assertionsAfter} Assertions`
-      : e.assertionsBefore != null ? `\n${e.assertionsBefore} Assertions (entfernt)` : '';
+      : e.assertionsBefore != null && e.assertionsAfter != null ? '\n' + t('{before} → {after} Assertions', { before: e.assertionsBefore, after: e.assertionsAfter })
+      : e.assertionsAfter != null ? '\n' + t('{n} Assertions', { n: e.assertionsAfter })
+      : e.assertionsBefore != null ? '\n' + t('{n} Assertions (entfernt)', { n: e.assertionsBefore }) : '';
     return `${path}\n${status} · ${where}${action}${asserts}`;
   }
 
