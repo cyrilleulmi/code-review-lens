@@ -366,11 +366,12 @@ function shortName(s: Segment): string {
   return name.substring(name.lastIndexOf('.') + 1);
 }
 
+/** The table is the default; the list only when the viewer chose it. */
 function readMode(): ViewMode {
   try {
-    return localStorage.getItem(VIEW_KEY) === 'table' ? 'table' : 'list';
+    return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'table';
   } catch {
-    return 'list';
+    return 'table';
   }
 }
 
