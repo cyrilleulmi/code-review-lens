@@ -3,6 +3,7 @@ import { CaseMatrixOverview } from './case-matrix';
 import { CodeBlock } from './code-block';
 import { CoverageOverview } from './coverage-overview';
 import { Icon } from './icon';
+import { MockWarnings } from './mock-warnings';
 import { ReviewStore, Slot } from './review.store';
 import { SpecLineTarget, SpecOverview } from './spec-overview';
 import { TestOverview } from './test-overview';
@@ -11,7 +12,7 @@ import { TestOverview } from './test-overview';
 @Component({
   selector: 'app-group-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CaseMatrixOverview, CodeBlock, CoverageOverview, Icon, SpecOverview, TestOverview],
+  imports: [CaseMatrixOverview, CodeBlock, CoverageOverview, Icon, MockWarnings, SpecOverview, TestOverview],
   template: `
     <div class="view-head">
       <app-icon [name]="icon()" [size]="18" />
@@ -51,6 +52,9 @@ import { TestOverview } from './test-overview';
     }
     @if (coverage() && store.bundle()?.analysis?.coverage && stepIndex() === null) {
       <app-coverage-overview (testClick)="openRef($event)" />
+    }
+    @if (coverage() && store.bundle()?.analysis?.mockWarnings?.length && stepIndex() === null) {
+      <app-mock-warnings (lineClick)="openLine($event)" (segmentClick)="openRef($event)" />
     }
     @if (testIds().length && stepIndex() === null) {
       <app-test-overview [testIds]="testIds()" (testClick)="scrollTo($event)" />
@@ -112,7 +116,7 @@ export class GroupView {
   readonly scope = input.required<string>();
   /** File view: marks apply to all places of a line. */
   readonly fileView = input(false);
-  /** Show the Spec-Diff, the Fallmatrix and the coverage of the changed code above the blocks (test category). */
+  /** Show the Spec-Diff, the Fallmatrix, the coverage of the changed code and the mock warnings above the blocks (test category). */
   readonly coverage = input(false);
 
   protected readonly progress = computed(() => this.store.progressOf(this.slots()));

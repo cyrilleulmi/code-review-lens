@@ -106,7 +106,8 @@ Alle Dateien sind UTF-8, eingerückt und werden **atomar** geschrieben (temporä
 * `layer` (`domain` | `application` | `usecase` | `adapter` | null) und `frontend` (true/false) pro Segment; `architecture.style` = `hexagonal`, wenn das Repo Ports & Adapters nutzt (`evidence` = Ordner).
 * `flows[].edges[].kind`: `call` oder `http` (dann `via` = `PUT /api/players/{}`).
 * `components[]` (`id`, `name`, `paths`, `area`, `segmentIds`) und `componentEdges[]` (`from`, `to`, `calls`, `http`): das Komponentendiagramm.
-* `tests[]`: pro geändertem Testfall die getesteten Komponenten (`how`: `name` = Namenskonvention, `call` = direkt aufgerufen) und die erreichten Segmente (`direct`, sonst `via` = das Segment, über das es erreicht wird; `line` = Aufrufstelle im Test). `testedBy` ist die Rückrichtung.
+* `tests[]`: pro geändertem Testfall die getesteten Komponenten (`how`: `name` = Namenskonvention, `call` = direkt aufgerufen) und die erreichten Segmente (`direct`, sonst `via` = das Segment, über das es erreicht wird; `line` = Aufrufstelle im Test; `mocked` = der Test mockt die Abhängigkeit, zu der es gehört – nur der Mock läuft). `testedBy` ist die Rückrichtung (ohne gemockte).
+* `mockWarnings[]` (`test`, `testName`, `path`, `line`, `segmentId`, `member`, `collaborator`): Tests, die eine geänderte Funktion mocken und beim Namen stubben; `flowCoverage[]` (`flowId`, `steps[]` mit `status` `tested`/`mocked`/`none`, `edges[]` mit `tested`/`separate`/`partial`/`none`): was die Tests in jedem Flow wirklich ausführen (Mock-Grenzen, Abschnitt 5g in [05-analyse.md](05-analyse.md)).
 * `existingTests[]`: Testfälle **bestehender, unveränderter** Testdateien, die geänderten Code erreichen (`id` `e1`, `e2` …, `path`, `name`, `line`, `reason`, `covers` wie bei `tests[]`, `profile`). Sie sind keine Segmente – nichts zu markieren. `coverage[].existingTests` verweist auf ihre Ids. `relatedTests` beschreibt die Auswahl (siehe unten).
 
 ## `related.json`

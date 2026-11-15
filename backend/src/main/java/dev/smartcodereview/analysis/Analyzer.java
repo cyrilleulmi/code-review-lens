@@ -23,6 +23,7 @@ import dev.smartcodereview.model.Model.FlowStep;
 import dev.smartcodereview.model.Model.Group;
 import dev.smartcodereview.model.Model.Hunk;
 import dev.smartcodereview.model.Model.LineRef;
+import dev.smartcodereview.model.Model.MockWarning;
 import dev.smartcodereview.model.Model.RelatedTestFile;
 import dev.smartcodereview.model.Model.RepoStructure;
 import dev.smartcodereview.model.Model.Segment;
@@ -60,6 +61,9 @@ import java.util.stream.Collectors;
  *       points is part of both flows.</li>
  *   <li>Changed test cases are linked to the changed code they reach through the same call graph; seen from the
  *       code, every testable changed function gets a coverage status (direct, indirect, none) and a branch count.
+ *       Code of a collaborator a test mocks is reached only as a mock: the walk stops there and it does not count as
+ *       covered; tests that stub changed members of a mock get a warning, every flow a per step/edge view of what the
+ *       tests really execute (<em>Mock-Grenzen</em>, {@link MockBoundaries}).
  *       Every changed test case gets a profile (<em>Test-Steckbrief</em>, {@link TestProfiles}). Existing, unchanged
  *       test files loaded for the change ({@link RelatedTests}) are linked the same way (<em>Bestehende Tests</em>,
  *       coverage status "existing"); they are no segments.</li>
@@ -95,7 +99,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 21;
+    public static final int VERSION = 22;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -295,11 +299,15 @@ public final class Analyzer {
             }
         }
         TestProfiles profiles = new TestProfiles(rules);
-        List<TestInfo> tests = tests(works, edges, snapshot.files(), profiles);
-        List<ExistingTest> existingTests = existingTests(works, edges, related, relatedSources, profiles);
+        List<MockWarning> mockWarnings = new ArrayList<>();
+        List<TestInfo> tests = tests(works, edges, snapshot.files(), profiles, mockWarnings);
+        List<ExistingTest> existingTests = existingTests(works, edges, related, relatedSources, profiles, mockWarnings);
+        mockWarnings.sort(Comparator.comparing(MockWarning::path).thenComparing(w -> w.line() == null ? 0 : w.line())
+                .thenComparing(MockWarning::member));
         Map<String, List<String>> testedBy = new HashMap<>();
         for (TestInfo t : tests) {
-            t.covers().forEach(c -> testedBy.computeIfAbsent(c.segmentId(), k -> new ArrayList<>()).add(t.segmentId()));
+            t.covers().stream().filter(c -> !c.mocked())
+                    .forEach(c -> testedBy.computeIfAbsent(c.segmentId(), k -> new ArrayList<>()).add(t.segmentId()));
         }
 
         List<Segment> segments = new ArrayList<>();
@@ -318,7 +326,7 @@ public final class Analyzer {
                 coverage(works, tests, existingTests),
                 repository ? List.of() : specs(snapshot.files(), sources, baseSources == null ? Map.of() : baseSources, lookup),
                 repository ? List.of() : new CaseMatrices(rules).all(snapshot.files(), sources, lookup),
-                existingTests, related);
+                existingTests, related, List.copyOf(mockWarnings), MockBoundaries.flowCoverage(flows, tests, existingTests));
     }
 
     /** The segment of a changed symbol (path + symbol of the new version), null for unchanged symbols. */
@@ -1090,7 +1098,8 @@ public final class Analyzer {
      * indirectly via other changed code), the components it is about (naming convention + called code) and its
      * profile (Test-Steckbrief, {@link TestProfiles}).
      */
-    private static List<TestInfo> tests(List<Work> works, List<FlowEdge> edges, List<DiffFile> files, TestProfiles profiles) {
+    private static List<TestInfo> tests(List<Work> works, List<FlowEdge> edges, List<DiffFile> files, TestProfiles profiles,
+                                        List<MockWarning> warnings) {
         Map<String, Work> byId = new HashMap<>();
         works.forEach(w -> byId.put(w.id, w));
         Map<String, List<FlowEdge>> outgoing = testGraph(edges);
@@ -1100,9 +1109,12 @@ public final class Analyzer {
             if (!isTestCase(t)) {
                 continue;
             }
-            Map<String, TestCoverage> covers = reach(t.id, outgoing, byId);
-            List<TestSubject> subjects = subjects(t, covers.values(), byId, files);
             String unit = unitOf(t.file.path());
+            String surroundings = TestProfiles.surroundingsOf(t.ctx.text, t.ctx.symbols, t.symbol);
+            List<String> mocks = profiles.mocks(surroundings, unit);
+            Map<String, TestCoverage> covers = reach(t.id, outgoing, byId, mocks);
+            warnings.addAll(mockWarnings(t.id, t.symbol.displayName(), t.file.path(), mocks, surroundings, works, profiles));
+            List<TestSubject> subjects = subjects(t, covers.values(), byId, files);
             result.add(new TestInfo(t.id, t.symbol.displayName(), t.file.path(), subjects, List.copyOf(covers.values()),
                     profiles.profile(t.file.path(), t.ctx.text, t.ctx.symbols, t.symbol,
                             targets(covers.values(), subjects, byId), unit)));
@@ -1125,9 +1137,12 @@ public final class Analyzer {
     /**
      * The changed code a test case reaches (breadth first, up to MAX_TEST_DEPTH calls): direct when called by the test
      * or its helpers (test helpers and fixtures are transparent), else indirect via the changed segment it came through.
-     * line: the call site in the test that leads there.
+     * line: the call site in the test that leads there. Code of a collaborator in mocks (TestProfile.mocks) is reached
+     * only as a mock: it is recorded as mocked and the walk does not continue into what it calls (Mock-Grenze).
      */
-    private static Map<String, TestCoverage> reach(String testId, Map<String, List<FlowEdge>> outgoing, Map<String, Work> byId) {
+    private static Map<String, TestCoverage> reach(String testId, Map<String, List<FlowEdge>> outgoing, Map<String, Work> byId,
+                                                   List<String> mocks) {
+        Set<String> mockKeys = MockBoundaries.keys(mocks);
         record Hop(String id, String via, Integer line, int depth) {
         }
         Map<String, TestCoverage> covers = new LinkedHashMap<>();
@@ -1142,7 +1157,11 @@ public final class Analyzer {
             }
             String via = h.via();
             if (!isTest(w)) { // a test helper/fixture is transparent
-                covers.put(w.id, new TestCoverage(w.id, h.via() == null, h.via(), h.line()));
+                boolean mocked = !mockKeys.isEmpty() && ownerKeys(w).stream().anyMatch(mockKeys::contains);
+                covers.put(w.id, new TestCoverage(w.id, h.via() == null, h.via(), h.line(), mocked));
+                if (mocked) {
+                    continue; // the test runs the mock, neither this code nor what it calls
+                }
                 via = w.id;
             }
             if (h.depth() < MAX_TEST_DEPTH) {
@@ -1152,6 +1171,40 @@ public final class Analyzer {
             }
         }
         return covers;
+    }
+
+    /** The names a segment's collaborator can be mocked by (see {@link MockBoundaries#ownerKeys}). */
+    private static Set<String> ownerKeys(Work w) {
+        return MockBoundaries.ownerKeys(w.file.path(), w.symbol == null ? null : w.symbol.kind(),
+                w.symbol == null ? null : w.symbol.name(), w.symbol == null ? null : w.symbol.container());
+    }
+
+    /**
+     * Mock warnings of one test: for every changed callable segment (no test code) of a collaborator the test mocks,
+     * the place where the test stubs or references that member by name (rules "testProfile.mockMembers"); a mocked
+     * collaborator whose changed members the test does not name gives no warning.
+     */
+    private static List<MockWarning> mockWarnings(String testId, String testName, String path, List<String> mocks,
+                                                  String surroundings, List<Work> works, TestProfiles profiles) {
+        if (MockBoundaries.keys(mocks).isEmpty()) {
+            return List.of();
+        }
+        List<MockWarning> result = new ArrayList<>();
+        for (Work w : works) {
+            if (!"symbol".equals(w.kind) || isTest(w) || !w.symbol.isCallable() || w.symbol.isTestBlock()
+                    || NOT_CALLED.contains(w.symbol.name())) {
+                continue;
+            }
+            String collaborator = MockBoundaries.mockedBy(mocks, ownerKeys(w));
+            if (collaborator == null) {
+                continue;
+            }
+            Integer line = profiles.mockedMemberLine(surroundings, w.symbol.name());
+            if (line != null) {
+                result.add(new MockWarning(testId, testName, path, line, w.id, w.symbol.name(), collaborator));
+            }
+        }
+        return result;
     }
 
     /** Changed code that can be called: functions, methods, components and constants with a specific enough name. */
@@ -1169,7 +1222,8 @@ public final class Analyzer {
      * are no segments; only test cases that reach changed code are returned, by path and line, with ids e1, e2, ….
      */
     private static List<ExistingTest> existingTests(List<Work> works, List<FlowEdge> edges, Model.RelatedTests related,
-                                                    Map<String, String> relatedSources, TestProfiles profiles) {
+                                                    Map<String, String> relatedSources, TestProfiles profiles,
+                                                    List<MockWarning> warnings) {
         if (related == null || related.files() == null || relatedSources == null || relatedSources.isEmpty()) {
             return List.of();
         }
@@ -1177,7 +1231,7 @@ public final class Analyzer {
         works.forEach(w -> byId.put(w.id, w));
         Map<String, List<FlowEdge>> graph = new HashMap<>(testGraph(edges));
         List<Work> callees = callees(works);
-        record Found(Work test, String reason, Map<String, TestCoverage> covers) {
+        record Found(Work test, String reason, Map<String, TestCoverage> covers, List<String> mocks, String surroundings) {
         }
         List<Found> found = new ArrayList<>();
         for (RelatedTestFile f : related.files()) {
@@ -1234,9 +1288,11 @@ public final class Analyzer {
             }
             for (Work t : nodes) {
                 if (t.symbol.kind().equals("test")) {
-                    Map<String, TestCoverage> covers = reach(t.id, graph, byId);
+                    String surroundings = TestProfiles.surroundingsOf(ctx.text, ctx.symbols, t.symbol);
+                    List<String> mocks = profiles.mocks(surroundings, unitOf(f.path()));
+                    Map<String, TestCoverage> covers = reach(t.id, graph, byId, mocks);
                     if (!covers.isEmpty()) {
-                        found.add(new Found(t, f.reason(), covers));
+                        found.add(new Found(t, f.reason(), covers, mocks, surroundings));
                     }
                 }
             }
@@ -1250,9 +1306,11 @@ public final class Analyzer {
             if (targets.isEmpty() && unit != null) {
                 targets = List.of(unit);
             }
-            result.add(new ExistingTest("e" + (result.size() + 1), t.file.path(), t.symbol.displayName(), t.symbol.startLine(),
+            String id = "e" + (result.size() + 1);
+            result.add(new ExistingTest(id, t.file.path(), t.symbol.displayName(), t.symbol.startLine(),
                     x.reason(), List.copyOf(x.covers().values()),
                     profiles.profile(t.file.path(), t.ctx.text, t.ctx.symbols, t.symbol, targets, unit)));
+            warnings.addAll(mockWarnings(id, t.symbol.displayName(), t.file.path(), x.mocks(), x.surroundings(), works, profiles));
         }
         return result;
     }
@@ -1260,20 +1318,23 @@ public final class Analyzer {
     /**
      * Coverage from the code's side: for every testable changed function, which changed tests reach it directly or
      * only via other changed code, which existing tests reach it, how many branches it has and how much of it changed
-     * (see Model.CodeCoverage).
+     * (see Model.CodeCoverage). A reach of a mock of it (TestCoverage.mocked) does not cover it; such tests are listed
+     * as mockedTests.
      */
     private List<CodeCoverage> coverage(List<Work> works, List<TestInfo> tests, List<ExistingTest> existingTests) {
         Map<String, List<String>> direct = new HashMap<>();
         Map<String, List<String>> indirect = new HashMap<>();
         Map<String, List<String>> existing = new HashMap<>();
+        Map<String, List<String>> mocked = new HashMap<>(); // only a mock of it is reached: not covered
         for (TestInfo t : tests) {
             for (TestCoverage c : t.covers()) {
-                (c.direct() ? direct : indirect).computeIfAbsent(c.segmentId(), k -> new ArrayList<>()).add(t.segmentId());
+                (c.mocked() ? mocked : c.direct() ? direct : indirect)
+                        .computeIfAbsent(c.segmentId(), k -> new ArrayList<>()).add(t.segmentId());
             }
         }
         for (ExistingTest t : existingTests) {
             for (TestCoverage c : t.covers()) {
-                existing.computeIfAbsent(c.segmentId(), k -> new ArrayList<>()).add(t.id());
+                (c.mocked() ? mocked : existing).computeIfAbsent(c.segmentId(), k -> new ArrayList<>()).add(t.id());
             }
         }
         List<CodeCoverage> result = new ArrayList<>();
@@ -1294,7 +1355,7 @@ public final class Analyzer {
             }
             int branches = Coverage.branches(body);
             result.add(new CodeCoverage(w.id, status, List.copyOf(d), List.copyOf(i), branches, changed, Coverage.risk(changed, branches),
-                    List.copyOf(e)));
+                    List.copyOf(e), List.copyOf(mocked.getOrDefault(w.id, List.of()))));
         }
         result.sort(Coverage.ORDER);
         return result;
@@ -1330,7 +1391,7 @@ public final class Analyzer {
         }
         for (TestCoverage c : covers) {
             Work w = byId.get(c.segmentId());
-            if (!c.direct() || subjects.containsKey(w.file.path())) {
+            if (!c.direct() || c.mocked() || subjects.containsKey(w.file.path())) {
                 continue;
             }
             String name = w.symbol != null && w.symbol.container() != null ? w.symbol.container() : fileName(w.file.path());
@@ -1346,14 +1407,14 @@ public final class Analyzer {
     }
 
     /**
-     * What a test exercises, short: the names of the changed code it calls directly (call order, no duplicates), else
-     * the component from the test file name.
+     * What a test exercises, short: the names of the changed code it calls directly (call order, no duplicates; not
+     * what it only reaches as a mock), else the component from the test file name.
      */
     private static List<String> targets(Collection<TestCoverage> covers, List<TestSubject> subjects, Map<String, Work> byId) {
         Set<String> names = new LinkedHashSet<>();
         for (TestCoverage c : covers) {
             Work w = byId.get(c.segmentId());
-            if (c.direct() && w != null) {
+            if (c.direct() && !c.mocked() && w != null) {
                 names.add(w.symbol != null ? w.symbol.name() : fileName(w.file.path()));
             }
         }

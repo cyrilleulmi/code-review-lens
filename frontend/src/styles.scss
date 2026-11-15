@@ -36,6 +36,11 @@
   --del-bg-ok: rgba(212, 98, 98, 0.06);
   --del-fg: #d46c6c;
 
+  /* Mock-Grenzen: what the tests really execute in a flow (step box, connections, legend) */
+  --run-tested: var(--ok);
+  --run-mocked: var(--warn);
+  --run-none: var(--del-fg);
+
   /* Spec-Diff: status of a test name (new / removed use --add-fg / --del-fg) */
   --spec-changed: #6ca0f0;
   --spec-renamed: #c39ae8;

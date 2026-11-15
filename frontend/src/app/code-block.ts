@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, ou
 import { Blame, Comment, Commit, DisplayLine, LineMark, Segment } from './api';
 import { assertionDrop, bendsExpectations, describeChange, newlyDisabled } from './expectations';
 import { highlightLines } from './highlight';
+import { mockBadgeTitle } from './mock-boundaries';
 import { Icon, SymbolBadge } from './icon';
 import { areaColor, areaLabel, areaOfSegment, langColor, langLabel } from './look';
 import { ReviewStore } from './review.store';
@@ -117,7 +118,7 @@ export class CodeBlock {
     const segs = this.store.segments();
     return (t?.covers ?? [])
       .filter((c) => segs.has(c.segmentId))
-      .map((c) => ({ id: c.segmentId, name: shortName(segs.get(c.segmentId)!), direct: c.direct }));
+      .map((c) => ({ id: c.segmentId, name: shortName(segs.get(c.segmentId)!), direct: c.direct, mocked: !!c.mocked }));
   });
 
   /** Testable changed function: is it reached by a changed test (static)? null for anything else. */
@@ -134,8 +135,16 @@ export class CodeBlock {
       : `${c.directTests.length} ${c.directTests.length === 1 ? 'Test ruft' : 'Tests rufen'} die Funktion direkt auf`
         + (c.indirectTests.length ? `, ${c.indirectTests.length} indirekt` : '');
     const old = c.status !== 'existing' && existing ? ` · dazu ${existing} ${existing === 1 ? 'bestehender Test' : 'bestehende Tests'}` : '';
+    const mocked = c.mockedTests?.length ?? 0;
+    const mocks = mocked ? ` · in ${mocked} ${mocked === 1 ? 'Test' : 'Tests'} nur gemockt (zählt nicht)` : '';
     const branches = `${c.branches} ${c.branches === 1 ? 'Verzweigung' : 'Verzweigungen'}`;
-    return { status: c.status, label, title: `${tests}${old} · ${branches} · statisch ermittelt – Klick: Abdeckung zeigen` };
+    return { status: c.status, label, title: `${tests}${old}${mocks} · ${branches} · statisch ermittelt – Klick: Abdeckung zeigen` };
+  });
+
+  /** Test case that mocks changed code (Mock-Grenzen): header badge with the stubbed members; null otherwise. */
+  protected readonly mockWarning = computed(() => {
+    const warnings = this.store.mockWarningsByTest().get(this.segment().id);
+    return warnings?.length ? { title: mockBadgeTitle(warnings) } : null;
   });
 
   /** Test case whose expectations changed or that is switched off (Spec-Diff): header badge; null otherwise. */

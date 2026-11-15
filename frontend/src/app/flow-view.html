@@ -43,6 +43,21 @@
   }
 </div>
 
+@if (hasRuns()) {
+  <div class="run-legend" aria-label="Was die Tests ausführen">
+    <span class="lbl">Tests:</span>
+    @for (r of runLegend; track r) {
+      <span class="run-key" [class]="'run-key run-' + r"><span class="swatch"></span>{{ stepLabels[r] }}</span>
+    }
+    <span class="sep">·</span>
+    <span class="edge-key" title="Ein Test läuft durch diesen Aufruf"><svg width="22" height="8"><path d="M1 4 H21" class="k-solid" /></svg>{{ edgeLabels.tested }}</span>
+    <span class="edge-key" title="Beide Seiten haben Tests, aber kein Test läuft durch den Aufruf (typisch: der REST-Aufruf zwischen Frontend und Backend)">
+      <svg width="22" height="8"><path d="M1 4 H21" class="k-separate" /></svg>{{ edgeLabels.separate }}</span>
+    <span class="edge-key" title="Nur eine Seite oder keine hat Tests"><svg width="22" height="8"><path d="M1 4 H21" class="k-faint" /></svg>ungetestet</span>
+    <span class="hint">statisch: Aufrufe aus Tests, gemockte Klassen zählen nicht</span>
+  </div>
+}
+
 <div class="diagram" role="list">
   <svg [attr.width]="d.width" [attr.height]="d.height" class="edges">
     <defs>
@@ -58,19 +73,26 @@
     @for (e of d.edges; track $index) {
       <path [attr.d]="e.d" class="edge" [class.hot]="hovered() === e.from || hovered() === e.to" [class.back]="e.back" [class.http]="e.http"
             [class.dim]="!!hovered() && hovered() !== e.from && hovered() !== e.to"
-            [style.stroke]="'var(--edge-' + e.c + ')'" [attr.marker-end]="'url(#arrow-' + e.c + ')'"><title>{{ e.http ? 'HTTP ' + e.via : e.via }}</title></path>
+            [class.run-separate]="e.run === 'separate'" [class.run-faint]="e.run === 'partial' || e.run === 'none'"
+            [style.stroke]="'var(--edge-' + e.c + ')'" [attr.marker-end]="'url(#arrow-' + e.c + ')'"><title>{{ e.title }}</title></path>
       @if (e.http) {
         <text class="http-label" [attr.x]="e.lx" [attr.y]="e.ly" text-anchor="middle" [style.fill]="'var(--edge-' + e.c + ')'">HTTP</text>
+      }
+      @if (e.run === 'separate') {
+        <text class="run-label" [attr.x]="e.lx" [attr.y]="e.ly + (e.http ? 22 : 12)" text-anchor="middle">einzeln<title>{{ e.title }}</title></text>
       }
     }
   </svg>
   @for (n of nodes(); track n.step.segmentId; let i = $index) {
     @let p = nodeProgress(n.step.segmentId);
+    @let run = runOf(n.step.segmentId);
     <div class="node" role="listitem" tabindex="0"
             [style.left.px]="n.x" [style.top.px]="n.y" [style.width.px]="d.nodeW" [style.height.px]="d.nodeH"
             [class.done]="p.total > 0 && p.ok === p.total" [class.quick]="n.segment.category === 'quick-wins'"
             [class.off]="!visible().has(n.step.segmentId)" [class.other-commit]="!store.inCommitSegment(n.step.segmentId)" [class.current]="stepIndex() === i" [class.root]="focusRoot() === n.step.segmentId"
             [style.--area]="areaColor(areaOf(n.segment))"
+            [class.run-tested]="run === 'tested'" [class.run-mocked]="run === 'mocked'" [class.run-none]="run === 'none'"
+            [title]="runTitle(n.step.segmentId)"
             (mouseenter)="hovered.set(n.step.segmentId)" (mouseleave)="hovered.set(null)"
             (click)="scrollTo(n.step.segmentId)" (keydown.enter)="scrollTo(n.step.segmentId)">
       <span class="no">{{ n.no }}</span>
@@ -82,6 +104,9 @@
           }
           {{ nodeHint(n.segment) }}</span>
       </span>
+      @if (mockWarned(n.step.segmentId)) {
+        <app-icon name="warning" [size]="13" class="mock-warn" />
+      }
       @if (p.total > 0 && p.ok === p.total) {
         <app-icon name="check" [size]="14" class="ok" />
       } @else {

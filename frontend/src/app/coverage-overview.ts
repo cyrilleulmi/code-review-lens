@@ -16,6 +16,8 @@ interface CoverageRow {
   tests: TestChip[];
   /** existing, unchanged tests reaching it (not in the diff: no navigation) */
   existing: ExistingChip[];
+  /** tests that reach only a mock of it (Mock-Grenzen): not counted; changed ones can be opened */
+  mocked: { id: string; name: string; changed: boolean }[];
   done: boolean;
 }
 
@@ -91,6 +93,13 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
                         <app-symbol-badge kind="test" /> <span class="tname">{{ e.name }}</span> <span class="tline">{{ e.where }}</span>
                       </span>
                     }
+                    @for (m of r.mocked; track m.id) {
+                      <button type="button" class="test mocked" [disabled]="!m.changed"
+                              (click)="$event.stopPropagation(); m.changed && testClick.emit(m.id)"
+                              title="Erreicht nur einen Mock dieser Funktion – zählt nicht als Test">
+                        <app-symbol-badge kind="test" /> <span class="tname">{{ m.name }}</span> <span class="mock-tag">Mock</span>
+                      </button>
+                    }
                     @if (!r.tests.length && !r.existing.length) {
                       <span class="none">kein Test erreicht sie</span>
                     }
@@ -134,6 +143,9 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
     .test.existing { border-style: dashed; border-color: var(--border); background: transparent; color: var(--fg-muted); cursor: default; }
     .test.existing:hover { border-color: var(--border-strong); }
     .tline { color: var(--fg-dim); font-size: 11px; }
+    .test.mocked { border-style: dashed; border-color: color-mix(in srgb, var(--run-mocked) 55%, transparent); color: var(--fg-muted); }
+    .test.mocked:disabled { cursor: default; }
+    .mock-tag { color: var(--run-mocked); font-size: 10px; font-weight: 600; }
     .basis { padding: 6px 12px; border-bottom: 1px solid var(--border); color: var(--fg-dim); font-size: 11.5px; }
     .basis p { display: flex; align-items: center; gap: 6px; margin: 0; }
     .basis p + p { margin-top: 3px; }
@@ -176,6 +188,7 @@ export class CoverageOverview {
             ...c.indirectTests.map((id) => ({ id, name: testName(id), direct: false })),
           ],
           existing: (c.existingTests ?? []).filter((id) => existing.has(id)).map((id) => existingChip(existing.get(id)!, c.segmentId)),
+          mocked: (c.mockedTests ?? []).map((id) => ({ id, name: this.store.testName()(id), changed: tests.has(id) })),
           done: p.total > 0 && p.ok === p.total,
         };
       });

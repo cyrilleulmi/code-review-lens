@@ -314,3 +314,146 @@
 .edge.hot {
   stroke-width: 2.6;
 }
+
+/* ------------------------------------------------------------- Mock-Grenzen: what the tests really execute */
+
+.run-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+  color: var(--fg-muted);
+  font-size: 11.5px;
+
+  .lbl {
+    color: var(--fg-dim);
+  }
+
+  .sep {
+    color: var(--fg-dim);
+  }
+
+  .hint {
+    margin-left: auto;
+    color: var(--fg-dim);
+  }
+}
+
+.run-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+
+  .swatch {
+    width: 12px;
+    height: 10px;
+    border: 1.5px solid var(--run);
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--run) 14%, transparent);
+  }
+
+  &.run-tested {
+    --run: var(--run-tested);
+  }
+
+  &.run-mocked {
+    --run: var(--run-mocked);
+  }
+
+  &.run-none {
+    --run: var(--run-none);
+
+    .swatch {
+      border-style: dashed;
+      background: transparent;
+    }
+  }
+}
+
+.edge-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: help;
+
+  path {
+    fill: none;
+    stroke: var(--fg-muted);
+    stroke-width: 1.6;
+  }
+
+  .k-separate {
+    stroke-dasharray: 2 3;
+  }
+
+  .k-faint {
+    opacity: 0.3;
+  }
+}
+
+/* step box coloured by run status (the layer stripe on the left and done/current/root keep their meaning) */
+.node {
+  &.run-tested {
+    --run: var(--run-tested);
+  }
+
+  &.run-mocked {
+    --run: var(--run-mocked);
+  }
+
+  &.run-none {
+    --run: var(--run-none);
+    border-style: dashed;
+  }
+
+  &.run-tested,
+  &.run-mocked,
+  &.run-none {
+    border-top-color: color-mix(in srgb, var(--run) 70%, transparent);
+    border-right-color: color-mix(in srgb, var(--run) 70%, transparent);
+    border-bottom-color: color-mix(in srgb, var(--run) 70%, transparent);
+
+    &:not(.done) {
+      background: color-mix(in srgb, var(--run) 6%, var(--bg-editor));
+    }
+
+    &:hover {
+      border-color: var(--accent);
+    }
+  }
+
+  &.run-none:not(.done) .name {
+    color: var(--fg-muted);
+  }
+
+  &.root,
+  &.current {
+    border-top-color: var(--accent);
+    border-right-color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .mock-warn {
+    flex: none;
+    color: var(--warn);
+  }
+}
+
+.edge.run-separate {
+  stroke-dasharray: 2 3;
+}
+
+.edge.run-faint {
+  opacity: 0.3;
+}
+
+.edge.run-faint.hot {
+  opacity: 0.8;
+}
+
+.run-label {
+  fill: var(--fg-muted);
+  font: 500 9px var(--font-ui);
+  cursor: help;
+}

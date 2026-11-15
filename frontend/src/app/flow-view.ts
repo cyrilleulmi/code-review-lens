@@ -10,10 +10,11 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { Flow, FlowEdge, FlowStep, Segment } from './api';
+import { Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from './api';
 import { CodeBlock } from './code-block';
 import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
+import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
 import { ReviewStore } from './review.store';
 
 interface Node {
@@ -79,6 +80,13 @@ export class FlowView {
   });
   protected readonly hovered = signal<string | null>(null);
   protected readonly indent = INDENT;
+
+  /** Mock-Grenzen: what the tests really execute, per step (segment id) and per edge ("from>to"). */
+  protected readonly runs = computed(() => flowRuns(this.store.flowCoverage().get(this.flow().id)));
+  protected readonly hasRuns = computed(() => this.runs().steps.size > 0);
+  protected readonly stepLabels = STEP_LABELS;
+  protected readonly edgeLabels = EDGE_LABELS;
+  protected readonly runLegend: StepRunStatus[] = ['tested', 'mocked', 'none'];
 
   /** The flow's place: each step needs an ok here (a step can be part of several flows). */
   protected readonly place = computed(() => 'flows/' + this.flow().id);
@@ -147,7 +155,9 @@ export class FlowView {
           ? `M ${x1} ${y1} C ${x1 + 40} ${y1}, ${x1 + 40} ${y2}, ${b.x + NODE_W} ${y2}`
           : `M ${x1} ${y1} C ${x1 + COL_GAP / 2} ${y1}, ${x2 - COL_GAP / 2} ${y2}, ${x2 - 4} ${y2}`;
         const http = e.kind === 'http';
-        return { d, from: e.from, to: e.to, back, http, via: e.via, c, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 4 };
+        const run = this.runs().edges.get(e.from + '>' + e.to);
+        const title = (http ? 'HTTP ' + e.via : e.via) + (run ? '\n' + edgeTitle(run, this.store.testName()) : '');
+        return { d, from: e.from, to: e.to, back, http, via: e.via, c, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 4, run: run?.status ?? null, title };
       });
     const width = Math.max(...nodes.map((n) => n.x + NODE_W), 0) + 48;
     const height = Math.max(...nodes.map((n) => n.y + NODE_H), 0) + 4;
@@ -254,6 +264,21 @@ export class FlowView {
       this.stepIndex.set(null);
       this.store.notify('Flow durchgearbeitet');
     }
+  }
+
+  /** Run status of a step (Mock-Grenzen), null without flow coverage (older analyses). */
+  protected runOf(id: string): StepRunStatus | null {
+    return this.runs().steps.get(id)?.status ?? null;
+  }
+
+  /** Tooltip of a step: which tests run it for real, which only mock it, and the mock warnings on it. */
+  protected runTitle(id: string): string {
+    return stepTitle(this.runs().steps.get(id), this.store.testName(), this.store.mockWarningsBySegment().get(id) ?? []);
+  }
+
+  /** A changed test stubs this step's function (mock warning). */
+  protected mockWarned(id: string): boolean {
+    return this.store.mockWarningsBySegment().has(id);
   }
 
   protected calledBy(node: Node): string | null {

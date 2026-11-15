@@ -23,6 +23,7 @@ import {
   providerInfo,
 } from './api';
 import { AcceptStatus, Acceptance, accept, acceptedElsewhere, acceptedIn, statusOf } from './acceptance';
+import { groupWarnings, testNamer } from './mock-boundaries';
 
 export type Selection =
   | { kind: 'overview' }
@@ -249,6 +250,14 @@ export class ReviewStore {
     }
     return map;
   });
+
+  /** Mock-Grenzen: tests that mock changed code, by test id (code block badge) and by mocked segment (flow marker). */
+  readonly mockWarningsByTest = computed(() => groupWarnings(this.bundle()?.analysis.mockWarnings, 'test'));
+  readonly mockWarningsBySegment = computed(() => groupWarnings(this.bundle()?.analysis.mockWarnings, 'segmentId'));
+  /** Mock-Grenzen of each flow (what the tests really execute), by flow id. */
+  readonly flowCoverage = computed(() => new Map((this.bundle()?.analysis.flowCoverage ?? []).map((c) => [c.flowId, c])));
+  /** Test name by id: changed tests by segment id, existing tests by "e1" …. */
+  readonly testName = computed(() => testNamer(this.bundle()?.analysis));
 
   /** Spec-Diff entries of tests with changed expectations or switched off, by segment id (code block badge). */
   readonly expectationsBySegment = computed(() => {

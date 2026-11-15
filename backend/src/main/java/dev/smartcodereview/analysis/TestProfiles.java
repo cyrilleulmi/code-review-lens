@@ -372,6 +372,40 @@ public final class TestProfiles {
 
     // ------------------------------------------------------------------ mocks
 
+    /**
+     * The collaborators a test case replaces (as in its profile) - needed before the profile, to stop the walk through
+     * the call graph at them (Mock-Grenzen, see {@link MockBoundaries}). unit: the unit under test, may be null.
+     */
+    List<String> mocks(CodeText text, List<Symbol> symbols, Symbol test, String unit) {
+        return mocks(surroundings(text, symbols, test), unit);
+    }
+
+    /** The test's surroundings (see the class comment): line-aligned with the file, other tests and suites blanked. */
+    static String surroundingsOf(CodeText text, List<Symbol> symbols, Symbol test) {
+        return surroundings(text, symbols, test);
+    }
+
+    /**
+     * Where a test stubs or references the member `member` of a mock (rules "mockMembers", first template with a match):
+     * the 1-based line in the surroundings (= in the file), null when the test does not name it.
+     */
+    Integer mockedMemberLine(String surroundings, String member) {
+        String quoted = Pattern.quote(member);
+        for (String template : rules.mockMembers()) {
+            Matcher m = Pattern.compile(template.replace("{member}", quoted)).matcher(surroundings);
+            if (m.find()) {
+                int line = 1;
+                for (int i = 0; i < m.start(); i++) {
+                    if (surroundings.charAt(i) == '\n') {
+                        line++;
+                    }
+                }
+                return line;
+            }
+        }
+        return null;
+    }
+
     /** Collaborators replaced around the test, in order of appearance, without duplicates and without the unit. */
     List<String> mocks(String surroundings, String unit) {
         record Found(int at, String name) {
@@ -443,7 +477,7 @@ public final class TestProfiles {
     }
 
     /** For comparing names across conventions: player-view, PlayerView, player_view -> playerview. */
-    private static String comparable(String name) {
+    static String comparable(String name) {
         return name.replaceAll("[^\\p{L}\\d]", "").toLowerCase(Locale.ROOT);
     }
 

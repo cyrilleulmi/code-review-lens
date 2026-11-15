@@ -77,12 +77,14 @@ public final class Rules {
      * argument lists of calls to the targets and of the inputCalls. inputCalls: regexes ending at the "(" of a call
      * whose arguments are inputs (HTTP requests: given().body(, http.put(, …). errorName / edgeName: regexes searched
      * in the test name split into lower-case words. assertionKinds: kind -> regexes on an assertion statement,
-     * checked in this order (existence additionally takes "weakAssertions"). A rules file without the section or
-     * without one of its keys uses the built-in value for that key.
+     * checked in this order (existence additionally takes "weakAssertions"). mockMembers: regex templates with the
+     * placeholder {member} (replaced by the quoted name of a changed function of a mocked collaborator) that find where
+     * a test stubs or references that member (Mock-Grenzen); the first template with a match gives the line. A rules
+     * file without the section or without one of its keys uses the built-in value for that key.
      */
     public record TestProfileRules(List<Pattern> errorCode, List<Pattern> errorName, List<Pattern> edgeName,
                                    List<Pattern> edgeCode, List<Pattern> inputCalls, Map<String, List<Pattern>> assertionKinds,
-                                   List<MockRule> mocks, List<LevelRule> levels) {
+                                   List<MockRule> mocks, List<LevelRule> levels, List<String> mockMembers) {
     }
 
     /**
@@ -203,7 +205,7 @@ public final class Rules {
         }
         return new TestProfileRules(patterns(key.apply("errorCode"), false), patterns(key.apply("errorName"), false),
                 patterns(key.apply("edgeName"), false), patterns(key.apply("edgeCode"), false),
-                patterns(key.apply("inputCalls"), false), kinds, mocks, levels);
+                patterns(key.apply("inputCalls"), false), kinds, mocks, levels, strings(key.apply("mockMembers")));
     }
 
     /** A list of regexes; taken from the built-in rules when the given rules file has no such section. */

@@ -245,6 +245,8 @@ export interface TestCoverage {
   direct: boolean;
   via: string | null;
   line: number | null;
+  /** only a mock of it is reached (its collaborator is mocked in the test); the walk stops there (absent in older analyses) */
+  mocked?: boolean;
 }
 
 export interface TestInfo {
@@ -313,6 +315,8 @@ export interface CodeCoverage {
   risk: number;
   /** ids of existing tests (Analysis.existingTests) reaching it, also for direct/indirect (absent in older analyses) */
   existingTests?: string[] | null;
+  /** ids of changed and existing tests that only reach a mock of it - they do not count as coverage (absent in older analyses) */
+  mockedTests?: string[] | null;
 }
 
 /** Why an existing test file was loaded: named after the changed file (mirrored/same directory), elsewhere, or by prefix. */
@@ -436,6 +440,52 @@ export interface Settings {
   disabledCategories: string[];
 }
 
+/**
+ * A test that mocks code this PR changes (Model.MockWarning): it replaces a collaborator with a changed function and
+ * stubs or references that member by name - it pins the old behaviour.
+ */
+export interface MockWarning {
+  /** segment id of a changed test, or the id of an existing test ("e1") */
+  test: string;
+  testName: string;
+  path: string;
+  /** where the test or its setup stubs / references the member */
+  line: number | null;
+  /** the mocked changed segment */
+  segmentId: string;
+  member: string;
+  collaborator: string;
+}
+
+/** tested: a test runs it for real · mocked: tests only reach a mock of it · none: no test reaches it */
+export type StepRunStatus = 'tested' | 'mocked' | 'none';
+/** tested: one test crosses the call · separate: both ends tested, but by different tests · partial: one end · none */
+export type EdgeRunStatus = 'tested' | 'separate' | 'partial' | 'none';
+
+export interface StepCoverage {
+  segmentId: string;
+  status: StepRunStatus;
+  /** tests reaching it for real (segment ids of changed tests, "e1" … for existing ones) */
+  tests: string[];
+  /** tests reaching only a mock of it */
+  mockedBy: string[];
+}
+
+export interface EdgeCoverage {
+  from: string;
+  to: string;
+  status: EdgeRunStatus;
+  /** tests that cross the call */
+  tests: string[];
+}
+
+/** Mock-Grenzen of a flow: what the tests really execute, per step and per edge (Model.FlowCoverage). */
+export interface FlowCoverage {
+  flowId: string;
+  steps: StepCoverage[];
+  edges: EdgeCoverage[];
+}
+
 export interface Analysis {
   schemaVersion: number;
   generatedAt: string;
@@ -458,6 +508,10 @@ export interface Analysis {
   existingTests?: ExistingTest[] | null;
   /** the existing test files selected and loaded for that; null for a whole repository and older analyses */
   relatedTests?: RelatedTests | null;
+  /** Mock-Grenzen: tests that mock changed code, by path and line (absent in older analyses) */
+  mockWarnings?: MockWarning[] | null;
+  /** Mock-Grenzen: per flow what the tests really execute (absent in older analyses) */
+  flowCoverage?: FlowCoverage[] | null;
 }
 
 export type CaseMatrixKind = 'similar' | 'parameterized';

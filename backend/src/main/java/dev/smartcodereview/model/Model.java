@@ -199,10 +199,12 @@ public final class Model {
 
     /**
      * Changed code reached from a test. direct: called by the test (or its helpers); otherwise reached via
-     * the changed segment `via`. line: call site in the test (new-file line) that leads there.
+     * the changed segment `via`. line: call site in the test (new-file line) that leads there. mocked: the segment
+     * belongs to a collaborator the test replaces (TestProfile.mocks) - the test reaches only the mock, not this code,
+     * and the walk through the call graph stops there (Mock-Grenze); false in analyses of older versions.
      */
     @RegisterForReflection
-    public record TestCoverage(String segmentId, boolean direct, String via, Integer line) {
+    public record TestCoverage(String segmentId, boolean direct, String via, Integer line, boolean mocked) {
     }
 
     /**
@@ -266,11 +268,14 @@ public final class Model {
      * in the whole function (if, case, catch, for, while, &&, ||, ternary ?). changedLines: non-blank changed
      * lines. risk = changedLines × (1 + branches), for sorting. existingTests: ids of the existing tests
      * (Analysis.existingTests) that reach it, directly or indirectly - also when the status is direct/indirect (old
-     * tests that run through the change and may need adapting); null in analyses of older versions.
+     * tests that run through the change and may need adapting); null in analyses of older versions. Reaches of a
+     * mocked collaborator (TestCoverage.mocked) do not count for the status or these lists; mockedTests: ids of the
+     * changed and existing tests that only reach a mock of it (null in analyses of older versions).
      */
     @RegisterForReflection
     public record CodeCoverage(String segmentId, String status, List<String> directTests, List<String> indirectTests,
-                               int branches, int changedLines, int risk, List<String> existingTests) {
+                               int branches, int changedLines, int risk, List<String> existingTests,
+                               List<String> mockedTests) {
     }
 
     /**
@@ -387,13 +392,51 @@ public final class Model {
     }
 
     /**
+     * A test that mocks code this PR changes (Mock-Grenzen): it replaces a collaborator with a changed callable segment
+     * and stubs or references that member by name - it pins the old behaviour of that function. test: the test's
+     * segment id (changed test) or ExistingTest.id ("e1"); testName / path: of the test; line: where the test or its
+     * setup stubs / references the member (rules "testProfile.mockMembers"); segmentId: the mocked changed segment;
+     * member: its name; collaborator: the mocked collaborator as in TestProfile.mocks.
+     */
+    @RegisterForReflection
+    public record MockWarning(String test, String testName, String path, Integer line, String segmentId, String member,
+                              String collaborator) {
+    }
+
+    /**
+     * How the tests reach one step of a flow. status: "tested" (a test reaches it really, directly or via other changed
+     * code), "mocked" (only reaches of a mock of it), "none". tests: ids of the tests that reach it really (changed
+     * tests: segment id, existing tests: "e1", …); mockedBy: ids of the tests that only reach a mock of it.
+     */
+    @RegisterForReflection
+    public record StepCoverage(String segmentId, String status, List<String> tests, List<String> mockedBy) {
+    }
+
+    /**
+     * How the tests cover one connection of a flow. status: "tested" (a test reaches both ends really through this
+     * call, i.e. crosses it), "separate" (both ends are tested really, but no single test crosses it - typical for the
+     * REST hop between frontend and backend, http edges are never crossed), "partial" (only one end is tested really),
+     * "none". tests: the tests that cross it.
+     */
+    @RegisterForReflection
+    public record EdgeCoverage(String from, String to, String status, List<String> tests) {
+    }
+
+    /** Mock-Grenzen of a flow: per step and per edge (in the order of Flow.steps / Flow.edges) what the tests execute. */
+    @RegisterForReflection
+    public record FlowCoverage(String flowId, List<StepCoverage> steps, List<EdgeCoverage> edges) {
+    }
+
+    /**
      * coverage: testable changed functions, "none" first, then "indirect", then "direct", each by risk (highest
      * first); null in analyses of older versions. specs: the test names of every changed test file as old/new outline
      * (Spec-Diff), in path order; null in analyses of older versions. caseMatrices: similar and parameterised tests of
      * the changed test files as tables input → expected (Fallmatrix), by path and line; null in analyses of older
      * versions. existingTests: test cases of existing, unchanged test files that reach changed code (Bestehende
      * Tests), by path and line; relatedTests: which existing test files were selected and loaded for that (null for a
-     * whole repository and in analyses of older versions).
+     * whole repository and in analyses of older versions). mockWarnings: tests that mock changed code, by path and
+     * line; flowCoverage: per flow (same order as flows) which steps and edges the tests really execute (Mock-Grenzen);
+     * both null in analyses of older versions.
      */
     @RegisterForReflection
     public record Analysis(int schemaVersion, String generatedAt, String headSha, String rulesHash,
@@ -401,7 +444,8 @@ public final class Model {
                            List<TestInfo> tests, ArchitectureInfo architecture,
                            List<Component> components, List<ComponentEdge> componentEdges,
                            List<CodeCoverage> coverage, List<SpecFile> specs, List<CaseMatrix> caseMatrices,
-                           List<ExistingTest> existingTests, RelatedTests relatedTests) {
+                           List<ExistingTest> existingTests, RelatedTests relatedTests,
+                           List<MockWarning> mockWarnings, List<FlowCoverage> flowCoverage) {
     }
 
     /**

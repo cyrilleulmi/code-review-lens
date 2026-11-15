@@ -29,6 +29,11 @@
       <app-icon [name]="ex.warn ? 'warning' : 'info'" [size]="11" /> {{ ex.label }}
     </span>
   }
+  @if (mockWarning(); as mw) {
+    <span class="expect warn" [title]="mw.title" (click)="$event.stopPropagation()">
+      <app-icon name="warning" [size]="11" /> mockt geänderten Code
+    </span>
+  }
   @if (calledBy(); as by) {
     <button class="called-by" type="button" [style.--c]="calledByColor()" (click)="$event.stopPropagation(); calledByClick.emit()">
       <app-icon name="arrowLeft" [size]="12" /> {{ by }}
@@ -63,8 +68,9 @@
     @if (covers().length) {
       <span class="lbl"><app-icon name="test" [size]="12" /> Testet:</span>
       @for (c of covers(); track c.id) {
-        <button type="button" class="place" [class.indirect]="!c.direct" (click)="goSegment(c.id, $event)"
-                [title]="c.direct ? 'Direkt aufgerufen' : 'Indirekt erreicht'">{{ c.name }}</button>
+        <button type="button" class="place" [class.indirect]="!c.direct" [class.mocked]="c.mocked" (click)="goSegment(c.id, $event)"
+                [title]="c.mocked ? 'Nur als Mock erreicht – der echte Code läuft in diesem Test nicht' : c.direct ? 'Direkt aufgerufen' : 'Indirekt erreicht'">
+          {{ c.name }}@if (c.mocked) {<span class="mock-tag">Mock</span>}</button>
       }
     }
     @if (testedBy().length) {

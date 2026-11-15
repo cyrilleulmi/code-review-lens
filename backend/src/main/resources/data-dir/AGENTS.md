@@ -43,7 +43,8 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
 4. `segments[].places` → every group id that shows the segment (e.g. `quick-wins/mapper`, `flows/flow-2`).
    A segment at several places needs one ok per place.
 5. `tests[]` → per changed test case: `subjects` (components under test) and `covers` (reached segments,
-   `direct` or `via` another segment, `line` = call site in the test). `segments[].testedBy` is the reverse.
+   `direct` or `via` another segment, `line` = call site in the test, `mocked` = the segment belongs to a collaborator
+   the test mocks: only the mock runs, the walk stops there). `segments[].testedBy` is the reverse (without mocked).
    `profile` (Test-Steckbrief, pattern-based, rules section `testProfile`; null in older analyses): `targets`
    (names of the changed code it calls directly, else the unit from the file name), `scenario` (error = expects a
    failure | edge = null/empty/limit values in the inputs of the code under test: arguments of calls to the targets and of HTTP requests, parameter sources - not fixtures or expected values | normal) with `scenarioBy` (code | name) and `scenarioReason` (the
@@ -60,7 +61,8 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    calls it), `indirect` (only reached via other changed code), `existing` (no changed test reaches it, an existing
    unchanged test does), `none` (no test reaches it); `directTests` / `indirectTests` = test segment ids;
    `existingTests` = ids of `existingTests[]` reaching it (also for direct/indirect: old tests running through the
-   change that may need adapting); `branches` = decision points in the whole function
+   change that may need adapting); reaches of a mock never count, `mockedTests` = tests that only reach a mock of it
+   (a function only reached mocked is `none`); `branches` = decision points in the whole function
    (if, case, catch, for, while, &&, ||, ternary ?); `changedLines` = non-blank, non-brace changed lines;
    `risk` = changedLines × (1 + branches). Sorted: `none`, `indirect`, `existing`, `direct`, each by risk
    descending. Missing (null) in analyses of older versions.
@@ -72,6 +74,13 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    with `path`, `reason` (mirror = named after the changed file, in the mirrored test directory or next to it |
    name = same name elsewhere, nearest | prefix = name starts with the changed file's name), `sources` (the changed
    files it was selected for), `loaded`. Rules section `relatedTests` (`limit`, `mirrors`).
+   Mock-Grenzen (null in older analyses): `mockWarnings[]` = tests that mock changed code - a mocked collaborator
+   has a changed function and the test stubs or names that member (rules `testProfile.mockMembers`): `test` (segment
+   id or `e1`), `testName`, `path`, `line` (of the stub), `segmentId` + `member` (the mocked changed function),
+   `collaborator`. Such a test pins the OLD behaviour of that function: check it first. `flowCoverage[]` = per flow
+   (`flowId`, same order as `flows`) `steps[]` (`segmentId`, `status` tested | mocked | none, `tests`, `mockedBy`)
+   and `edges[]` (`from`, `to`, `status` tested = one test crosses the call | separate = both ends tested, no
+   single test crosses it, e.g. the REST hop | partial = one end tested | none, `tests` = crossing tests).
    `specs[]` (Spec-Diff) = per changed test file (`path`, `previousPath`, file `status`) the test names as an
    outline, old against new version: `entries[]` with `name`, `suites` (enclosing suites, outermost first; JUnit:
    test class and @Nested classes), `kind` (suite | test), `status` (added | removed | changed | renamed |

@@ -496,6 +496,17 @@
     border-style: dashed;
   }
 
+  /* reached only as a mock (Mock-Grenzen): the real code does not run in this test */
+  &.mocked {
+    border-color: color-mix(in srgb, var(--run-mocked) 55%, transparent);
+
+    .mock-tag {
+      color: var(--run-mocked);
+      font-size: 10px;
+      font-weight: 600;
+    }
+  }
+
   &.test {
     color: #c793e0;
   }
