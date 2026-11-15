@@ -24,7 +24,8 @@ reviews/<provider>/<owner>/<repo>/<number>/      provider: github | gitlab; nest
   review.json          THE ONLY REAL STATE: which changed lines are marked "ok" (per place)
   comments.json        cache of the last comment fetch (GitHub or GitLab)
   commits.json         derived: the PR's commits (oldest first) and `lines` path -> line key -> commit sha
-                       (added line: commit that last wrote it; deleted line: commit that removed it)
+                       (added line: commit that last wrote it; deleted line: commit that removed it), and
+                       `findings[]` (Commit-Bezug der Tests, see below)
   blame/<path>.json    cache: git blame of a file at the PR head (`ranges` of new-file lines -> sha)
 ```
 
@@ -183,7 +184,17 @@ move it to `ok` and remove it from `okAt`.
 * `GET  /api/prs/<provider>/<owner>/<repo>/<number>` – bundle (also creates the files above)
 * `POST …/reanalyse` – recompute analysis.json (e.g. after editing rules.json)
 * `GET  …/commits` – commits.json (computed on first call); to review commit by commit, mark the line keys
-  that `lines` assigns to one sha
+  that `lines` assigns to one sha. `findings[]` (Commit-Bezug der Tests; recomputed at every call from the stored
+  attribution and the current analysis; null in older files, empty for number 0) = what the ORDER of the commits
+  says about the tests: `kind` expectation-later (an assertion of a test written in this PR was changed by a later
+  commit than the test's declaration line - `level` warn when that commit changes only test files or its title
+  adjusts tests like "fix tests", else info) | fix-without-test (warn: commit title is a fix, it changes source code
+  and no test file) | logic-without-test (info: commit changes testable code = `coverage[]` and no test file, and no
+  later commit changes a test reaching it); `sha`, `title` (the commit), `path`, `lineKey` (where it shows; null if
+  none of its lines is left), `segmentId`, `testSegmentId` (expectation-later), `detail` (German). Merge commits,
+  side-branch commits (`mergedVia`) and commits without a known diff are skipped. Patterns: rules section
+  `commitChecks` (`fixTitles`, `testAdjustTitles`, `notCode`). A warn finding is worth a look: was the test bent to
+  the code, does the fix need a test?
 * `GET  …/blame?path=<changed file>` – git blame at the PR head
 * `GET  …/comments`, `POST …/comments` – comments; POST publishes IMMEDIATELY on GitHub/GitLab:
   inline `{"path":"src/a.ts","line":12,"side":"RIGHT","body":"…"}`, reply `{"inReplyTo":123,"body":"…"}`,

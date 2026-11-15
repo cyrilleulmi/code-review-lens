@@ -740,5 +740,37 @@
       "**/*Fixtures.*",
       "**/*Mother.*"
     ]
+  },
+  "commitChecks": {
+    "$comment": "Commit-Bezug der Tests (docs/05-analyse.md, 7a): findings from the order of the PR's commits, computed with commits.json. fixTitles: regexes (find) on a commit title that make it a fix - a fix that changes source code and no test file is 'Fix ohne Test'. testAdjustTitles: regexes on titles of commits that adjust tests ('fix tests', 'Tests anpassen'); such a commit is never a fix, and an expectation it changes later counts as a strong signal. notCode: globs of files in a code language that are no source code to be tested (build scripts, generated code, tool configuration). Test files are those of the path rule of category 'tests' and the setupImpact.supportPaths. A rules file without this section, or without one of its keys, uses the built-in value for that key.",
+    "fixTitles": [
+      "(?i)\\bfix(e[sd]|ing)?\\b",
+      "(?i)\\bbug(s|fix|fixes)?\\b",
+      "(?i)\\bhotfix(es)?\\b",
+      "(?i)\\brepair(s|ed|ing)?\\b",
+      "(?i)\\bkorrigier\\w*",
+      "(?i)\\bbeheb\\w*|\\bbehoben\\b"
+    ],
+    "testAdjustTitles": [
+      "(?i)\\b(fix|adjust|update|repair|correct|align)(e[sd]|ing|s)?\\s+(\\w+\\s+){0,3}(tests?|specs?|expectations?|assertions?|snapshots?)\\b",
+      "(?i)\\b(make|get|keep)s?\\s+(the\\s+)?(tests?|specs?|build|ci|pipeline)\\s+(pass\\w*|green|work\\w*|run\\w*)",
+      "(?i)\\b(tests?|specs?|erwartungen|assertions?)\\s+(\\w+\\s+){0,2}(anpassen|angepasst|korrigier\\w*|repar\\w*|gefixt|fixen|grün)(?!\\w)",
+      "(?i)\\b(anpassen|korrigieren|reparieren|fixen)\\s+(der\\s+|die\\s+)?(tests?|specs?|erwartungen)\\b"
+    ],
+    "notCode": [
+      "**/build.gradle*",
+      "**/settings.gradle*",
+      "**/*.config.*",
+      "**/*.conf.js",
+      "**/*.generated.*",
+      "**/generated/**",
+      "**/gen/**",
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/build/generated/**",
+      "**/target/generated-sources/**",
+      "**/*.min.js",
+      "**/*.d.ts"
+    ]
   }
 }

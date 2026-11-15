@@ -24,6 +24,7 @@ import {
   providerInfo,
 } from './api';
 import { AcceptStatus, Acceptance, accept, acceptedElsewhere, acceptedIn, statusOf } from './acceptance';
+import { laterExpectationsByTest } from './commit-findings';
 import { groupWarnings, testNamer } from './mock-boundaries';
 
 export type Selection =
@@ -158,6 +159,12 @@ export class ReviewStore {
     }
     return map;
   });
+
+  /** Commit-Bezug der Tests (computed with the commits; empty until they are loaded). */
+  readonly commitFindings = computed(() => this.commits()?.findings ?? []);
+
+  /** Tests whose expectation a later commit changed: test segment id -> findings (expectation-later). */
+  readonly laterExpectations = computed(() => laterExpectationsByTest(this.commitFindings()));
 
   /** The commit the views are filtered to, if any. */
   readonly activeCommit = computed(() => {

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { isFlowView, isTestsView, ownerLabel } from './api';
 import { CommitList } from './commit-list';
+import { findingSummary, findingTotals } from './commit-findings';
 import { expectationTotals, expectationWarning } from './expectations';
 import { ComponentDiagram } from './component-diagram';
 import { Icon } from './icon';
@@ -24,6 +25,14 @@ export class Overview {
   protected readonly sending = signal(false);
 
   protected readonly pr = computed(() => this.store.bundle()!.pr);
+  /** Commit-Bezug der Tests: «⚠ 2 Commit-Hinweise · 4 Infos» next to the commits heading; null without findings. */
+  protected readonly commitFindings = computed(() => {
+    const findings = this.store.commitFindings();
+    const text = findingSummary(findings);
+    if (!text) return null;
+    const t = findingTotals(findings);
+    return { text, warn: t.warn > 0, commits: t.commits };
+  });
   protected readonly allCategories = computed(() =>
     this.store.bundle()!.analysis.categories.map((c) => {
       const ids = c.groups.flatMap((g) => g.segmentIds);

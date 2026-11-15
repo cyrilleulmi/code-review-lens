@@ -69,13 +69,17 @@ Alle Dateien sind UTF-8, eingerückt und werden **atomar** geschrieben (temporä
   "commits": [{ "sha": "76ce6d0d…", "title": "Flow connectors: one lane per connection", "author": "Cyrille",
                 "date": "2026-11-13T16:18:00Z", "parents": ["69f7bd1f…"], "additions": 68, "deletions": 22, "files": ["…"] }],
   "lines": { "frontend/src/app/flow-view.ts": { "N186": "76ce6d0d…", "O116": "69f7bd1f…" } },
-  "mergedVia": { "<sha eines Commits aus einem gemergten Seitenzweig>": "<sha des Merge-Commits>" }
+  "mergedVia": { "<sha eines Commits aus einem gemergten Seitenzweig>": "<sha des Merge-Commits>" },
+  "findings": [{ "kind": "expectation-later", "level": "warn", "sha": "406522ac…", "title": "fix tests",
+                 "path": "backend/src/test/java/…/JerseyNumberValidationTest.java", "lineKey": "N62",
+                 "segmentId": "s37", "testSegmentId": "s37", "detail": "Test geschrieben in eec1cd1 …" }]
 }
 ```
 
 * `commits` stehen in Reihenfolge, die ältesten zuerst.
 * `lines` ordnet die Zeilenschlüssel des PR-Diffs (dieselben wie in `lineKeys`) einem Commit zu. Hinzugefügte Zeilen gehören zum Commit, der sie zuletzt geschrieben hat, gelöschte Zeilen zu dem, der sie entfernt hat. Zeilen ohne sichere Zuordnung fehlen.
-* Wird neu berechnet, wenn sich `headSha` oder der Algorithmus (`version`) ändert. Die Datei ist abgeleitet und kann gelöscht werden.
+* `findings` (Commit-Bezug der Tests): was die Reihenfolge der Commits über die Tests sagt – `expectation-later` (eine Assertion eines in diesem PR geschriebenen Tests wurde in einem späteren Commit geändert; `warn`, wenn dieser nur Tests ändert oder «fix tests» heisst), `fix-without-test` (Fix-Commit ändert Code, aber keinen Test), `logic-without-test` (Info: Commit ändert testbaren Code ohne Test, und kein späterer Commit ändert einen Test dafür). `sha`/`title` = der Commit, `path`/`lineKey` = wo es sich zeigt, `testSegmentId` = der Test. `null` in Dateien älterer Versionen, leer für das ganze Repository (Abschnitt 7a in [05-analyse.md](05-analyse.md)).
+* Die Zuordnung wird neu berechnet, wenn sich `headSha` oder der Algorithmus (`version`) ändert. `findings` werden bei jedem Abruf aus der Zuordnung und der aktuellen `analysis.json` neu bestimmt und bei einer Änderung zurückgeschrieben. Die Datei ist abgeleitet und kann gelöscht werden.
 
 ## `analysis.json` (Auszug)
 

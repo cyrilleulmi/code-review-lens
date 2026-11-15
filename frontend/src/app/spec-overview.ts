@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
-import { AffectedTest, ExpectationChange, SetupImpact, SpecEntry, SpecFile, SpecStatus } from './api';
+import { AffectedTest, CommitFinding, ExpectationChange, SetupImpact, SpecEntry, SpecFile, SpecStatus } from './api';
+import { laterExpectationText, newLineOf } from './commit-findings';
 import { ExpectationMark, KIND_LABELS, expectationMarks, expectationTotals, expectationWarning } from './expectations';
 import {
   affectedStatus, countUnchangedAffected, impactNotice, impactWarns, markerTitle, sortImpacts, unchangedAffected,
@@ -30,6 +31,8 @@ interface SpecRow {
   changes: ExpectationChange[];
   /** unchanged test whose setup, test data or helper changed (Wirkung von Setup und Testdaten), else null */
   affectedBy: SetupImpact[] | null;
+  /** assertions of this test changed by a later commit than the test itself (Commit-Bezug), empty if none */
+  later: CommitFinding[];
 }
 
 interface SpecFileView {
@@ -64,7 +67,8 @@ function noteworthy(e: SpecEntry): boolean {
  * jump to it; removed entries open the file view at the deleted lines. Tests whose expectations changed (assertion
  * changed, removed, weakened, test switched off) carry a warning marker that expands to the old/new assertions.
  * Changed setup blocks, fixtures and test helpers are listed with the tests they affect (Wirkung von Setup und
- * Testdaten); unchanged tests among them stay visible with the marker «Setup geändert».
+ * Testdaten); unchanged tests among them stay visible with the marker «Setup geändert». Tests whose expectation a
+ * later commit changed carry «Erwartung nachträglich in <sha> «<title>» geändert» (Commit-Bezug; click: the line).
  */
 @Component({
   selector: 'app-spec-overview',
@@ -188,6 +192,16 @@ function noteworthy(e: SpecEntry): boolean {
                 <button type="button" class="xmarks warn setup-mark" [title]="markTitle(by)"
                         (click)="openImpact(by[0], $event)" (keydown.enter)="$event.stopPropagation()">
                   <app-icon name="warning" [size]="11" /> Setup geändert
+                </button>
+              }
+              @if (r.later.length) {
+                @let lf = r.later[0];
+                <button type="button" class="xmarks later-mark" [class.warn]="laterWarns(r)" [title]="laterTitle(r)"
+                        (click)="openLater(r, lf, $event)" (keydown.enter)="$event.stopPropagation()">
+                  <app-icon [name]="laterWarns(r) ? 'warning' : 'info'" [size]="11" /> {{ laterText(lf) }}
+                  @if (r.later.length > 1) {
+                    <span class="xmark">+{{ r.later.length - 1 }}</span>
+                  }
                 </button>
               }
               <span class="where">{{ e.line ?? e.oldLine }}</span>
@@ -317,6 +331,7 @@ function noteworthy(e: SpecEntry): boolean {
     .astatus.s-unchanged { color: var(--warn); font-weight: 600; }
     .impacts .more { border-bottom: 0; padding-left: 12px; }
     .setup-mark { cursor: pointer; }
+    .later-mark { cursor: pointer; max-width: 46ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .box > :last-child { border-bottom: 0; }
   `,
 })
@@ -371,6 +386,7 @@ export class SpecOverview {
   protected readonly files = computed((): SpecFileView[] => {
     const segs = this.store.segments();
     const affected = unchangedAffected(this.store.setupImpacts());
+    const later = this.store.laterExpectations();
     return (this.store.bundle()?.analysis.specs ?? []).map((file) => {
       const entries = file.entries;
       const byLine = affected.get(file.path);
@@ -401,6 +417,7 @@ export class SpecOverview {
           warn: marks.some((m) => m.warn),
           changes: entry.expectations ?? [],
           affectedBy: affectedBy(entry),
+          later: (segmentId ? later.get(segmentId) : undefined) ?? [],
         };
       });
       const unchanged = entries.filter((e) => e.kind === 'test' && !shown(e)).length;
@@ -464,6 +481,28 @@ export class SpecOverview {
 
   protected hasSegment(id: string | null): boolean {
     return !!id && this.store.segments().has(id);
+  }
+
+  protected laterText(f: CommitFinding): string {
+    return laterExpectationText(f);
+  }
+
+  protected laterWarns(r: SpecRow): boolean {
+    return r.later.some((f) => f.level === 'warn');
+  }
+
+  protected laterTitle(r: SpecRow): string {
+    return r.later.map((f) => f.detail).join('\n\n') + '\n– aus der Reihenfolge der Commits (Commit-Bezug). Klick: zur Assertion springen';
+  }
+
+  /** Expectation changed by a later commit: show the assertion line in the test's code block. */
+  protected openLater(r: SpecRow, f: CommitFinding, event: Event): void {
+    event.stopPropagation();
+    const id = r.entry.segmentId;
+    const line = newLineOf(f.lineKey);
+    if (id && this.store.segments().has(id) && line != null) {
+      this.lineClick.emit({ segmentId: id, line, old: false });
+    }
   }
 
   /** The changed setup block / fixture / helper: jump to its code. */

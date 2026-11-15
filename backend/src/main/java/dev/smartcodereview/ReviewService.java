@@ -8,12 +8,14 @@ import dev.smartcodereview.analysis.OpenApi;
 import dev.smartcodereview.analysis.Rules;
 import dev.smartcodereview.analysis.Specs;
 import dev.smartcodereview.commits.Attribution;
+import dev.smartcodereview.commits.CommitChecks;
 import dev.smartcodereview.model.Model;
 import dev.smartcodereview.model.Model.Account;
 import dev.smartcodereview.model.Model.ApiOperation;
 import dev.smartcodereview.model.Model.Analysis;
 import dev.smartcodereview.model.Model.Blame;
 import dev.smartcodereview.model.Model.Commit;
+import dev.smartcodereview.model.Model.CommitFinding;
 import dev.smartcodereview.model.Model.Commits;
 import dev.smartcodereview.model.Model.Comment;
 import dev.smartcodereview.model.Model.DiffFile;
@@ -58,6 +60,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -629,57 +632,98 @@ public class ReviewService {
     /**
      * The PR's commits and which commit made each changed line (commits.json; recomputed when the head or the
      * attribution algorithm changed). Commit diffs never change, so they are fetched only here. On a provider
-     * error the last result is returned if there is one, else an empty result carrying the error.
+     * error the last result is returned if there is one, else an empty result carrying the error. The findings
+     * (Commit-Bezug der Tests) are recomputed at every call from the attribution and the current analysis, so they
+     * follow a new analysis or new rules without fetching the commits again; the file is rewritten when they changed.
      */
     public Commits commits(PrRef ref) {
         Snapshot snapshot = snapshot(ref);
         Path file = prDirFile(ref, "commits.json");
         synchronized (locks.computeIfAbsent(ref.key() + "#commits", k -> new Object())) {
-            Optional<Commits> cached = store.read(file, Commits.class);
-            if (cached.filter(c -> c.version() == Attribution.VERSION && c.error() == null
-                    && snapshot.pr().headSha().equals(c.headSha())).isPresent()) {
-                return cached.get();
+            Commits attributed = attributed(ref, snapshot, file);
+            List<CommitFinding> findings = commitFindings(ref, snapshot, attributed);
+            if (Objects.equals(findings, attributed.findings())) {
+                return attributed;
             }
-            try {
-                ReviewProvider provider = provider(ref.provider());
-                // whole repository: the newest commits of the branch (older lines stay without commit; blame shows them)
-                List<Commit> commits = ref.number() == 0
-                        ? provider.branchCommits(ref, snapshot.pr().headSha(), REPOSITORY_COMMITS)
-                        : provider.commits(ref);
-                Map<String, List<DiffFile>> diffs = new ConcurrentHashMap<>();
-                Semaphore limit = new Semaphore(6);
-                try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
-                    List<Future<?>> tasks = new ArrayList<>();
-                    for (Commit c : commits) {
-                        tasks.add(pool.submit(() -> {
-                            limit.acquireUninterruptibly();
-                            try {
-                                diffs.put(c.sha(), provider.commitDiff(ref, c.sha()));
-                            } finally {
-                                limit.release();
-                            }
-                        }));
-                    }
-                    for (Future<?> t : tasks) {
+            Commits result = attributed.withFindings(findings);
+            if (result.error() == null && snapshot.pr().headSha().equals(result.headSha())) {
+                store.write(file, result);
+            }
+            return result;
+        }
+    }
+
+    /**
+     * Commit-Bezug der Tests ({@link CommitChecks}) for the current analysis; empty for a whole repository, without
+     * commits, and when the analysis cannot be had (logged - the commits stay usable).
+     */
+    private List<CommitFinding> commitFindings(PrRef ref, Snapshot snapshot, Commits commits) {
+        if (ref.number() == 0 || commits.commits().isEmpty() || !snapshot.pr().headSha().equals(commits.headSha())) {
+            return List.of();
+        }
+        try {
+            Analysis analysis;
+            synchronized (lock(ref)) {
+                analysis = currentAnalysis(ref, snapshot);
+            }
+            Map<String, String> sources = new HashMap<>();
+            Path dir = store.sourcesDir(ref);
+            if (analysis.tests() != null) {
+                analysis.tests().stream().map(Model.TestInfo::path).distinct().forEach(p ->
+                        store.readText(DataStore.resolveInside(dir, p)).ifPresent(s -> sources.put(p, s)));
+            }
+            return CommitChecks.find(rules(), commits, analysis, sources);
+        } catch (RuntimeException e) {
+            Log.warnf("Commit findings of %s not available: %s", ref.key(), e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** The attribution part of commits.json: the stored one if it is current, else computed now (commits() stores it). */
+    private Commits attributed(PrRef ref, Snapshot snapshot, Path file) {
+        Optional<Commits> cached = store.read(file, Commits.class);
+        if (cached.filter(c -> c.version() == Attribution.VERSION && c.error() == null
+                && snapshot.pr().headSha().equals(c.headSha())).isPresent()) {
+            return cached.get();
+        }
+        try {
+            ReviewProvider provider = provider(ref.provider());
+            // whole repository: the newest commits of the branch (older lines stay without commit; blame shows them)
+            List<Commit> commits = ref.number() == 0
+                    ? provider.branchCommits(ref, snapshot.pr().headSha(), REPOSITORY_COMMITS)
+                    : provider.commits(ref);
+            Map<String, List<DiffFile>> diffs = new ConcurrentHashMap<>();
+            Semaphore limit = new Semaphore(6);
+            try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+                List<Future<?>> tasks = new ArrayList<>();
+                for (Commit c : commits) {
+                    tasks.add(pool.submit(() -> {
+                        limit.acquireUninterruptibly();
                         try {
-                            t.get();
-                        } catch (Exception e) {
-                            Log.warnf("Commit diff of %s not available: %s", ref.key(), e.getMessage());
+                            diffs.put(c.sha(), provider.commitDiff(ref, c.sha()));
+                        } finally {
+                            limit.release();
                         }
+                    }));
+                }
+                for (Future<?> t : tasks) {
+                    try {
+                        t.get();
+                    } catch (Exception e) {
+                        Log.warnf("Commit diff of %s not available: %s", ref.key(), e.getMessage());
                     }
                 }
-                long t0 = System.currentTimeMillis();
-                Attribution.Result r = Attribution.compute(snapshot, commits, diffs);
-                Log.infof("Attributed %s to %d commits in %d ms", ref.key(), commits.size(), System.currentTimeMillis() - t0);
-                Commits result = new Commits(Attribution.VERSION, snapshot.pr().headSha(), Instant.now().toString(),
-                        r.ordered(), r.lines(), r.mergedVia(), null);
-                store.write(file, result);
-                return result;
-            } catch (ProviderException e) {
-                Log.warnf("Commits of %s not available: %s", ref.key(), e.getMessage());
-                return cached.orElseGet(() -> new Commits(Attribution.VERSION, snapshot.pr().headSha(), Instant.now().toString(),
-                        List.of(), Map.of(), Map.of(), e.getMessage()));
             }
+            long t0 = System.currentTimeMillis();
+            Attribution.Result r = Attribution.compute(snapshot, commits, diffs);
+            Log.infof("Attributed %s to %d commits in %d ms", ref.key(), commits.size(), System.currentTimeMillis() - t0);
+            Commits result = new Commits(Attribution.VERSION, snapshot.pr().headSha(), Instant.now().toString(),
+                    r.ordered(), r.lines(), r.mergedVia(), null);
+            return result; // written with its findings by commits()
+        } catch (ProviderException e) {
+            Log.warnf("Commits of %s not available: %s", ref.key(), e.getMessage());
+            return cached.orElseGet(() -> new Commits(Attribution.VERSION, snapshot.pr().headSha(), Instant.now().toString(),
+                    List.of(), Map.of(), Map.of(), e.getMessage()));
         }
     }
 

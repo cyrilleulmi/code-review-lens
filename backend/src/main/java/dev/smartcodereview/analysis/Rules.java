@@ -116,6 +116,27 @@ public final class Rules {
         }
     }
 
+    /**
+     * Commit-Bezug der Tests (see dev.smartcodereview.commits.CommitChecks), rules section "commitChecks". fixTitles:
+     * regexes on a commit title that make it a fix; testAdjustTitles: regexes on a title that make it a test adjustment
+     * ("fix tests", "Tests anpassen") - such a commit is no fix, and it strengthens a later changed expectation;
+     * notCode: globs of files in a code language that are no source code to be tested (build scripts, generated code,
+     * tool configuration). A rules file without the section or without one of its keys uses the built-in value.
+     */
+    public record CommitCheckRules(List<Pattern> fixTitles, List<Pattern> testAdjustTitles, List<Pattern> notCode) {
+        public boolean isFix(String title) {
+            return title != null && fixTitles.stream().anyMatch(p -> p.matcher(title).find()) && !isTestAdjust(title);
+        }
+
+        public boolean isTestAdjust(String title) {
+            return title != null && testAdjustTitles.stream().anyMatch(p -> p.matcher(title).find());
+        }
+
+        public boolean isNotCode(String path) {
+            return notCode.stream().anyMatch(p -> p.matcher(path).matches());
+        }
+    }
+
     /** A source directory prefix and the test directory prefix that mirrors it (rules "relatedTests.mirrors"). */
     public record Mirror(String from, String to) {
     }
@@ -235,13 +256,16 @@ public final class Rules {
     public final Map<String, SmellRule> testSmells;
     /** Wirkung von Setup und Testdaten: test-support paths (see {@link SetupImpactRules}). */
     public final SetupImpactRules setupImpact;
+    /** Commit-Bezug der Tests: fix and test-adjustment titles, files that are no source code (see {@link CommitCheckRules}). */
+    public final CommitCheckRules commitChecks;
     public final String hash;
 
     private Rules(List<CategoryDef> categories, List<Rule> rules, List<Rule> aspects, List<Rule> concerns,
                   List<Pattern> assertions, List<Pattern> weakAssertions, List<Pattern> disabledTests,
                   TestProfileRules testProfile, CaseMatrixRules caseMatrix, RelatedTestRules relatedTests,
                   CaseCheckRules caseCheck, List<TestRule> testRules, List<Pattern> testHttpCalls,
-                  Map<String, SmellRule> testSmells, SetupImpactRules setupImpact, String hash) {
+                  Map<String, SmellRule> testSmells, SetupImpactRules setupImpact, CommitCheckRules commitChecks,
+                  String hash) {
         this.categories = categories;
         this.rules = rules;
         this.aspects = aspects;
@@ -257,6 +281,7 @@ public final class Rules {
         this.testHttpCalls = testHttpCalls;
         this.testSmells = testSmells;
         this.setupImpact = setupImpact;
+        this.commitChecks = commitChecks;
         this.hash = hash;
     }
 
@@ -272,7 +297,15 @@ public final class Rules {
                 testProfile(root.path("testProfile")), caseMatrix(root.path("caseMatrix")),
                 relatedTests(root.path("relatedTests")), caseCheck(root.path("caseCheck")), testRules(root.path("testRules")),
                 section(root, "testHttpCalls"), testSmells(root.path("testSmells")),
-                setupImpact(root.path("setupImpact")), hash);
+                setupImpact(root.path("setupImpact")), commitChecks(root.path("commitChecks")), hash);
+    }
+
+    /** The "commitChecks" section; every missing key is taken from the built-in rules. */
+    private static CommitCheckRules commitChecks(JsonNode node) {
+        JsonNode builtIn = defaults().path("commitChecks");
+        java.util.function.Function<String, JsonNode> key = k -> node.has(k) ? node.get(k) : builtIn.path(k);
+        return new CommitCheckRules(patterns(key.apply("fixTitles"), false), patterns(key.apply("testAdjustTitles"), false),
+                patterns(key.apply("notCode"), true));
     }
 
     /** The "setupImpact" section; every missing key is taken from the built-in rules. */

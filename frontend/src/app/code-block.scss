@@ -438,6 +438,17 @@
   &:hover {
     background: color-mix(in srgb, var(--warn) 18%, transparent);
   }
+
+  // information only (Commit-Bezug: expectation changed together with other code)
+  &.info {
+    border-color: var(--border-strong);
+    background: none;
+    color: var(--fg-muted);
+
+    &:hover {
+      background: var(--bg-hover);
+    }
+  }
 }
 
 .check.part {

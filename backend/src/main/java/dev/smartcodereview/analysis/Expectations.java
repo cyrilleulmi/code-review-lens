@@ -123,7 +123,7 @@ public final class Expectations {
      * The first line (1-based) of a symbol that is not blank, a comment or an annotation (also not a continuation
      * line of an annotation whose arguments span lines): its declaration.
      */
-    static int declarationLine(CodeText text, Symbol s) {
+    public static int declarationLine(CodeText text, Symbol s) {
         int last = Math.min(s.endLine(), text.lines.size());
         for (int li = s.startLine(); li <= last; li++) {
             String t = text.code.get(li - 1).strip();

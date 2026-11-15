@@ -119,6 +119,34 @@ export interface Commits {
   /** commit of a merged side branch -> merge commit its changes are attributed to */
   mergedVia: Record<string, string>;
   error: string | null;
+  /** Commit-Bezug der Tests, by commit order; null from older versions */
+  findings?: CommitFinding[] | null;
+}
+
+/**
+ * expectation-later: an assertion of a test written in this PR was changed by a later commit; fix-without-test: a fix
+ * commit changes code and no test; logic-without-test: a commit changes testable code and no test, and no later
+ * commit changes a test that reaches it.
+ */
+export type CommitFindingKind = 'expectation-later' | 'fix-without-test' | 'logic-without-test';
+
+/** Commit-Bezug der Tests (Model.CommitFinding): what the order of the PR's commits says about its tests. */
+export interface CommitFinding {
+  kind: CommitFindingKind;
+  /** expectation-later is a warning when the later commit changes only tests or adjusts tests by its title */
+  level: 'warn' | 'info';
+  /** the commit the finding is about */
+  sha: string;
+  title: string;
+  path: string;
+  /** where it shows (the assertion line, the commit's first line in the function or file); null if none is left */
+  lineKey: string | null;
+  /** segment of that line */
+  segmentId: string | null;
+  /** the test case (expectation-later) */
+  testSegmentId: string | null;
+  /** German explanation */
+  detail: string;
 }
 
 export interface BlameRange {

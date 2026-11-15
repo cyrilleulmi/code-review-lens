@@ -3,6 +3,7 @@ import { Blame, Comment, Commit, DisplayLine, LineMark, Segment } from './api';
 import { smellBadgeText, smellBadgeTitle, smellDetail, smellText, smellsByLine } from './test-smells';
 import { impactBadge } from './setup-impact';
 import { findingDetail, findingsByLine, lineChipText } from './case-checks';
+import { laterExpectationChip, laterExpectationText, laterExpectationsByLine } from './commit-findings';
 import { ruleChipText, ruleDetail, unmetByLine } from './rule-checks';
 import { assertionDrop, bendsExpectations, describeChange, newlyDisabled } from './expectations';
 import { highlightLines } from './highlight';
@@ -201,6 +202,36 @@ export class CodeBlock {
     });
     return result;
   });
+
+  /**
+   * Commit-Bezug: line index -> chips on assertions a later commit changed than the one that wrote the test
+   * («Erwartung nachträglich geändert (406522a)»); click shows only that commit.
+   */
+  protected readonly laterNotes = computed(() => {
+    const result = new Map<number, { text: string; title: string; sha: string; warn: boolean }[]>();
+    const byLine = laterExpectationsByLine(this.store.commitFindings(), this.segment().id);
+    if (!byLine.size) {
+      return result;
+    }
+    this.segment().lines.forEach((line, i) => {
+      const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
+      if (found) {
+        result.set(i, found.map((f) => ({
+          text: laterExpectationChip(f),
+          title: `${laterExpectationText(f)}\n${f.detail}\n– Klick: nur diesen Commit zeigen`,
+          sha: f.sha,
+          warn: f.level === 'warn',
+        })));
+      }
+    });
+    return result;
+  });
+
+  /** Shows only the changes of a commit (line chip of the Commit-Bezug). */
+  protected showCommit(sha: string, event: Event): void {
+    event.stopPropagation();
+    this.store.setCommitFilter(sha);
+  }
 
   /** Test case with Test-Smells: header badge («Smell: keine Assertion»); null when it has none. */
   protected readonly smellBadge = computed(() => {

@@ -130,6 +130,7 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | FR-COM-05 | Das System muss zwischen Commits vor- und zurückschalten lassen. | Toolbar ← →, überspringt Commits ohne Zeilen im Diff; × hebt den Filter auf. | M |
 | FR-COM-06 | Der gewählte Commit muss in der URL stehen. | `…/c/<sha>/…`; Öffnen der URL stellt den Filter wieder her. | M |
 | FR-COM-07 | Die Zuordnung muss gecacht und bei neuem Head oder neuem Algorithmus neu berechnet werden. | `commits.json` mit `headSha` und `version`. | M |
+| FR-COM-08 | Das System muss aus der Reihenfolge der Commits ableiten, was sie über die Tests sagen (Commit-Bezug der Tests). | Regel-Abschnitt `commitChecks` (`fixTitles`, `testAdjustTitles`, `notCode`). `expectation-later`: eine Assertion-Zeile (Erkennung wie FR-ANA-17) eines im PR geschriebenen Tests gehört zu einem späteren Commit als seine Deklarationszeile – `warn`, wenn dieser Commit nur Testdateien ändert oder sein Titel Tests anpasst, sonst `info`. `fix-without-test` (`warn`): Fix-Titel (nicht Test-Anpassung), ändert Quellcode und keine Testdatei. `logic-without-test` (`info`): Commit ändert eine testbare Funktion (`coverage[]`) und keine Testdatei, kein späterer Commit ändert einen erreichenden Test, nicht «Test zuerst», nicht schon «Fix ohne Test». Merge-Commits, Seitenzweige (`mergedVia`) und Commits ohne Diff übersprungen; leer für das ganze Repository. Ergebnis `commits.json` → `findings[]`, bei jedem Abruf aus Zuordnung und aktueller Analyse neu berechnet. Im UI Chips «Fix ohne Test», «passt Erwartungen an», «Logik ohne Test» an den Commits, Zahl bei «Commits» auf der Übersicht, Markierung «Erwartung nachträglich in <sha> «<Titel>» geändert» in der Spezifikation (Klick springt zur Assertion), Chip auf der Assertion-Zeile (Klick filtert auf den Commit) (B10g, 05-analyse 7a). | T: CommitChecksTest (9 Tests); commit-findings.spec.ts; M: spongecoach#13 (`9cb532b` Fix ohne Test, `406522a` passt Erwartungen an) |
 
 ## 9. Blame (FR-BLA)
 
@@ -223,13 +224,15 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | `analysis/SetupImpactTest` | 15 | FR-ANA-25 |
 | `frontend/src/app/setup-impact.spec.ts` | 4 | FR-ANA-25 (Hinweise, Abzeichen, Markierung in der Gliederung, Zählung für Zusammenfassung und Kachel) |
 | `commits/AttributionTest` | 7 | FR-COM-02, -03 |
+| `commits/CommitChecksTest` | 9 | FR-COM-08 |
+| `frontend/src/app/commit-findings.spec.ts` | 3 | FR-COM-08 (Chips pro Commit, Zählung für die Übersicht, Markierung und Zeilen-Chips) |
 | `gitlab/ProviderUrlTest` | 3 | FR-ZUG-03, FR-REP-01 |
 | `repo/RepositorySnapshotTest` | 1 | FR-REP-02, -03 |
 
 **Anforderungen ohne automatischen Test** (nur manuell oder gar nicht geprüft). Sie sind die Grundlage für V-02 bis V-04 in [11-verbesserungen.md](11-verbesserungen.md):
 
 * Alle Provider-Abbildungen (FR-ZUG-01, -02, -04, -06, FR-SNP-01, FR-KOM-01 bis -04, FR-COM-01, FR-BLA-05, FR-REP-04): kein Test gegen aufgezeichnete Antworten von GitHub/GitLab. GitHub-Blame (GraphQL) und alle GitLab-Teile von Commits, Blame und Repository-Modus sind auch manuell noch nicht live geprüft.
-* `ReviewService` (Caching, Invalidierung, `mark` mit Schreiben/Lesen von `review.json`, Fortschritt, Laden der bestehenden Tests für FR-ANA-20): kein Test, nur über `LineAcceptance` indirekt.
+* `ReviewService` (Caching, Invalidierung, `mark` mit Schreiben/Lesen von `review.json`, Fortschritt, Laden der bestehenden Tests für FR-ANA-20, Neuberechnen der Commit-Befunde für FR-COM-08): kein Test, nur über `LineAcceptance` indirekt.
 * REST-API (FR-AGT-01): kein `@QuarkusTest`.
-* UI (FR-UI-*, FR-COM-04 bis -06, FR-BLA-01 bis -04): ausser `acceptance.spec.ts`, `expectations.spec.ts`, `test-profile.spec.ts`, `case-matrices.spec.ts`, `existing-tests.spec.ts`, `mock-boundaries.spec.ts`, `case-checks.spec.ts`, `rule-checks.spec.ts`, `test-smells.spec.ts` und `setup-impact.spec.ts` (reine Hilfsfunktionen) keine Frontend-Tests.
+* UI (FR-UI-*, FR-COM-04 bis -06, FR-BLA-01 bis -04): ausser `acceptance.spec.ts`, `expectations.spec.ts`, `test-profile.spec.ts`, `case-matrices.spec.ts`, `existing-tests.spec.ts`, `mock-boundaries.spec.ts`, `case-checks.spec.ts`, `rule-checks.spec.ts`, `test-smells.spec.ts`, `setup-impact.spec.ts` und `commit-findings.spec.ts` (reine Hilfsfunktionen) keine Frontend-Tests.
 * NFR-10 (Pfad-Sicherheit), FR-BET-06 (Health).

@@ -159,6 +159,11 @@
                 <app-icon name="warning" [size]="10" /> {{ n.text }}
               </button>
             }
+            @for (n of laterNotes().get(i) ?? []; track $index) {
+              <button type="button" class="case-note" [class.info]="!n.warn" (click)="showCommit(n.sha, $event)" [title]="n.title">
+                <app-icon name="commit" [size]="10" /> {{ n.text }}
+              </button>
+            }
             @for (n of ruleNotes().get(i) ?? []; track $index) {
               <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
                 <app-icon name="shield" [size]="10" /> {{ n.text }}

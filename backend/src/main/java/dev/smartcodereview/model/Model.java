@@ -108,10 +108,39 @@ public final class Model {
      * wrote it, a deleted line to the commit that removed it; lines that could not be attributed are missing.
      * mergedVia: commits that are not on the first-parent chain of the head (merged side branches) -> the merge
      * commit their changes are attributed to. version: of the attribution algorithm (recomputed when it changes).
+     * findings: what the order of the commits says about the tests (Commit-Bezug der Tests, see CommitFinding), by
+     * commit order; recomputed whenever commits.json is served, from the stored attribution and the current analysis;
+     * empty for a whole repository, null in files of older versions (and before they are computed).
      */
     @RegisterForReflection
     public record Commits(int version, String headSha, String generatedAt, List<Commit> commits,
-                          Map<String, Map<String, String>> lines, Map<String, String> mergedVia, String error) {
+                          Map<String, Map<String, String>> lines, Map<String, String> mergedVia, String error,
+                          List<CommitFinding> findings) {
+        public Commits(int version, String headSha, String generatedAt, List<Commit> commits,
+                       Map<String, Map<String, String>> lines, Map<String, String> mergedVia, String error) {
+            this(version, headSha, generatedAt, commits, lines, mergedVia, error, null);
+        }
+
+        public Commits withFindings(List<CommitFinding> list) {
+            return new Commits(version, headSha, generatedAt, commits, lines, mergedVia, error, list);
+        }
+    }
+
+    /**
+     * Commit-Bezug der Tests (pattern-based, rules section "commitChecks"; see commits/CommitChecks): a finding from the
+     * order of the PR's commits. kind: "expectation-later" (an assertion of a test written in this PR was changed by a
+     * later commit than the test's declaration line) | "fix-without-test" (a commit whose title is a fix changes source
+     * code and no test file) | "logic-without-test" (a commit changes testable code - CodeCoverage - and no test file,
+     * and no later commit changes a test that reaches that code). level: "warn" | "info" (expectation-later is "warn"
+     * when the later commit changes only test files or its title is a test adjustment, else "info"; fix-without-test
+     * always "warn", logic-without-test always "info"). sha / title: the commit the finding is about. path / lineKey:
+     * where it shows (the assertion line, the first line of the commit in the changed function or file; lineKey null
+     * when no line of the commit is left in the PR diff). segmentId: the segment of that line (null if none);
+     * testSegmentId: the test case (expectation-later), else null. detail: German explanation.
+     */
+    @RegisterForReflection
+    public record CommitFinding(String kind, String level, String sha, String title, String path, String lineKey,
+                                String segmentId, String testSegmentId, String detail) {
     }
 
     /** Lines start..end (1-based, inclusive) of a file were last changed by commit sha. */
