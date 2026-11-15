@@ -75,7 +75,7 @@ Jede Kategorie ist ein eigenes **Modul** (`CategoryModule`) mit derselben Schnit
 |---|---|
 | `id()`, `info()` | Name, Icon und **Selbstbeschreibung**: `summary` (wofür), `builds` (wie sie aufgebaut ist: welcher Code hier landet und warum), `divides` (wie sie in Gruppen unterteilt wird). Das UI zeigt `builds`/`divides` unter dem Titel der Kategorie («Wie entsteht diese Kategorie?») und als Tooltip in der Übersicht. |
 | `groups(context)` | Die Gruppen der Kategorie, berechnet aus `SegmentFacts` (Pfad, Regel-Kategorie und -Gruppe, Schicht, Frontend-Aspekt, Querschnittsthemen, Adapter-Richtung, «Teil eines Flusses») und den Flüssen. |
-| `view()` | `groups` (Standard: Liste von Gruppen mit Code-Blöcken) oder eine **Ausnahme mit eigener Ansicht**: `flow` (Aufrufdiagramm, Blöcke in Aufrufreihenfolge), `tests` (Gruppen plus Spezifikation der Testnamen, Abdeckung des geänderten Codes und Testübersicht, Abschnitte 5a–5c). Das UI entscheidet danach, nicht nach der Kategorie-Id. |
+| `view()` | `groups` (Standard: Liste von Gruppen mit Code-Blöcken) oder eine **Ausnahme mit eigener Ansicht**: `flow` (Aufrufdiagramm, Blöcke in Aufrufreihenfolge), `tests` (Gruppen plus Spezifikation der Testnamen, Abdeckung des geänderten Codes, Erwartungs-Regeln und Testübersicht, Abschnitte 5a–5i). Das UI entscheidet danach, nicht nach der Kategorie-Id. |
 | `origin()` | `builtin` (fest eingebaut, z. B. Datenflüsse), `rules` (aus der Regeldatei); später `external`. |
 
 **Entkoppelt:** Ein Modul kennt kein anderes Modul und den `Analyzer` nicht. Hinzufügen oder Entfernen einer Kategorie ändert nur ihre eigene Liste; ein Segment, das mehrere Module beanspruchen, wird einfach in jedem zu einem eigenen Ort (Abschnitt 4). Die Module werden aus den Kategorien der Regeldatei erzeugt (`CategoryModules`): Kategorie mit Regeln → Regel-Gruppen; `domain`/`usecases`/`application`/`adapters` → zusätzlich die Architektur-Schicht; Kategorie mit `aspects` → Frontend-Aspekt; mit `concerns` → Querschnittsthema; `flows` → eine Gruppe pro Fluss mit eigener Ansicht; `logic` → der Rest ausserhalb von Flüssen.
@@ -353,6 +353,75 @@ Beispiel spongecoach#13: `PlayerResource.isInRange` (`jerseyNumber < 1`, `jersey
 
 **Im UI:** In der Abdeckung steht unter jeder Funktion mit Befunden eine Zeile wie «⚠ NotFoundException ungeprüft · Grenze 1…99: 1, 99 fehlen · jerseyNumberChangedAt ungeprüft · 5 Verzweigungen, 2 Tests» (in Warnfarbe, wenn etwas offen ist, sonst «n Fälle geprüft» in Ok-Farbe); ein Klick klappt die ganze Liste auf: geprüfte Befunde mit ✓ und den Tests, offene mit Warnzeichen, der Verzweigungs-Hinweis neutral. Ein Klick auf einen Befund springt zu seiner Zeile im Code. Funktionen mit offenen Befunden tragen ein Warnzeichen neben dem Namen – auch unter «Direkt getestet» –, die Gruppenköpfe zählen sie, und der Kopf der Box fasst zusammen: «7 offene Fälle in 4 Funktionen» (der Verzweigungs-Hinweis zählt nicht). Im Code-Block steht auf der Zeile eines offenen Befunds ein Chip in Warnfarbe – «kein Test erwartet NotFoundException», «Grenze nicht geprüft: 1, 99», «Wirkung ungeprüft: jerseyNumberChangedAt» (Tooltip: der ganze Befund; Klick: Abdeckung zeigen). Unter einer Fallmatrix mit Grenzen steht «Grenze im Code (PlayerResource.isInRange): jerseyNumber 1…99 – Grenzwerte 0, 1, 99, 100 – in dieser Matrix fehlen 1, 99» (Klick: zum Code).
 
+### 5i. Erwartungs-Regeln
+
+Teams kennen Regeln wie «eine geänderte Berechtigungsprüfung braucht einen Test für den verweigerten Fall» oder «ein neuer Endpunkt braucht einen Test über HTTP». Die **Erwartungs-Regeln** machen sie explizit: **wenn X geändert wird, wird ein Test der Form Y erwartet** – datengetrieben im Regel-Abschnitt `testRules`, pro PR geprüft. Ergebnis: `ruleChecks[]` (Code in `analysis/TestRules`). Musterbasiert und deterministisch, ohne KI. Für das ganze Repository (Abschnitt 8) gibt es keine Prüfungen: Jeder Endpunkt wäre «neu», jede Regel würde auf allen Code greifen – das wäre ein Audit, kein Review.
+
+**Auslöser** (`when`): Geprüft wird jedes geänderte Segment mit Quelltext ausserhalb der Tests – Funktionen, Methoden, Klassen, Code auf Modulebene. **Alle** angegebenen Bedingungen müssen gelten; eine Regel ohne Bedingung greift nie. Pro Segment greift eine Regel höchstens einmal.
+
+| Schlüssel | Bedingung |
+|---|---|
+| `changed` | Regex (Liste); einer kommt in einer **geänderten** Zeile des Segments vor (hinzugefügt oder gelöscht; Zeilen nur mit Kommentar zählen nicht). |
+| `text` | Regex; einer kommt im Code des Segments vor (die ganze Funktion mit Annotationen, bei Klassen die ganze Klasse). |
+| `concern` | Querschnittsthema (`security`, `messaging`, `transactions`, `persistence`) oder eine Liste davon; eines davon gilt für das Segment (3c). |
+| `endpoint` | `true`: das Segment ist ein **geänderter HTTP-Endpunkt** – Methode mit JAX-RS-/Spring-Annotationen, Next.js-Route, Express-/Go-Routenregistrierung in seinen Zeilen, Implementierung einer OpenAPI-Operation (wie in 3b). |
+| `newEndpoint` | `true`: ein solcher Endpunkt, dessen **Deklarationszeile hinzugefügt** ist (bei Methoden die Zeile mit dem Namen, bei Registrierungen deren Zeile). |
+| `kinds` | Symbolarten (`method`, `function`, `class`, `component`, `const` …; Code auf Modulebene: `module`). |
+| `paths` | Globs auf die Datei. |
+
+Die **auslösende Zeile** (`line`) ist die erste geänderte Zeile mit Treffer (`changed`), sonst die Deklarationszeile des (neuen) Endpunkts, sonst die erste Zeile mit `text`-Treffer, sonst der Anfang des Symbols; `trigger` nennt den Treffer bzw. den Endpunkt (`DELETE /api/players/{}/jersey-number`).
+
+**Tests, die zählen:** die geänderten und die nachgeladenen bestehenden Tests (5f), die das Segment **wirklich** erreichen – direkt oder über anderen geänderten Code, nicht nur als Mock (5g). Eine Klasse nimmt auch die Tests, die ihre geänderten Member erreichen. Für einen **Endpunkt** zählt zusätzlich jeder geänderte oder nachgeladene bestehende Test, der ihm eine **HTTP-Anfrage** schickt – auch wenn die Verknüpfung (5) den Test nicht mit ihm verbindet, denn sie folgt aus Tests keinem HTTP. HTTP-Anfragen findet der Regel-Abschnitt `testHttpCalls` im Code des Tests und der Hilfsfunktionen derselben Datei, die er aufruft (bis drei Aufrufe tief): RestAssured `given()…delete("/api/players/{id}/jersey-number")` bzw. `put("/api/players/" + player.id)`, MockMvc `perform(delete("/api/…", id))`, WebTestClient `put().uri(…)`, TestRestTemplate `getForEntity(…)`/`exchange(…, HttpMethod.X)`, supertest `request(app).patch('/api/x')`, Playwright `request.delete(…)`, Cypress `cy.request('DELETE', …)`, `fetch(url, { method })`, Go `httptest.NewRequest(…)`. Methode und Pfad werden wie die REST-Verbindungen der Flüsse verglichen (3b): Pfadparameter (`{id}`, `:id`, `${id}`) passen auf jedes Segment, ein mit `+` angehängter Wert ebenso. Ein Test mit **gemocktem HTTP-Backend** (`HTTP` in den `mocks` des Steckbriefs: `HttpTestingController`, `MockWebServer`, WireMock …) zählt so nie – Angulars `expectOne(url)` ist keine Anfrage ans Backend. Ein bestehender Test, der nur so einen geänderten Endpunkt aufruft, steht mit leerem `covers` in `existingTests`.
+
+**Erwartung** (`expect`): **Ein** dieser Tests muss alles zeigen, was angegeben ist; innerhalb eines Schlüssels genügt ein Eintrag. Ohne Schlüssel genügt ein Test, der das Segment wirklich erreicht.
+
+| Schlüssel | Der Test … |
+|---|---|
+| `assertion` | Regex; trifft eine seiner Assertion-Anweisungen (5c). |
+| `code` | Regex; trifft seinen Code: Annotationen, Rumpf und die Hilfsfunktionen derselben Datei, die er aufruft (ohne Kommentare, mit String-Inhalten). |
+| `scenario` | Szenario des Steckbriefs (`error`, `edge`, `normal`), eines davon. |
+| `level` | Ebene des Steckbriefs (`unit`, `integration`, `e2e`), eine davon. |
+| `http` | `true`: schickt dem auslösenden Endpunkt eine HTTP-Anfrage (bei `newEndpoint` dem neuen), mit echtem HTTP-Backend. |
+
+**Eingebaute Regeln:**
+
+| Id | Wenn | Dann erwartet | Hinweis |
+|---|---|---|---|
+| `auth-denied` | Eine geänderte Zeile berührt eine Berechtigung: `@RolesAllowed`, `@PreAuthorize`, `@PostAuthorize`, `@Secured`, `@PermitAll`, `@DenyAll`, `@Authenticated`, `access.require…(` (allgemein `access/auth/security/permission….require/check/assert/ensure…(`), `.hasRole(`/`.hasAuthority(`, `canActivate`, `CanActivateFn`, `AuthGuard`. | Ein Test zeigt den verweigerten Fall: Status 401/403 (`.statusCode(403)`, `status().isForbidden()`, `{ status: 403 }`, `toBe(403)`, `assertEquals(403, …)`, `HttpStatus.FORBIDDEN`), eine `AccessDenied…`/`Forbidden…`/`Unauthorized…`/`NotAuthorized…`-Ausnahme oder ein Guard, der `false` liefert bzw. zum Login umleitet. | «Test für den verweigerten Zugriff (401/403) fehlt» |
+| `endpoint-http` | Neuer Endpunkt (`newEndpoint`). | Ein Test ruft ihn über HTTP auf (`http`). | «Neuer Endpunkt ohne Test über HTTP» |
+| `validation-boundary` | Eine geänderte Zeile enthält eine Validierung: Bean Validation (`@Min`, `@Max`, `@Size`, `@Positive`, `@NotNull`, `@NotBlank`, `@NotEmpty`, `@Pattern`, `@Email`, `@DecimalMin` …, `@Valid`) oder Angular `Validators.min/max/required/pattern/…`. | Ein Test mit Szenario `error` oder `edge`. | «Test mit ungültigem Wert oder Grenzwert fehlt» |
+| `transaction-integration` | Eine geänderte Zeile enthält `@Transactional`. | Ein Test der Ebene `integration` oder `e2e` – eine Transaktion zeigt sich erst mit echter Datenbank. | «Integrationstest für die Transaktion fehlt» |
+| `listener-test` | Eine Methode oder Funktion mit `@Incoming`, `@JmsListener`, `@KafkaListener`, `@RabbitListener`, `@SqsListener`, `@EventListener`, `@TransactionalEventListener` oder `@Observes` ist geändert (`text` + `kinds`). | Irgendein Test, der sie wirklich erreicht – der Framework-Aufruf ist statisch nicht zu sehen. | «Test, der den Listener aufruft, fehlt» |
+
+`@TestSecurity`/`@WithMockUser` allein zählen für `auth-denied` nicht: Ob die Rolle des Tests nicht passt, ist statisch nicht zu entscheiden – der Test muss die Verweigerung auch erwarten (Status oder Ausnahme).
+
+**Eigene Regeln:** Eine `rules.json` mit dem Abschnitt `testRules` wird **nach Id eingemischt**: Ein Eintrag mit eingebauter Id ersetzt diese Regel (an ihrem Platz), `"enabled": false` schaltet sie ab, andere Einträge kommen dazu. Beispiel – jeder geänderte Endpunkt braucht einen HTTP-Test mit Erfolgsstatus:
+
+```json
+"testRules": [
+  { "id": "auth-denied", "enabled": false },
+  { "id": "endpoint-changed-http", "label": "Endpunkt geändert → Test über HTTP", "when": { "endpoint": true },
+    "expect": { "http": true, "code": ["statusCode\\(200\\)"] }, "hint": "Kein Test über HTTP mit Status 200" }
+]
+```
+
+| Feld (`RuleCheck`) | Bedeutung |
+|---|---|
+| `ruleId`, `label` | Die Regel und ihr Titel (deutsch). |
+| `segmentId` | Das geänderte Segment, auf das sie greift. |
+| `line`, `code`, `trigger` | Die auslösende Zeile (neue Datei), ihr Text und was ausgelöst hat (Treffer oder Endpunkt). |
+| `met`, `metBy` | Ein Test zeigt, was die Regel erwartet, und welche (Segment-Ids geänderter Tests, `e1` … bestehender). |
+| `tests` | Die betrachteten Tests: wirklich erreichende, bei Endpunkten auch die über HTTP. |
+| `hint` | Der Hinweis der Regel für den fehlenden Test. |
+
+Die Prüfungen stehen nach Segment und Zeile.
+
+Beispiel spongecoach#13: `PlayerResource.clearJerseyNumber` ruft neu `access.requireCoach(player.team)` auf → `auth-denied` nicht erfüllt (Zeile 92; erreicht von `ClearJerseyNumber › removesTheNumber` und `› isANoOpWithoutNumber`, keiner erwartet 403 oder `AccessDeniedException`). Es ist ein neuer Endpunkt `DELETE /api/players/{}/jersey-number` ohne Test über HTTP → `endpoint-http` nicht erfüllt (Zeile 87). Sein neues `@Transactional` → `transaction-integration` erfüllt durch dieselben zwei Tests (`@QuarkusTest` → Ebene `integration`). `PlayerResource.update` ist kein neuer Endpunkt und seine Berechtigungsprüfung `access.requireSelf` ist unverändert – dort greift keine eingebaute Regel. Eine eigene Regel `endpoint` + `http` wäre dort erfüllt (`JerseyNumberApiTest` ruft `put("/api/players/" + player.id)` über die Hilfsmethode `putJerseyNumber`), eine Berechtigungsregel durch `JerseyNumberValidationTest › keepsTheNumberWhenAccessIsDenied` (`assertThrows(AccessDeniedException.class, …)`).
+
+**Grenzen:** Alles statisch. Ein Test, der den Code auf einem Weg erreicht, den die Verknüpfung nicht sieht (Reflection, ein Framework, das einen Listener aufruft, eine URL aus Variablen oder ein anderswo gesetzter Basispfad wie `@TestHTTPEndpoint`), zählt nicht. Bei einer verketteten URL zählt nur der erste literale Teil (`"/api/players/" + id + "/skills"` wird zu `/api/players/{}`). Typen (DTOs, Entitäten) werden nur über ihre geänderten Member erreicht – eine geänderte Validierungsannotation an einem Record-Feld bleibt meist «nicht erfüllt». Ein Treffer im Testcode (`code`) kann auch im Setup stehen: `doThrow(new AccessDeniedException(…))` zeigt den verweigerten Fall, ohne dass der Test ihn prüft.
+
+**Im UI:** In der Kategorie Tests (bzw. auf der Seite Abdeckung) steht unter der Abdeckung die Box «Erwartete Tests (Regeln)»; der Kopf fasst zusammen («2 von 3 Regeln nicht erfüllt», sonst «Alle n Regeln erfüllt»). Nicht erfüllte Prüfungen zuerst, mit Warnzeichen, Titel der Regel, Funktion, `datei:zeile`, Hinweis und wie viele Tests den Code erreichen; erfüllte eingeklappt unter «Erfüllt» mit ✓ und den Tests, die sie erfüllen (geänderte öffnen den Test). Ein Klick auf eine Prüfung springt zur auslösenden Zeile. Im Code-Block steht auf der auslösenden Zeile einer nicht erfüllten Regel ein Chip «Regel: Test für den verweigerten Zugriff (401/403) fehlt» (Tooltip: Regel, Auslöser, betrachtete Tests; Klick: Tests zeigen). Auf der Übersicht nennen die Kachel der Tests und die Kachel Abdeckung «n Erwartungs-Regeln nicht erfüllt».
+
 ## 6. Anzeige
 
 * Symbol-Segmente zeigen die **ganze Funktion** aus der neuen Datei, mit eingewobenen gelöschten Zeilen. Unveränderte Strecken über 2 Zeilen ausserhalb von ±2 Zeilen um Änderungen und Aufrufstellen werden zu «⋯ n unveränderte Zeilen».
@@ -418,9 +487,11 @@ Das ganze Repository wird genauso analysiert wie ein Pull Request (`number` 0). 
 | `testProfile` | (eigener Abschnitt, Objekt; siehe 5d) Muster für den Test-Steckbrief. `errorCode`: Regex im Test (Kopf und Rumpf, ohne Kommentare, mit String-Inhalten). `edgeCode`: Regex nur in den Eingaben des geprüften Codes (Parameterquellen, Argumentlisten der Ziel- und HTTP-Aufrufe). `inputCalls`: Regex, die bei der `(` eines Aufrufs enden, dessen Argumente Eingaben sind (HTTP-Anfragen). `errorName`, `edgeName`: Regex auf den Namen als kleingeschriebene Wörter. `assertionKinds`: Art → Regex auf eine Assertion-Anweisung, geprüft in der Reihenfolge des Objekts (`existence` umfasst zusätzlich `weakAssertions`). `mocks`: Regex mit benannter Gruppe `type` (Name), `ref` (Variable, wird über ihre Deklaration aufgelöst) oder `module` (Modulpfad, letztes Segment); oder `{ "pattern": …, "name": "HTTP" }` für einen festen Namen. `mockMembers`: Regex-Vorlagen mit dem Platzhalter `{member}` (Name einer geänderten Funktion einer gemockten Abhängigkeit), die die Stelle finden, an der ein Test sie stubbt oder nennt; die erste Vorlage mit Treffer gibt die Zeile der Mock-Warnung (5g). `levels`: Liste `{ "level", "paths" (Globs), "code" (Regex in der Umgebung), "unless" (Regex, die die Regel aufheben) }`, erste passende gewinnt, sonst `unit`. Fehlt der Abschnitt oder einer seiner Schlüssel, gilt der eingebaute Wert. |
 | `relatedTests` | (eigener Abschnitt, Objekt; siehe 5f) Bestehende Tests. `limit`: höchstens so viele bestehende Testdateien pro PR. `mirrors`: Liste `{ "from", "to" }`; das erste Vorkommen von `from` (ganze Pfadsegmente) im Ordner einer geänderten Datei wird durch `to` ersetzt, um ihren Testordner zu finden (der Ordner selbst zählt immer). Fehlt der Abschnitt oder einer seiner Schlüssel, gilt der eingebaute Wert. |
 | `caseCheck` | (eigener Abschnitt, Objekt; siehe 5h) Fall- und Effekt-Abgleich. `exceptions`: Regex im Code der Funktion (ohne Strings und Kommentare) für einen Fehlerausgang, benannte Gruppe `type` = Ausnahmetyp (optional). `typedChecks`: Regex-Vorlagen mit `{type}`, die zeigen, dass ein Test diesen Typ erwartet; `anyChecks`: Regex für Tests, die irgendeinen Fehler erwarten. `statuses`: Ausnahmetyp → HTTP-Status; `statusNames`: Status → Konstantenname (`404` → `NOT_FOUND`). `statusChecks`: Vorlagen mit `{status}` (404), `{statusName}` (`NOT_FOUND`) und `{statusCamel}` (`NotFound`). `effects`: Liste `{ "kind": "field" \| "persist" \| "message", "pattern" }` mit benannter Gruppe `name`, gesucht in geänderten Zeilen. `fieldChecks`, `callChecks` (Vorlagen mit `{name}`), `readBack` (Regex) und `httpChecks` (Vorlagen mit `{segment}`) werden in den Assertion-Anweisungen der erreichenden Tests gesucht. Fehlt der Abschnitt oder einer seiner Schlüssel, gilt der eingebaute Wert. |
+| `testRules` | (eigener Abschnitt, Liste; siehe 5i) Erwartungs-Regeln: `{ "id", "label", "when": { "changed", "text", "concern", "endpoint", "newEndpoint", "kinds", "paths" }, "expect": { "assertion", "code", "scenario", "level", "http" }, "hint" }`. Wird nach Id in die eingebauten Regeln eingemischt: gleiche Id ersetzt, `"enabled": false` schaltet ab, neue Ids kommen dazu. |
+| `testHttpCalls` | (eigener Abschnitt, Liste von Regex; siehe 5i) HTTP-Anfragen im Testcode, mit benannter Gruppe `url` (String-Literal, optional mit folgendem `+`) und optional `method` (fehlt: GET). |
 | `caseMatrix` | (eigener Abschnitt, Objekt; siehe 5e) Fallmatrix. `expectedNames`: Regex auf den Namen einer Tabellenspalte (Methoden-/Callback-Parameter, Objektschlüssel, Tabellenkopf, Struct-Feld); ein Treffer macht sie zur Erwartungsspalte. `nameFields`: Regex auf Go-Struct-Felder, die den Fall benennen (Zeilenname statt Spalte). Fehlt der Abschnitt oder einer seiner Schlüssel, gilt der eingebaute Wert. |
 
-Fehlt einer der Abschnitte `assertions`, `weakAssertions`, `disabledTests` in einer eigenen `rules.json`, gilt die eingebaute Liste (ältere Kopien funktionieren so weiter). Eine leere Liste schaltet die Erkennung ab.
+Fehlt einer der Abschnitte `assertions`, `weakAssertions`, `disabledTests`, `testHttpCalls` in einer eigenen `rules.json`, gilt die eingebaute Liste (ältere Kopien funktionieren so weiter). Eine leere Liste schaltet die Erkennung ab.
 
 Zusätzlich zu `rules` gibt es die Liste **`aspects`** (Frontend-Kategorien, erste passende Regel gewinnt). Die Kategorien `domain`, `usecases`, `application`, `adapters` werden automatisch befüllt, wenn sie in `categories` stehen.
 

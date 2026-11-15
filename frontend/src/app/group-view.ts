@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, comp
 import { CaseMatrixOverview } from './case-matrix';
 import { CodeBlock, flashLine } from './code-block';
 import { CoverageOverview } from './coverage-overview';
+import { RuleCheckOverview } from './rule-check-overview';
 import { Icon } from './icon';
 import { MockWarnings } from './mock-warnings';
 import { ReviewStore, Slot } from './review.store';
@@ -12,7 +13,7 @@ import { TestOverview } from './test-overview';
 @Component({
   selector: 'app-group-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CaseMatrixOverview, CodeBlock, CoverageOverview, Icon, MockWarnings, SpecOverview, TestOverview],
+  imports: [CaseMatrixOverview, CodeBlock, CoverageOverview, Icon, MockWarnings, RuleCheckOverview, SpecOverview, TestOverview],
   template: `
     <div class="view-head">
       <app-icon [name]="icon()" [size]="18" />
@@ -52,6 +53,9 @@ import { TestOverview } from './test-overview';
     }
     @if (coverage() && store.bundle()?.analysis?.coverage && stepIndex() === null) {
       <app-coverage-overview (testClick)="openRef($event)" (lineClick)="openLine($event)" />
+    }
+    @if (coverage() && store.bundle()?.analysis?.ruleChecks && stepIndex() === null) {
+      <app-rule-check-overview (testClick)="openRef($event)" (lineClick)="openLine($event)" />
     }
     @if (coverage() && store.bundle()?.analysis?.mockWarnings?.length && stepIndex() === null) {
       <app-mock-warnings (lineClick)="openLine($event)" (segmentClick)="openRef($event)" />

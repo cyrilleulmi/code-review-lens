@@ -4,6 +4,7 @@ import { CommitList } from './commit-list';
 import { expectationTotals, expectationWarning } from './expectations';
 import { ComponentDiagram } from './component-diagram';
 import { Icon } from './icon';
+import { unmetWarning } from './rule-checks';
 import { ReviewStore } from './review.store';
 
 /** Start page of an opened PR: description, the suggested review order, general comments. */
@@ -36,6 +37,8 @@ export class Overview {
         enabled: !this.store.disabledCategories().has(c.id),
         // tests bent to fit the code: changed/removed/weakened assertions, switched-off tests (Spec-Diff)
         warning: isTestsView(c) ? expectationWarning(expectationTotals(this.store.bundle()!.analysis.specs ?? [])) : null,
+        // Erwartungs-Regeln without a test of the expected form
+        rules: isTestsView(c) ? unmetWarning(this.store.ruleChecks()) : null,
       };
     }),
   );
@@ -50,7 +53,8 @@ export class Overview {
     const list = this.store.bundle()!.analysis.coverage ?? [];
     if (list.length === 0) return null;
     const n = (status: string) => list.filter((c) => c.status === status).length;
-    return { total: list.length, direct: n('direct'), indirect: n('indirect'), existing: n('existing'), none: n('none') };
+    return { total: list.length, direct: n('direct'), indirect: n('indirect'), existing: n('existing'), none: n('none'),
+      rules: unmetWarning(this.store.ruleChecks()) };
   });
 
   protected toggle(id: string, event: Event): void {

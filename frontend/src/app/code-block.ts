@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { Blame, Comment, Commit, DisplayLine, LineMark, Segment } from './api';
 import { findingDetail, findingsByLine, lineChipText } from './case-checks';
+import { ruleChipText, ruleDetail, unmetByLine } from './rule-checks';
 import { assertionDrop, bendsExpectations, describeChange, newlyDisabled } from './expectations';
 import { highlightLines } from './highlight';
 import { mockBadgeTitle } from './mock-boundaries';
@@ -174,6 +175,26 @@ export class CodeBlock {
       const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
       if (found) {
         result.set(i, found.map((f) => ({ text: lineChipText(f), title: findingDetail(f, testName) + ' – statisch ermittelt, Klick: Abdeckung zeigen' })));
+      }
+    });
+    return result;
+  });
+
+  /**
+   * Erwartungs-Regeln: line index -> chips for the unmet rules triggered on that line («Regel: Test für den
+   * verweigerten Zugriff (401/403) fehlt»).
+   */
+  protected readonly ruleNotes = computed(() => {
+    const result = new Map<number, { text: string; title: string }[]>();
+    const byLine = unmetByLine(this.store.ruleChecks(), this.segment().id);
+    if (!byLine.size) {
+      return result;
+    }
+    const testName = this.store.testName();
+    this.segment().lines.forEach((line, i) => {
+      const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
+      if (found) {
+        result.set(i, found.map((c) => ({ text: ruleChipText(c), title: ruleDetail(c, testName) + ' – statisch ermittelt, Klick: Tests zeigen' })));
       }
     });
     return result;

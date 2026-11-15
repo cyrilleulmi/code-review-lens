@@ -54,6 +54,9 @@
         @if (c.warning) {
           <span class="warning" title="Bestehende Tests erwarten jetzt etwas anderes oder weniger, oder sind ausgeschaltet (musterbasiert erkannt) – Details in der Spezifikation der Tests">{{ c.warning }}</span>
         }
+        @if (c.rules) {
+          <span class="warning" title="Für diese Änderungen erwarten die Regeln einen Test einer bestimmten Form (z. B. verweigerter Zugriff, Test über HTTP), der fehlt – Details unter «Erwartete Tests (Regeln)»">{{ c.rules }}</span>
+        }
       </span>
       <span class="ring" [style.--p]="percent(c.progress)">
         <span>{{ percent(c.progress) }}%</span>
@@ -82,7 +85,8 @@
     <span class="desc">{{ cv.direct }} von {{ cv.total }} geänderten {{ cv.total === 1 ? 'Funktion' : 'Funktionen' }} direkt getestet
       · {{ cv.indirect }} nur indirekt
       @if (cv.existing > 0) { · {{ cv.existing }} nur durch bestehende Tests }
-      · <b [class.warn]="cv.none > 0">{{ cv.none }} ohne Test</b></span>
+      · <b [class.warn]="cv.none > 0">{{ cv.none }} ohne Test</b>
+      @if (cv.rules) { · <b class="warn">{{ cv.rules }}</b> }</span>
     <app-icon name="chevronRight" [size]="12" class="go" />
   </button>
 }

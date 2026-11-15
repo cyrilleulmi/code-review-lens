@@ -92,6 +92,16 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    single test crosses it, e.g. the REST hop | partial = one end tested | none, `tests` = crossing tests).
    `caseMatrices[].boundaries[]` (null in older analyses) = boundaries in the code the matrix's tests reach:
    `segmentId`, `subject`, `label` (e.g. 1…99), `values` (all boundary values), `missing` (not an input of this matrix).
+   `ruleChecks[]` (Erwartungs-Regeln; null in older analyses, empty for number 0) = rules "if X changes, expect a
+   test of form Y" (rules section `testRules`) that apply to a changed segment: `ruleId`, `label` (German),
+   `segmentId`, `line` + `code` (the trigger line), `trigger` (matched text or endpoint, e.g. DELETE
+   /api/players/{}/jersey-number), `met`, `metBy` (test ids), `tests` (the tests considered: reaching it for real, for
+   an endpoint also those sending it an HTTP request - not with a mocked HTTP backend), `hint` (German text for the
+   missing test). Built in: auth-denied (changed authorisation needs a 401/403 test), endpoint-http (new endpoint
+   needs a test over HTTP), validation-boundary (changed validation needs an error/edge test),
+   transaction-integration (changed @Transactional needs an integration test), listener-test (changed message
+   listener needs a test that calls it). An unmet check is a missing test: worth a review comment. An existing test
+   that only calls a changed endpoint over HTTP is in `existingTests` with empty `covers`.
    `specs[]` (Spec-Diff) = per changed test file (`path`, `previousPath`, file `status`) the test names as an
    outline, old against new version: `entries[]` with `name`, `suites` (enclosing suites, outermost first; JUnit:
    test class and @Nested classes), `kind` (suite | test), `status` (added | removed | changed | renamed |

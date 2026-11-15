@@ -144,6 +144,11 @@
                 <app-icon name="warning" [size]="10" /> {{ n.text }}
               </button>
             }
+            @for (n of ruleNotes().get(i) ?? []; track $index) {
+              <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
+                <app-icon name="shield" [size]="10" /> {{ n.text }}
+              </button>
+            }
             @for (ref of line.refs ?? []; track ref.segmentId) {
               <button type="button" class="ref" [style.--c]="refColor(ref.segmentId)" (click)="refClick.emit(ref.segmentId)" [title]="'Springe zu ' + ref.symbol">
                 <app-icon name="arrowRight" [size]="11" />

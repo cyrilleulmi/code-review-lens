@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
 import { isTestsView, prLabel } from './api';
 import { CoverageOverview } from './coverage-overview';
+import { RuleCheckOverview } from './rule-check-overview';
 import { FlowView } from './flow-view';
 import { GroupView } from './group-view';
 import { Icon } from './icon';
@@ -27,7 +28,7 @@ interface EditorContent {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, CoverageOverview],
+  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, CoverageOverview, RuleCheckOverview],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

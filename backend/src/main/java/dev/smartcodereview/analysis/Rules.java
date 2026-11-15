@@ -130,6 +130,42 @@ public final class Rules {
     public record EffectRule(String kind, Pattern pattern) {
     }
 
+    /**
+     * Erwartungs-Regel (see {@link TestRules}), an entry of the rules section "testRules": when a changed segment fits
+     * `when`, a test that reaches it for real must show `expect`. label: German, shown in the UI; hint: German text for
+     * the missing test.
+     */
+    public record TestRule(String id, String label, TestRuleWhen when, TestRuleExpect expect, String hint) {
+    }
+
+    /**
+     * The trigger of an Erwartungs-Regel; every given condition must hold. changed: a regex that occurs in a changed
+     * line of the segment (comment-only lines left out); text: a regex that occurs in the segment's code; concerns:
+     * one of these concern categories (security, messaging, transactions, persistence) applies to it; endpoint: it is a
+     * changed HTTP endpoint (method with JAX-RS/Spring annotations, Next.js route, Express/Go route registration,
+     * implementation of an OpenAPI operation); newEndpoint: such an endpoint whose declaration line is added; kinds:
+     * its symbol kind is one of these; paths: its file matches one of these globs. A rule without any condition never
+     * triggers.
+     */
+    public record TestRuleWhen(List<Pattern> changed, List<Pattern> text, List<String> concerns, boolean endpoint,
+                               boolean newEndpoint, List<String> kinds, List<Pattern> paths) {
+        public boolean empty() {
+            return changed.isEmpty() && text.isEmpty() && concerns.isEmpty() && !endpoint && !newEndpoint && kinds.isEmpty()
+                    && paths.isEmpty();
+        }
+    }
+
+    /**
+     * What one test must show to meet an Erwartungs-Regel; every given key must hold for the same test, within a key
+     * one entry suffices. assertion: a regex on one of its assertion statements; code: a regex on its code (head, body
+     * and the same-file helpers it calls); scenario: its Test-Steckbrief scenario (error, edge, normal); level: its
+     * level (unit, integration, e2e); http: it sends an HTTP request to the triggering endpoint (rules
+     * "testHttpCalls", not with a mocked HTTP backend). Nothing given: a test that reaches the segment for real suffices.
+     */
+    public record TestRuleExpect(List<Pattern> assertion, List<Pattern> code, List<String> scenario, List<String> level,
+                                 boolean http) {
+    }
+
     /** Lines that never make a difference: blank, braces/brackets only, comments. */
     private static final Pattern TRIVIAL = Pattern.compile(
             "^\\s*$|^\\s*[{}()\\[\\];,]*\\s*$|^\\s*(//|/\\*|\\*|\\*/|#).*$|^\\s*\\}\\s*(else\\b.*)?\\{?\\s*$");
@@ -161,12 +197,22 @@ public final class Rules {
     public final RelatedTestRules relatedTests;
     /** Fall- und Effekt-Abgleich: error outcomes, effects and how tests check them (see {@link CaseCheckRules}). */
     public final CaseCheckRules caseCheck;
+    /**
+     * Erwartungs-Regeln (see {@link TestRule}): the built-in rules with those of the rules file merged in by id (same id
+     * replaces, "enabled": false removes, new ids are appended), in that order.
+     */
+    public final List<TestRule> testRules;
+    /**
+     * HTTP requests in test code (Erwartungs-Regeln, expect "http"): regexes with the named group "url" (a string literal,
+     * optionally followed by "+" for a concatenated value) and optionally "method" (GET, post, …; missing = GET).
+     */
+    public final List<Pattern> testHttpCalls;
     public final String hash;
 
     private Rules(List<CategoryDef> categories, List<Rule> rules, List<Rule> aspects, List<Rule> concerns,
                   List<Pattern> assertions, List<Pattern> weakAssertions, List<Pattern> disabledTests,
                   TestProfileRules testProfile, CaseMatrixRules caseMatrix, RelatedTestRules relatedTests,
-                  CaseCheckRules caseCheck, String hash) {
+                  CaseCheckRules caseCheck, List<TestRule> testRules, List<Pattern> testHttpCalls, String hash) {
         this.categories = categories;
         this.rules = rules;
         this.aspects = aspects;
@@ -178,6 +224,8 @@ public final class Rules {
         this.caseMatrix = caseMatrix;
         this.relatedTests = relatedTests;
         this.caseCheck = caseCheck;
+        this.testRules = testRules;
+        this.testHttpCalls = testHttpCalls;
         this.hash = hash;
     }
 
@@ -191,7 +239,49 @@ public final class Rules {
         return new Rules(categories, rules(root.path("rules")), rules(root.path("aspects")), rules(root.path("concerns")),
                 section(root, "assertions"), section(root, "weakAssertions"), section(root, "disabledTests"),
                 testProfile(root.path("testProfile")), caseMatrix(root.path("caseMatrix")),
-                relatedTests(root.path("relatedTests")), caseCheck(root.path("caseCheck")), hash);
+                relatedTests(root.path("relatedTests")), caseCheck(root.path("caseCheck")), testRules(root.path("testRules")),
+                section(root, "testHttpCalls"), hash);
+    }
+
+    /**
+     * The "testRules" section: the built-in rules, each replaced by an entry of the rules file with the same id (an entry
+     * with "enabled": false removes it), then the rules file's other entries in their order.
+     */
+    private static List<TestRule> testRules(JsonNode node) {
+        Map<String, JsonNode> byId = new LinkedHashMap<>();
+        for (JsonNode r : defaults().path("testRules")) {
+            byId.put(r.path("id").asText(), r);
+        }
+        if (node.isArray()) {
+            for (JsonNode r : node) {
+                byId.put(r.path("id").asText(), r); // a replaced built-in rule keeps its place
+            }
+        }
+        List<TestRule> result = new ArrayList<>();
+        for (JsonNode r : byId.values()) {
+            if (!r.path("enabled").asBoolean(true) || r.path("id").asText().isEmpty()) {
+                continue;
+            }
+            JsonNode w = r.path("when");
+            JsonNode e = r.path("expect");
+            TestRuleWhen when = new TestRuleWhen(patterns(list(w.path("changed")), false), patterns(list(w.path("text")), false),
+                    strings(list(w.path("concern"))), w.path("endpoint").asBoolean(false), w.path("newEndpoint").asBoolean(false),
+                    strings(list(w.path("kinds"))), patterns(list(w.path("paths")), true));
+            TestRuleExpect expect = new TestRuleExpect(patterns(list(e.path("assertion")), false),
+                    patterns(list(e.path("code")), false), strings(list(e.path("scenario"))), strings(list(e.path("level"))),
+                    e.path("http").asBoolean(false));
+            String id = r.path("id").asText();
+            result.add(new TestRule(id, r.path("label").asText(id), when, expect, r.path("hint").asText("")));
+        }
+        return result;
+    }
+
+    /** A single value as a one-element list (rules may write "concern": "security" or a list). */
+    private static JsonNode list(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) {
+            return MissingNode.getInstance();
+        }
+        return node.isArray() ? node : new ObjectMapper().createArrayNode().add(node);
     }
 
     /** The "caseCheck" section; every missing key is taken from the built-in rules. */

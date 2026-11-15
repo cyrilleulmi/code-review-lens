@@ -253,6 +253,9 @@ export class ReviewStore {
     return map;
   });
 
+  /** Erwartungs-Regeln that apply to changed code (empty for older analyses and a whole repository). */
+  readonly ruleChecks = computed(() => this.bundle()?.analysis.ruleChecks ?? []);
+
   /** Mock-Grenzen: tests that mock changed code, by test id (code block badge) and by mocked segment (flow marker). */
   readonly mockWarningsByTest = computed(() => groupWarnings(this.bundle()?.analysis.mockWarnings, 'test'));
   readonly mockWarningsBySegment = computed(() => groupWarnings(this.bundle()?.analysis.mockWarnings, 'segmentId'));

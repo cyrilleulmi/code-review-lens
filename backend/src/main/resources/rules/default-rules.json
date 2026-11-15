@@ -596,5 +596,63 @@
       "\\b(?:urlEqualTo|urlPathEqualTo|urlMatching|urlPathMatching)\\s*\\([^;]*{segment}",
       "\\.\\s*toHaveBeenCalledWith\\s*\\([^;]*{segment}"
     ]
-  }
+  },
+  "testRules": [
+    {"$comment": "Erwartungs-Regeln (docs/05-analyse.md, 5i): 'if X changes, expect a test of form Y', checked per pull request (not for a whole repository). Each rule: id, label (German, shown in the UI), when (trigger), expect (what one test must show), hint (German text for the missing test). when - every given key must hold for a changed function, method or class outside the tests: 'changed' = regexes, one occurs in a changed line of the segment (comment-only lines left out); 'text' = regexes, one occurs in the segment's code (the whole symbol with its annotations); 'concern' = a concern category or a list (security, messaging, transactions, persistence); 'endpoint': true = it is a changed HTTP endpoint (JAX-RS/Spring method, Next.js route, Express/Go route registration, implementation of an OpenAPI operation); 'newEndpoint': true = such an endpoint whose declaration line is added; 'kinds' = symbol kinds (method, function, class, component, const, ...); 'paths' = globs on the file. A rule without any of them never applies. Tests that count: the changed and the loaded existing tests that reach the segment for real (directly or via other changed code; reaching only a mock of it does not count); for a class also those that reach its changed members; for an endpoint also every changed or loaded existing test that sends an HTTP request to it (rules 'testHttpCalls', method and path compared like the REST links of the flows), even when the call graph does not link it - but never a test with a mocked HTTP backend (HttpTestingController, MockWebServer, WireMock, ...). expect - every given key must hold for one of those tests, within a key one entry suffices: 'assertion' = regexes on one of its assertion statements; 'code' = regexes on its code (annotations, body and the same-file helpers it calls; comments removed, strings kept); 'scenario' = Test-Steckbrief scenarios (error, edge, normal); 'level' = levels (unit, integration, e2e); 'http': true = it sends a request to the triggering endpoint (for 'newEndpoint' rules the new one). testHttpCalls: regexes for HTTP requests in test code (RestAssured, MockMvc, WebTestClient, TestRestTemplate, supertest, Playwright, Cypress, fetch, Go httptest) with the named group 'url' (a string literal, optionally followed by '+': the rest of the URL is a value) and optionally 'method' (missing = GET); path parameters ({id}, :id, ${id}) match any segment; Angular HttpTestingController.expectOne(url) is no request (the backend is mocked). No expect key: a test that reaches the segment for real suffices. A rules.json with this section merges by id: an entry with a built-in id replaces that rule, 'enabled': false switches it off, other entries are added at the end. An entry without id (like this comment) is ignored."},
+    {
+      "id": "auth-denied", "label": "Zugriffsprüfung geändert → Test für verweigerten Zugriff",
+      "when": {"changed": ["@RolesAllowed\\b|@PreAuthorize\\b|@PostAuthorize\\b|@Secured\\b|@PermitAll\\b|@DenyAll\\b|@Authenticated\\b|\\b(?:access|auth|security|permissions?)\\w*\\.(?:require|check|assert|ensure)\\w*\\s*\\(|\\.has(?:Any)?(?:Role|Authority)\\s*\\(|\\bcanActivate\\w*\\b|\\bCanActivateFn\\b|\\bAuthGuard\\b"]},
+      "expect": {"code": [
+        "\\.\\s*statusCode\\s*\\(\\s*40[13]\\b",
+        "\\b(?:status|expectStatus)\\s*\\(\\s*\\)\\s*\\.\\s*is(?:Unauthorized|Forbidden)\\s*\\(",
+        "\\bstatus\\s*:\\s*40[13]\\b",
+        "\\.\\s*(?:toBe|toEqual|toStrictEqual|isEqualTo|shouldBe)\\s*\\(\\s*40[13]\\s*\\)",
+        "\\.\\s*expect\\s*\\(\\s*40[13]\\b",
+        "\\bassert(?:Equals)?\\s*\\(\\s*40[13]\\s*,",
+        "\\b(?:HttpStatus(?:Code)?|Status)\\.(?:UNAUTHORIZED|FORBIDDEN)\\b",
+        "\\bhttp\\.Status(?:Unauthorized|Forbidden)\\b",
+        "\\b\\w*(?:AccessDenied|Forbidden|Unauthori[sz]ed|NotAuthorized|AuthorizationDenied)\\w*(?:Exception|Error)\\b",
+        "\\bexpect\\s*\\([^;]*(?:canActivate|[Gg]uard)[^;]*\\)\\s*\\.\\s*(?:toBeFalse\\s*\\(|toBe\\s*\\(\\s*false\\b|toEqual\\s*\\(\\s*false\\b)",
+        "\\bcreateUrlTree\\s*\\(\\s*\\[\\s*['\"]/?(?:login|forbidden|denied|unauthori[sz]ed)"
+      ]},
+      "hint": "Test für den verweigerten Zugriff (401/403) fehlt"
+    },
+    {
+      "id": "endpoint-http", "label": "Neuer Endpunkt → Test über HTTP",
+      "when": {"newEndpoint": true},
+      "expect": {"http": true},
+      "hint": "Neuer Endpunkt ohne Test über HTTP"
+    },
+    {
+      "id": "validation-boundary", "label": "Validierung geändert → Test mit ungültigem Wert oder Grenzwert",
+      "when": {"changed": ["@(?:Min|Max|Size|Positive|PositiveOrZero|Negative|NegativeOrZero|NotNull|NotBlank|NotEmpty|Pattern|Email|DecimalMin|DecimalMax|Digits|Past|PastOrPresent|Future|FutureOrPresent|Valid)\\b|\\bValidators\\.(?:min|max|minLength|maxLength|required|requiredTrue|pattern|email)\\b"]},
+      "expect": {"scenario": ["error", "edge"]},
+      "hint": "Test mit ungültigem Wert oder Grenzwert fehlt"
+    },
+    {
+      "id": "transaction-integration", "label": "@Transactional geändert → Integrationstest",
+      "when": {"changed": ["@Transactional\\b"]},
+      "expect": {"level": ["integration", "e2e"]},
+      "hint": "Integrationstest für die Transaktion fehlt"
+    },
+    {
+      "id": "listener-test", "label": "Message-Listener geändert → Test, der ihn aufruft",
+      "when": {"text": ["@(?:Incoming|JmsListener|KafkaListener|RabbitListener|SqsListener|EventListener|TransactionalEventListener)\\b|@Observes(?:Async)?\\b"], "kinds": ["method", "function"]},
+      "expect": {},
+      "hint": "Test, der den Listener aufruft, fehlt"
+    }
+  ],
+  "testHttpCalls": [
+    "(?<![\\w$])(?<method>get|post|put|patch|delete|head|options)\\s*\\(\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?|'[^']*'(?:\\s*\\+)?|`[^`]*`(?:\\s*\\+)?)",
+    "\\.\\s*(?<method>get|post|put|patch|delete|head|options)\\s*\\(\\s*\\)\\s*\\.\\s*uri\\s*\\(\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?|'[^']*'(?:\\s*\\+)?)",
+    "\\brequest\\s*\\(\\s*HttpMethod\\.(?<method>[A-Z]+)\\s*,\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?)",
+    "\\.\\s*(?<method>get|post|put|patch|delete)For(?:Entity|Object|Location)\\s*\\(\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?)",
+    "\\.\\s*exchange\\s*\\(\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?)[^,;]*,\\s*HttpMethod\\.(?<method>[A-Z]+)",
+    "\\bcy\\.request\\s*\\(\\s*['\"](?<method>GET|POST|PUT|PATCH|DELETE|HEAD)['\"]\\s*,\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?|'[^']*'(?:\\s*\\+)?|`[^`]*`(?:\\s*\\+)?)",
+    "\\bcy\\.request\\s*\\(\\s*\\{[^}]*?\\bmethod\\s*:\\s*['\"](?<method>\\w+)['\"][^}]*?\\burl\\s*:\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?|'[^']*'(?:\\s*\\+)?|`[^`]*`(?:\\s*\\+)?)",
+    "\\b(?:cy\\.request|fetch)\\s*\\(\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?|'[^']*'(?:\\s*\\+)?|`[^`]*`(?:\\s*\\+)?)(?!\\s*,\\s*\\{[^}]*?\\bmethod\\s*:)",
+    "\\bfetch\\s*\\(\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?|'[^']*'(?:\\s*\\+)?|`[^`]*`(?:\\s*\\+)?)\\s*,\\s*\\{[^}]*?\\bmethod\\s*:\\s*['\"](?<method>\\w+)['\"]",
+    "\\b(?:httptest\\.NewRequest|http\\.NewRequest(?:WithContext)?)\\s*\\(\\s*(?:\\w+\\s*,\\s*)?\"(?<method>[A-Z]+)\"\\s*,\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?)",
+    "\\b(?:httptest\\.NewRequest|http\\.NewRequest(?:WithContext)?)\\s*\\(\\s*(?:\\w+\\s*,\\s*)?http\\.Method(?<method>\\w+)\\s*,\\s*(?<url>\"[^\"]*\"(?:\\s*\\+)?)"
+  ]
 }

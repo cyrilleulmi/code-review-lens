@@ -329,7 +329,9 @@ public final class Model {
      * A test case of an existing, unchanged test file (RelatedTests) that reaches changed code. Not a segment: nothing
      * to review or mark. id: "e1", "e2", … (referenced by CodeCoverage.existingTests). line: start line in the file at
      * the PR head. reason: why its file was loaded (RelatedTestFile.reason). covers: the changed code it reaches, as for
-     * changed tests (direct, or indirect via other changed code; line = call site in the test). profile: Test-Steckbrief.
+     * changed tests (direct, or indirect via other changed code; line = call site in the test); empty for a test that
+     * only sends an HTTP request to a changed endpoint (kept for the Erwartungs-Regeln, see RuleCheck). profile:
+     * Test-Steckbrief.
      */
     @RegisterForReflection
     public record ExistingTest(String id, String path, String name, int line, String reason, List<TestCoverage> covers,
@@ -467,6 +469,22 @@ public final class Model {
     }
 
     /**
+     * Erwartungs-Regel checked for one changed segment (see analysis/TestRules; rules section "testRules"): the segment
+     * fits the rule's trigger, so a test of the expected form must exist. ruleId / label: of the rule (label German);
+     * segmentId: the changed function, method or class; line: the trigger line (new file: the changed line that matched,
+     * else the endpoint's declaration line, else the first line with a matching text, else the start of the symbol);
+     * code: that line, trimmed; trigger: what triggered it (the matched text, or the endpoint as "DELETE /api/x/{}").
+     * met: a test shows what the rule expects; metBy: those tests (segment ids of changed tests, "e1" … of existing
+     * ones). tests: the tests that were considered - changed and existing tests that reach the segment for real (not
+     * only a mock of it), for an endpoint also those that send an HTTP request to it (with a real HTTP backend). hint:
+     * German text for the missing test (from the rule).
+     */
+    @RegisterForReflection
+    public record RuleCheck(String ruleId, String label, String segmentId, Integer line, String code, String trigger,
+                            boolean met, List<String> metBy, List<String> tests, String hint) {
+    }
+
+    /**
      * coverage: testable changed functions, "none" first, then "indirect", then "direct", each by risk (highest
      * first); null in analyses of older versions. specs: the test names of every changed test file as old/new outline
      * (Spec-Diff), in path order; null in analyses of older versions. caseMatrices: similar and parameterised tests of
@@ -475,7 +493,9 @@ public final class Model {
      * Tests), by path and line; relatedTests: which existing test files were selected and loaded for that (null for a
      * whole repository and in analyses of older versions). mockWarnings: tests that mock changed code, by path and
      * line; flowCoverage: per flow (same order as flows) which steps and edges the tests really execute (Mock-Grenzen);
-     * both null in analyses of older versions.
+     * both null in analyses of older versions. ruleChecks: the Erwartungs-Regeln that apply to changed code and whether a
+     * test of the expected form exists (see RuleCheck), by segment and line; empty for a whole repository, null in
+     * analyses of older versions.
      */
     @RegisterForReflection
     public record Analysis(int schemaVersion, String generatedAt, String headSha, String rulesHash,
@@ -484,7 +504,8 @@ public final class Model {
                            List<Component> components, List<ComponentEdge> componentEdges,
                            List<CodeCoverage> coverage, List<SpecFile> specs, List<CaseMatrix> caseMatrices,
                            List<ExistingTest> existingTests, RelatedTests relatedTests,
-                           List<MockWarning> mockWarnings, List<FlowCoverage> flowCoverage) {
+                           List<MockWarning> mockWarnings, List<FlowCoverage> flowCoverage,
+                           List<RuleCheck> ruleChecks) {
     }
 
     /**

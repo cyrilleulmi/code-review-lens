@@ -541,6 +541,32 @@ export interface Analysis {
   mockWarnings?: MockWarning[] | null;
   /** Mock-Grenzen: per flow what the tests really execute (absent in older analyses) */
   flowCoverage?: FlowCoverage[] | null;
+  /** Erwartungs-Regeln: rules that apply to changed code and whether a test of the expected form exists (empty for a whole repository, absent in older analyses) */
+  ruleChecks?: RuleCheck[] | null;
+}
+
+/**
+ * Erwartungs-Regel checked for one changed segment (Model.RuleCheck): the segment fits the rule's trigger, so a test of
+ * the expected form must exist - pattern-based, deterministic (rules section «testRules»).
+ */
+export interface RuleCheck {
+  ruleId: string;
+  /** German, e.g. «Zugriffsprüfung geändert → Test für verweigerten Zugriff» */
+  label: string;
+  segmentId: string;
+  /** trigger line (new file) */
+  line: number | null;
+  /** that line, trimmed */
+  code: string | null;
+  /** what triggered it: the matched text or the endpoint («DELETE /api/players/{}/jersey-number») */
+  trigger: string | null;
+  met: boolean;
+  /** tests that show what the rule expects (segment ids of changed tests, «e1» … of existing ones) */
+  metBy: string[];
+  /** tests that were considered: reaching it for real, for an endpoint also calling it over HTTP */
+  tests: string[];
+  /** German text for the missing test */
+  hint: string;
 }
 
 export type CaseMatrixKind = 'similar' | 'parameterized';
