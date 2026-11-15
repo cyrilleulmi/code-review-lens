@@ -11,6 +11,7 @@ import {
   rowTip,
   templateParts,
 } from './case-matrices';
+import { boundaryNote } from './case-checks';
 import { Icon } from './icon';
 import { ReviewStore } from './review.store';
 
@@ -21,6 +22,8 @@ interface MatrixView {
   split: number;
   rows: { row: CaseRow; note: string | null; block: boolean }[];
   duplicates: number;
+  /** Fall- und Effekt-Abgleich: boundaries in the code the tests reach, with the values the matrix lacks */
+  boundaries: { text: string; missing: boolean; segmentId: string }[];
 }
 
 /**
@@ -108,6 +111,12 @@ interface MatrixView {
               }
             </table>
           </div>
+          @for (b of v.boundaries; track $index) {
+            <button type="button" class="bnote" [class.missing]="b.missing" (click)="segmentClick.emit(b.segmentId)"
+                    title="Grenzwerte aus den Vergleichen im geprüften Code (statisch) – Klick: zum Code">
+              <app-icon [name]="b.missing ? 'warning' : 'check'" [size]="11" /> {{ b.text }}
+            </button>
+          }
         </div>
       }
     </section>
@@ -161,6 +170,10 @@ interface MatrixView {
     tbody tr.dup .tname { color: var(--warn); }
     tfoot td { border-bottom: 0; background: var(--bg-panel); color: var(--fg-muted); font: 11px var(--font-code); }
     td.covered-lbl { color: var(--fg-dim); font: 11px var(--font-ui); }
+    .bnote { display: flex; align-items: center; gap: 5px; margin: 6px 12px 0; padding: 0; border: 0; background: none;
+      color: var(--ok); font: 11.5px var(--font-ui); cursor: pointer; text-align: left; }
+    .bnote.missing { color: var(--warn); }
+    .bnote:hover { text-decoration: underline; }
   `,
 })
 export class CaseMatrixOverview {
@@ -183,6 +196,11 @@ export class CaseMatrixOverview {
       split: firstExpected(matrix),
       rows: matrix.rows.map((row) => ({ row, note: duplicateNote(matrix, row), block: !!row.segmentId && segs.has(row.segmentId) })),
       duplicates: matrix.rows.filter((r) => r.duplicateOf != null).length,
+      boundaries: (matrix.boundaries ?? []).map((b) => ({
+        text: boundaryNote(b, segs.get(b.segmentId)?.symbol ?? null),
+        missing: b.missing.length > 0,
+        segmentId: b.segmentId,
+      })),
     }));
   });
 

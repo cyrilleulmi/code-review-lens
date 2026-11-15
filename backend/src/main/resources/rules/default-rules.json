@@ -490,5 +490,111 @@
       {"from": "src/", "to": "tests/"},
       {"from": "lib/", "to": "test/"}
     ]
+  },
+  "caseCheck": {
+    "$comment": "Fall- und Effekt-Abgleich (docs/05-analyse.md, 5h): what the code of a changed function can do, compared with what the tests that really reach it check. exceptions: regexes on the code of the whole function (strings and comments blanked) that find an error outcome; the named group 'type' is the exception type (optional: throwError(…), Promise.reject(…), errors.New(…) have none). typedChecks: templates in which {type} stands for the quoted type; a match in the head or body of a reaching test means it expects that exception. anyChecks: tests that expect some error without naming a type (toThrow(), assert.Error, err == nil {); they count for every exception. statuses: exception type -> HTTP status it maps to (also status constants); a type not listed takes a status from its arguments (an integer 400-599 or a constant like HttpStatus.NOT_FOUND). statusChecks: templates with {status} (404), {statusName} (NOT_FOUND, from statusNames) and {statusCamel} (NotFound); a match in a reaching test also checks the exception. effects: what a changed line does beyond its return value, each {kind, pattern} with the named group 'name': 'field' (assignment to a field of an object, a setter setX(…) -> x), 'persist' (save, persist, delete … of a repository or entity), 'message' (publish, emit, send, fire …). Outgoing HTTP calls with a literal URL are found without rules. fieldChecks: templates with {name}, searched in the assertion statements of the reaching tests (strings kept): a member access or getter (.jerseyNumber, .getJerseyNumber()), a JSON path (.body(\"jerseyNumber\", …)) or an object key (toEqual({ jerseyNumber: 7 })) - a variable of the same name (an input) does not count. callChecks: interaction assertions on the call ({name}: verify(repo).save(…), expect(api.publish).toHaveBeenCalled…); they check persist and message effects; readBack: an assertion that reads stored data again (findById, count …) checks a persist effect too. httpChecks: templates with {segment} (the last literal segment of the URL) for assertions on an outgoing HTTP call (expectOne(url), requestTo(url)). A rules file without this section, or without one of its keys, uses the built-in value for that key.",
+    "exceptions": [
+      "\\bthrow\\s+new\\s+(?:[a-z][\\w$]*\\.)*(?<type>[A-Z][\\w$]*)\\s*[(<]",
+      "\\bthrow\\s+(?:[a-z][\\w$]*\\.)*(?<type>[A-Z][\\w$]*)\\s*\\(",
+      "\\braise\\s+(?<type>[A-Z]\\w*)\\b",
+      "\\bthrowError\\s*\\(\\s*(?:\\(\\s*\\)\\s*=>\\s*)?(?:new\\s+(?<type>[A-Z][\\w$]*))?",
+      "\\bPromise\\s*\\.\\s*reject\\s*\\(\\s*(?:new\\s+(?<type>[A-Z][\\w$]*))?",
+      "\\b(?:errors\\.New|fmt\\.Errorf)\\s*\\("
+    ],
+    "typedChecks": [
+      "\\bassertThrows\\w*\\s*\\(\\s*(?:[\\w$]+\\.)*{type}\\s*(?:\\.class|::class)",
+      "\\b(?:isInstanceOf|isExactlyInstanceOf|hasCauseInstanceOf|assertThatExceptionOfType|catchThrowableOfType|expect)\\s*\\(\\s*(?:[\\w$]+\\.)*{type}\\s*(?:\\.class|::class)",
+      "@Test\\s*\\(\\s*expected\\s*=\\s*(?:[\\w$]+\\.)*{type}\\.class",
+      "\\b(?:shouldThrow\\w*|assertFailsWith|assertThrows)\\s*<\\s*(?:[\\w$]+\\.)*{type}\\s*>",
+      "\\.\\s*toThrow(?:Error)?\\s*\\(\\s*{type}\\b",
+      "\\.\\s*toBeInstanceOf\\s*\\(\\s*{type}\\b",
+      "\\bcatch\\s*\\(\\s*(?:final\\s+)?(?:[\\w$]+\\.)*{type}\\s+\\w+\\s*\\)",
+      "\\b(?:assert|require)\\.(?:ErrorIs|ErrorAs)\\s*\\([^)]*{type}",
+      "\\b(?:assertRaises|pytest\\.raises)\\s*\\(\\s*{type}\\b"
+    ],
+    "anyChecks": [
+      "\\.\\s*toThrow(?:Error)?\\s*\\(\\s*(?:\\)|['\"`/])",
+      "\\.\\s*rejects\\s*\\.\\s*(?!toThrow(?:Error)?\\s*\\(\\s*[A-Z])",
+      "\\b(?:assert|require)\\.(?:Error|ErrorContains|EqualError)\\s*\\(",
+      "\\berr\\s*==\\s*nil\\s*\\{",
+      "\\.\\s*(?:expectError|verifyError)\\w*\\s*\\("
+    ],
+    "statusChecks": [
+      "\\.\\s*statusCode\\s*\\(\\s*{status}\\b",
+      "\\b(?:status|expectStatus)\\s*\\(\\s*\\)\\s*\\.\\s*is{statusCamel}\\s*\\(",
+      "\\bstatus\\s*:\\s*{status}\\b",
+      "\\.\\s*(?:toBe|toEqual|toStrictEqual|isEqualTo|shouldBe)\\s*\\(\\s*{status}\\s*\\)",
+      "\\.\\s*expect\\s*\\(\\s*{status}\\b",
+      "\\bassert(?:Equals)?\\s*\\(\\s*{status}\\s*,",
+      "\\b(?:HttpStatus(?:Code)?|Status)\\.{statusName}\\b",
+      "\\bhttp\\.Status{statusCamel}\\b"
+    ],
+    "statuses": {
+      "BadRequestException": 400,
+      "ConstraintViolationException": 400,
+      "NotAuthorizedException": 401,
+      "UnauthorizedException": 401,
+      "ForbiddenException": 403,
+      "AccessDeniedException": 403,
+      "NotFoundException": 404,
+      "NotAllowedException": 405,
+      "NotAcceptableException": 406,
+      "ConflictException": 409,
+      "NotSupportedException": 415,
+      "InternalServerErrorException": 500,
+      "ServiceUnavailableException": 503
+    },
+    "statusNames": {
+      "400": "BAD_REQUEST",
+      "401": "UNAUTHORIZED",
+      "403": "FORBIDDEN",
+      "404": "NOT_FOUND",
+      "405": "METHOD_NOT_ALLOWED",
+      "406": "NOT_ACCEPTABLE",
+      "409": "CONFLICT",
+      "410": "GONE",
+      "412": "PRECONDITION_FAILED",
+      "413": "PAYLOAD_TOO_LARGE",
+      "415": "UNSUPPORTED_MEDIA_TYPE",
+      "422": "UNPROCESSABLE_ENTITY",
+      "429": "TOO_MANY_REQUESTS",
+      "500": "INTERNAL_SERVER_ERROR",
+      "501": "NOT_IMPLEMENTED",
+      "502": "BAD_GATEWAY",
+      "503": "SERVICE_UNAVAILABLE",
+      "504": "GATEWAY_TIMEOUT"
+    },
+    "effects": [
+      {"kind": "field", "pattern": "[\\w$)\\]]\\s*\\.\\s*(?<name>[A-Za-z_$][\\w$]*)\\s*(?:[-+*/%]|\\?\\?|\\|\\||&&)?=(?![=>])"},
+      {"kind": "field", "pattern": "\\.\\s*set(?<name>[A-Z][\\w$]*)\\s*\\("},
+      {"kind": "persist", "pattern": "\\.\\s*(?<name>persist(?:AndFlush|All)?|save(?:All|AndFlush)?|delete(?:All|ById|AllById)?|merge|insert(?:One|Many|All)?|upsert)\\s*\\("},
+      {"kind": "persist", "pattern": "\\b(?:\\w*[Rr]epo(?:sitory)?|em|entityManager|session)\\s*\\.\\s*(?<name>remove|update\\w*|store\\w*)\\s*\\("},
+      {"kind": "message", "pattern": "\\.\\s*(?<name>publish(?:Event)?|emit|send(?:AndForget|Async)?|fire(?:Async)?|convertAndSend|dispatch)\\s*\\("}
+    ],
+    "fieldChecks": [
+      "(?i)\\.\\s*(?:get|set|is|has)?{name}(?![\\w$])",
+      "(?i)['\"`](?:\\$\\.)?(?:[\\w$\\[\\]]+\\.)*{name}['\"`]",
+      "(?i)(?<![\\w$.]){name}\\s*:(?!:)"
+    ],
+    "callChecks": [
+      "\\bverify\\w*\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*\\.\\s*{name}\\s*\\(",
+      "\\b(?:verify|coVerify)\\s*(?:\\([^)]*\\))?\\s*\\{[^}]*\\.\\s*{name}\\s*\\(",
+      "\\.\\s*{name}\\s*\\)\\s*\\.\\s*(?:not\\s*\\.\\s*)?(?:toHaveBeenCalled\\w*|toBeCalled\\w*|toHaveBeenLastCalledWith|toHaveBeenNthCalledWith)\\s*\\(",
+      "\\.\\s*{name}\\s*\\.\\s*(?:calledWith|calledOnce|calledTwice|called|callCount)\\b",
+      "\\bthen\\s*\\(\\s*\\w+\\s*\\)\\s*\\.\\s*should\\w*\\s*\\([^)]*\\)\\s*\\.\\s*{name}\\s*\\("
+    ],
+    "readBack": [
+      "\\bfind\\w*\\s*\\(",
+      "\\bcount\\w*\\s*\\(",
+      "\\bexists\\w*\\s*\\(",
+      "\\blist\\w*\\s*\\(",
+      "\\bget\\w*By\\w*\\s*\\("
+    ],
+    "httpChecks": [
+      "\\.\\s*expect(?:One|None)\\s*\\([^;]*{segment}",
+      "\\brequestTo\\s*\\([^;]*{segment}",
+      "\\b(?:urlEqualTo|urlPathEqualTo|urlMatching|urlPathMatching)\\s*\\([^;]*{segment}",
+      "\\.\\s*toHaveBeenCalledWith\\s*\\([^;]*{segment}"
+    ]
   }
 }

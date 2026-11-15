@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, computed, inject, input, linkedSignal } from '@angular/core';
 import { CaseMatrixOverview } from './case-matrix';
-import { CodeBlock } from './code-block';
+import { CodeBlock, flashLine } from './code-block';
 import { CoverageOverview } from './coverage-overview';
 import { Icon } from './icon';
 import { MockWarnings } from './mock-warnings';
@@ -51,7 +51,7 @@ import { TestOverview } from './test-overview';
       <app-case-matrix (segmentClick)="openRef($event)" />
     }
     @if (coverage() && store.bundle()?.analysis?.coverage && stepIndex() === null) {
-      <app-coverage-overview (testClick)="openRef($event)" />
+      <app-coverage-overview (testClick)="openRef($event)" (lineClick)="openLine($event)" />
     }
     @if (coverage() && store.bundle()?.analysis?.mockWarnings?.length && stepIndex() === null) {
       <app-mock-warnings (lineClick)="openLine($event)" (segmentClick)="openRef($event)" />
@@ -158,6 +158,10 @@ export class GroupView {
     void el.offsetWidth;
     el.classList.add('flash');
     setTimeout(() => el.classList.remove('flash'), 1400);
+    const line = this.store.takeFocusLine(segmentId);
+    if (line != null) {
+      flashLine(el, line);
+    }
     return true;
   }
 
@@ -197,6 +201,9 @@ export class GroupView {
     const block = (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>(`app-code-block[data-segment="${target.segmentId}"]`);
     const row = block?.querySelector<HTMLElement>(`.row[data-${target.old ? 'old' : 'new'}="${target.line}"]`);
     if (!row || this.stepIndex() != null) {
+      if (!target.old) {
+        this.store.focusLine.set({ segmentId: target.segmentId, line: target.line });
+      }
       this.openRef(target.segmentId);
       return;
     }

@@ -127,7 +127,7 @@
                 <p>Welche geänderten Funktionen ein geänderter Test erreicht – und welche nicht. Ohne geänderte Tests steht hier alles unter «Ohne Test».</p>
               </div>
             </div>
-            <app-coverage-overview (testClick)="store.reveal($event)" />
+            <app-coverage-overview (testClick)="store.reveal($event)" (lineClick)="store.revealLine($event.segmentId, $event.line)" />
           }
           @default {
             <app-group-view [title]="c.title!" [description]="c.description ?? null" [details]="c.details ?? null" [icon]="c.icon ?? 'code'"

@@ -85,6 +85,8 @@ export class ReviewStore {
   readonly collapseCommand = signal<{ collapsed: boolean; seq: number } | null>(null);
   /** Segment to scroll to after the next render (e.g. clicked in a flow diagram). */
   readonly focusSegment = signal<string | null>(null);
+  /** Line (new file) to show within the focused block after the next render (e.g. a finding of the coverage view). */
+  readonly focusLine = signal<{ segmentId: string; line: number } | null>(null);
   /** Commits of the open PR and which commit made each changed line (loaded after the bundle). */
   readonly commits = signal<Commits | null>(null);
   readonly commitsLoading = signal(false);
@@ -577,6 +579,22 @@ export class ReviewStore {
       this.focusSegment.set(segmentId);
       this.select({ kind: 'file', path: seg.path });
     }
+  }
+
+  /** Like reveal, and then scrolls to a line of the block (when the block is expanded). */
+  revealLine(segmentId: string, line: number): void {
+    this.focusLine.set({ segmentId, line });
+    this.reveal(segmentId);
+  }
+
+  /** The line to show in a block that was just scrolled to (once), else null. */
+  takeFocusLine(segmentId: string): number | null {
+    const f = this.focusLine();
+    if (!f || f.segmentId !== segmentId) {
+      return null;
+    }
+    this.focusLine.set(null);
+    return f.line;
   }
 
   goToPlace(place: string, segmentId: string): void {

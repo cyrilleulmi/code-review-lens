@@ -65,7 +65,16 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    (a function only reached mocked is `none`); `branches` = decision points in the whole function
    (if, case, catch, for, while, &&, ||, ternary ?); `changedLines` = non-blank, non-brace changed lines;
    `risk` = changedLines × (1 + branches). Sorted: `none`, `indirect`, `existing`, `direct`, each by risk
-   descending. Missing (null) in analyses of older versions.
+   descending. Missing (null) in analyses of older versions. `findings[]` (Fall- und Effekt-Abgleich, null in
+   older analyses) = what the code can do against what the tests that really reach it check (changed + existing,
+   direct or indirect, not mocked; rules section `caseCheck`): `kind` exception (`throw new X(`, `throwError(` …;
+   checked when a reaching test expects the type, any error, or the mapped HTTP status, e.g. NotFoundException →
+   404) | boundary (comparison with an integer or a same-file constant; `covered` = integer inputs of the reaching
+   tests, `missing` = boundary values k-1/k resp. k/k+1 no test feeds in) | effect (changed line sets a field,
+   persists, sends a message or calls HTTP; checked when an assertion names the field, verifies the call or reads
+   stored data again) | branches (information only: more decision points than reaching tests, never checked);
+   `line`, `code`, `label` (German), `subject` (type, compared value, field or call), `checked`, `checkedBy` (test
+   ids). An unchecked exception/boundary/effect is a case no test proves: worth a review comment.
    `existingTests[]` (Bestehende Tests; null in older analyses, empty for number 0) = test cases of existing,
    unchanged test files that reach changed code, linked like changed tests (name reference + import evidence,
    helpers transparent, no HTTP): `id` (e1, …), `path`, `name`, `line` (in the file at the PR head), `reason`,
@@ -81,6 +90,8 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    (`flowId`, same order as `flows`) `steps[]` (`segmentId`, `status` tested | mocked | none, `tests`, `mockedBy`)
    and `edges[]` (`from`, `to`, `status` tested = one test crosses the call | separate = both ends tested, no
    single test crosses it, e.g. the REST hop | partial = one end tested | none, `tests` = crossing tests).
+   `caseMatrices[].boundaries[]` (null in older analyses) = boundaries in the code the matrix's tests reach:
+   `segmentId`, `subject`, `label` (e.g. 1…99), `values` (all boundary values), `missing` (not an input of this matrix).
    `specs[]` (Spec-Diff) = per changed test file (`path`, `previousPath`, file `status`) the test names as an
    outline, old against new version: `entries[]` with `name`, `suites` (enclosing suites, outermost first; JUnit:
    test class and @Nested classes), `kind` (suite | test), `status` (added | removed | changed | renamed |

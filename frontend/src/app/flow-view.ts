@@ -11,7 +11,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from './api';
-import { CodeBlock } from './code-block';
+import { CodeBlock, flashLine } from './code-block';
 import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
@@ -371,6 +371,10 @@ export class FlowView {
     void el.offsetWidth;
     el.classList.add('flash');
     setTimeout(() => el.classList.remove('flash'), 1400);
+    const line = this.store.takeFocusLine(segmentId);
+    if (line != null) {
+      flashLine(el, line);
+    }
     return true;
   }
 

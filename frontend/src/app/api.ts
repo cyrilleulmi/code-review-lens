@@ -317,6 +317,35 @@ export interface CodeCoverage {
   existingTests?: string[] | null;
   /** ids of changed and existing tests that only reach a mock of it - they do not count as coverage (absent in older analyses) */
   mockedTests?: string[] | null;
+  /** Fall- und Effekt-Abgleich: what the code can do against what the reaching tests check, by line (absent in older analyses) */
+  findings?: CaseFinding[] | null;
+}
+
+/** exception: an error outcome · boundary: a comparison with a number · effect: a field/persist/message/HTTP effect · branches: information */
+export type CaseFindingKind = 'exception' | 'boundary' | 'effect' | 'branches';
+
+/**
+ * Fall- und Effekt-Abgleich (Model.CaseFinding): one thing a changed function can do and whether a test that really
+ * reaches it checks it - pattern-based, deterministic.
+ */
+export interface CaseFinding {
+  kind: CaseFindingKind;
+  /** new-file line in the function; null for branches */
+  line: number | null;
+  /** that line, trimmed */
+  code: string | null;
+  /** «wirft NotFoundException (404)», «Grenze 1…99», «setzt jerseyNumberChangedAt», «5 Verzweigungen, 1 Test» */
+  label: string;
+  /** exception type, compared value, field or call; null for branches */
+  subject: string | null;
+  /** a reaching test checks it (boundary: every boundary value is a test input); always false for branches */
+  checked: boolean;
+  /** the tests that check it (segment ids of changed tests, «e1» … of existing ones) */
+  checkedBy: string[];
+  /** boundary: the integer inputs of the reaching tests, sorted */
+  covered: string[];
+  /** boundary: the boundary values no test feeds in */
+  missing: string[];
 }
 
 /** Why an existing test file was loaded: named after the changed file (mirrored/same directory), elsewhere, or by prefix. */
@@ -530,6 +559,21 @@ export interface CaseMatrix {
   template: string;
   columns: CaseColumn[];
   rows: CaseRow[];
+  /** boundaries in the code its tests reach, with the values no row feeds in (absent in older analyses) */
+  boundaries?: MatrixBoundary[] | null;
+}
+
+/** A boundary in the code reached by the tests of a Fallmatrix (Model.MatrixBoundary). */
+export interface MatrixBoundary {
+  segmentId: string;
+  /** the compared value */
+  subject: string;
+  /** «1…99», «≥ 1» */
+  label: string;
+  /** boundary values (both sides of each comparison) */
+  values: string[];
+  /** those that no row of the matrix uses as input */
+  missing: string[];
 }
 
 export interface CaseColumn {

@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
-import { CodeCoverage, CoverageStatus, ExistingTest, Segment } from './api';
+import { CaseFinding, CodeCoverage, CoverageStatus, ExistingTest, Segment } from './api';
+import { compactLine, findingDetail, findingsSummary, openFindings } from './case-checks';
 import { ExistingChip, basisText, basisWarnings, existingChip } from './existing-tests';
 import { Icon, SymbolBadge } from './icon';
 import { ReviewStore } from './review.store';
+import { SpecLineTarget } from './spec-overview';
 
 interface TestChip {
   id: string;
@@ -19,6 +21,10 @@ interface CoverageRow {
   /** tests that reach only a mock of it (Mock-Grenzen): not counted; changed ones can be opened */
   mocked: { id: string; name: string; changed: boolean }[];
   done: boolean;
+  /** Fall- und Effekt-Abgleich: all findings, how many are open, and the compact line (open first, branch hint last) */
+  findings: CaseFinding[];
+  open: number;
+  compact: string[];
 }
 
 const GROUPS: { status: CoverageStatus; label: string }[] = [
@@ -32,6 +38,8 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
  * Coverage seen from the code: every testable changed function and whether a changed test reaches it - directly,
  * only via other changed code, only an existing (unchanged) test, or not at all (static, see CodeCoverage). A row
  * jumps to the code, a test chip to the test; chips of existing tests show file:line only (not part of the diff).
+ * Below each row the Fall- und Effekt-Abgleich in one line (open findings, the branch hint), expandable to all findings;
+ * a finding jumps to its line.
  */
 @Component({
   selector: 'app-coverage-overview',
@@ -43,6 +51,10 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
         <app-icon name="test" [size]="15" class="head-icon" />
         <b>Abdeckung des geänderten Codes</b>
         <span class="hint">statisch ermittelt: Aufrufe aus Tests</span>
+        @if (casesSummary(); as cs) {
+          <span class="cases-sum" title="Fehlerfälle, Grenzen und Wirkungen im Code, die kein Test prüft, der die Funktion wirklich erreicht">
+            <app-icon name="warning" [size]="12" /> {{ cs }}</span>
+        }
       </header>
       <div class="basis">
         <p>{{ basis() }}</p>
@@ -64,6 +76,9 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
                     [attr.aria-expanded]="isOpen(g.status)">
               <app-icon [name]="isOpen(g.status) ? 'chevronDown' : 'chevronRight'" [size]="12" />
               {{ g.label }} <span class="n">{{ g.rows.length }}</span>
+              @if (openRows(g.rows); as n) {
+                <span class="open-n" [title]="n + (n === 1 ? ' Funktion' : ' Funktionen') + ' mit offenen Fällen'"><app-icon name="warning" [size]="11" /> {{ n }}</span>
+              }
             </button>
             @if (isOpen(g.status)) {
               @for (r of g.rows; track r.segment.id) {
@@ -74,6 +89,9 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
                     <span class="sym">{{ r.segment.symbol }}</span>
                     @if (r.done) {
                       <app-icon name="check" [size]="12" class="ok" />
+                    }
+                    @if (r.open) {
+                      <app-icon name="warning" [size]="12" class="open-mark" [title]="r.open + (r.open === 1 ? ' offener Fall' : ' offene Fälle') + ': kein Test prüft das'" />
                     }
                   </span>
                   <span class="where">{{ fileOf(r.segment.path) }}:{{ range(r.segment) }}</span>
@@ -104,6 +122,38 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
                       <span class="none">kein Test erreicht sie</span>
                     }
                   </span>
+                  @if (r.findings.length) {
+                    <button type="button" class="cases" [class.has-open]="r.open > 0" (click)="toggleCases(r.segment.id, $event)"
+                            [attr.aria-expanded]="casesOpen(r.segment.id)" title="Fälle und Wirkungen im Code gegen das, was die Tests prüfen – Klick: alle zeigen">
+                      <app-icon [name]="casesOpen(r.segment.id) ? 'chevronDown' : 'chevronRight'" [size]="11" />
+                      @if (r.open) {
+                        <app-icon name="warning" [size]="11" />
+                      }
+                      @for (c of r.compact; track $index) {
+                        @if ($index) {
+                          <span class="dot">·</span>
+                        }
+                        <span>{{ c }}</span>
+                      }
+                      @if (!r.compact.length) {
+                        <span class="all-ok">{{ r.findings.length }} {{ r.findings.length === 1 ? 'Fall' : 'Fälle' }} geprüft</span>
+                      }
+                    </button>
+                    @if (casesOpen(r.segment.id)) {
+                      <ul class="case-list">
+                        @for (f of r.findings; track $index) {
+                          <li [class.checked]="f.checked" [class.info]="f.kind === 'branches'" [class.clickable]="f.line != null"
+                              (click)="openFinding(r.segment.id, f, $event)" [title]="f.code ?? ''">
+                            <app-icon [name]="f.checked ? 'check' : f.kind === 'branches' ? 'info' : 'warning'" [size]="11" />
+                            <span class="ctext">{{ detail(f) }}</span>
+                            @if (f.line != null) {
+                              <span class="cline">:{{ f.line }}</span>
+                            }
+                          </li>
+                        }
+                      </ul>
+                    }
+                  }
                 </div>
               }
             }
@@ -152,6 +202,23 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
     .basis .warn { color: var(--warn); }
     .tname { overflow: hidden; text-overflow: ellipsis; }
     .none { color: var(--fg-dim); font-size: 11.5px; }
+    .cases-sum { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: var(--warn); font-size: 11.5px; font-weight: 600; }
+    .open-n { display: inline-flex; align-items: center; gap: 3px; color: var(--warn); font-size: 11px; font-weight: 600; }
+    .open-mark { color: var(--warn); }
+    .cases { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; justify-self: start; max-width: 100%;
+      padding: 0; border: 0; background: none; color: var(--fg-muted); font: 11.5px var(--font-ui); cursor: pointer; text-align: left; }
+    .cases.has-open { color: var(--warn); }
+    .cases:hover { color: var(--accent-fg); }
+    .cases .dot { color: var(--fg-dim); }
+    .cases .all-ok { color: var(--ok); }
+    .case-list { grid-column: 1 / -1; margin: 0; padding: 0 0 2px 16px; list-style: none; font-size: 11.5px; cursor: default; }
+    .case-list li { display: flex; align-items: center; gap: 6px; padding: 1px 0; color: var(--warn); }
+    .case-list li.checked { color: var(--ok); }
+    .case-list li.info { color: var(--fg-muted); }
+    .case-list li.clickable { cursor: pointer; }
+    .case-list li.clickable:hover .ctext { color: var(--accent-fg); text-decoration: underline; }
+    .case-list .ctext { color: var(--fg); }
+    .case-list .cline { color: var(--fg-dim); font-size: 11px; }
     .ok { color: var(--ok); }
     @media (max-width: 900px) {
       .row { grid-template-columns: minmax(0, 1fr) auto; }
@@ -163,6 +230,10 @@ export class CoverageOverview {
   protected readonly store = inject(ReviewStore);
   /** A test chip was clicked (test segment id). */
   readonly testClick = output<string>();
+  /** A finding was clicked: its line in the changed function. */
+  readonly lineClick = output<SpecLineTarget>();
+  /** Rows whose findings are expanded. */
+  private readonly expanded = signal<ReadonlySet<string>>(new Set());
 
   /** Groups shown expanded; the directly tested ones start collapsed. */
   private readonly open = signal<ReadonlySet<CoverageStatus>>(new Set<CoverageStatus>(['none', 'indirect', 'existing']));
@@ -190,11 +261,15 @@ export class CoverageOverview {
           existing: (c.existingTests ?? []).filter((id) => existing.has(id)).map((id) => existingChip(existing.get(id)!, c.segmentId)),
           mocked: (c.mockedTests ?? []).map((id) => ({ id, name: this.store.testName()(id), changed: tests.has(id) })),
           done: p.total > 0 && p.ok === p.total,
+          findings: c.findings ?? [],
+          open: openFindings(c).length,
+          compact: compactLine(c),
         };
       });
   });
 
   protected readonly total = computed(() => this.rows().length);
+  protected readonly casesSummary = computed(() => findingsSummary(this.rows().map((r) => r.coverage)));
   protected readonly groups = computed(() =>
     GROUPS.map((g) => ({ ...g, rows: this.rows().filter((r) => r.coverage.status === g.status) })),
   );
@@ -211,6 +286,34 @@ export class CoverageOverview {
     const next = new Set(this.open());
     next.has(status) ? next.delete(status) : next.add(status);
     this.open.set(next);
+  }
+
+  /** Rows with open findings in a group (marker on the group head, also for «direkt getestet»). */
+  protected openRows(rows: CoverageRow[]): number {
+    return rows.filter((r) => r.open > 0).length;
+  }
+
+  protected casesOpen(id: string): boolean {
+    return this.expanded().has(id);
+  }
+
+  protected toggleCases(id: string, event: Event): void {
+    event.stopPropagation();
+    const next = new Set(this.expanded());
+    next.has(id) ? next.delete(id) : next.add(id);
+    this.expanded.set(next);
+  }
+
+  protected detail(f: CaseFinding): string {
+    return findingDetail(f, this.store.testName());
+  }
+
+  /** A finding with a line: jump to that line of the function. */
+  protected openFinding(segmentId: string, f: CaseFinding, event: Event): void {
+    event.stopPropagation();
+    if (f.line != null) {
+      this.lineClick.emit({ segmentId, line: f.line, old: false });
+    }
   }
 
   protected fileOf(path: string): string {

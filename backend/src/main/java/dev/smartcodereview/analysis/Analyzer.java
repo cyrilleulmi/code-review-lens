@@ -9,6 +9,8 @@ import dev.smartcodereview.model.Model;
 import dev.smartcodereview.model.Model.Analysis;
 import dev.smartcodereview.model.Model.ApiOperation;
 import dev.smartcodereview.model.Model.ArchitectureInfo;
+import dev.smartcodereview.model.Model.CaseMatrix;
+import dev.smartcodereview.model.Model.CaseRow;
 import dev.smartcodereview.model.Model.Category;
 import dev.smartcodereview.model.Model.CodeCoverage;
 import dev.smartcodereview.model.Model.Component;
@@ -23,6 +25,7 @@ import dev.smartcodereview.model.Model.FlowStep;
 import dev.smartcodereview.model.Model.Group;
 import dev.smartcodereview.model.Model.Hunk;
 import dev.smartcodereview.model.Model.LineRef;
+import dev.smartcodereview.model.Model.MatrixBoundary;
 import dev.smartcodereview.model.Model.MockWarning;
 import dev.smartcodereview.model.Model.RelatedTestFile;
 import dev.smartcodereview.model.Model.RepoStructure;
@@ -45,7 +48,9 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -66,7 +71,8 @@ import java.util.stream.Collectors;
  *       tests really execute (<em>Mock-Grenzen</em>, {@link MockBoundaries}).
  *       Every changed test case gets a profile (<em>Test-Steckbrief</em>, {@link TestProfiles}). Existing, unchanged
  *       test files loaded for the change ({@link RelatedTests}) are linked the same way (<em>Bestehende Tests</em>,
- *       coverage status "existing"); they are no segments.</li>
+ *       coverage status "existing"); they are no segments. Per testable function, its error outcomes, boundaries and
+ *       effects are compared with what the reaching tests check (<em>Fall- und Effekt-Abgleich</em>, {@link CaseChecks}).</li>
  *   <li>Frontend REST calls are matched to backend endpoints (http edges), so a flow can run from a component
  *       through the API client into the backend.</li>
  *   <li>Ports &amp; adapters projects get a layer per segment (domain, use case, application, adapter); frontend
@@ -99,7 +105,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 22;
+    public static final int VERSION = 23;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -299,9 +305,12 @@ public final class Analyzer {
             }
         }
         TestProfiles profiles = new TestProfiles(rules);
+        CaseChecks caseChecks = new CaseChecks(rules);
+        Map<String, CaseChecks.Evidence> testEvidence = new HashMap<>();
         List<MockWarning> mockWarnings = new ArrayList<>();
-        List<TestInfo> tests = tests(works, edges, snapshot.files(), profiles, mockWarnings);
-        List<ExistingTest> existingTests = existingTests(works, edges, related, relatedSources, profiles, mockWarnings);
+        List<TestInfo> tests = tests(works, edges, snapshot.files(), profiles, mockWarnings, caseChecks, testEvidence);
+        List<ExistingTest> existingTests = existingTests(works, edges, related, relatedSources, profiles, mockWarnings,
+                caseChecks, testEvidence);
         mockWarnings.sort(Comparator.comparing(MockWarning::path).thenComparing(w -> w.line() == null ? 0 : w.line())
                 .thenComparing(MockWarning::member));
         Map<String, List<String>> testedBy = new HashMap<>();
@@ -321,12 +330,69 @@ public final class Analyzer {
         // case matrices would list every similar test of the repository - both only make sense for a change
         boolean repository = snapshot.pr().number() == 0;
         Specs.SegmentLookup lookup = segmentLookup(works);
+        List<CaseMatrix> matrices = repository ? List.of() : new CaseMatrices(rules).all(snapshot.files(), sources, lookup);
+        addMatrixInputs(matrices, testEvidence);
+        Map<String, List<CaseChecks.Boundary>> boundaries = new HashMap<>();
+        List<CodeCoverage> coverage = coverage(works, tests, existingTests, caseChecks, testEvidence, boundaries);
         return new Analysis(Model.SCHEMA_VERSION, Instant.now().toString(), snapshot.pr().headSha(), fingerprint(rules),
                 segments, categories, flows, tests, architecture, components, componentEdges(edges, componentOf),
-                coverage(works, tests, existingTests),
+                coverage,
                 repository ? List.of() : specs(snapshot.files(), sources, baseSources == null ? Map.of() : baseSources, lookup),
-                repository ? List.of() : new CaseMatrices(rules).all(snapshot.files(), sources, lookup),
+                withBoundaries(matrices, tests, boundaries),
                 existingTests, related, List.copyOf(mockWarnings), MockBoundaries.flowCoverage(flows, tests, existingTests));
+    }
+
+    /** The input values of the Fallmatrix rows of changed tests count as inputs of those tests (Fall- und Effekt-Abgleich). */
+    private static void addMatrixInputs(List<CaseMatrix> matrices, Map<String, CaseChecks.Evidence> evidence) {
+        for (CaseMatrix m : matrices) {
+            for (CaseRow r : m.rows()) {
+                CaseChecks.Evidence e = r.segmentId() == null ? null : evidence.get(r.segmentId());
+                if (e == null) {
+                    continue;
+                }
+                for (int c = 0; c < m.columns().size() && c < r.values().size(); c++) {
+                    if (CaseMatrices.INPUT.equals(m.columns().get(c).role())) {
+                        CaseChecks.addValue(e, r.values().get(c));
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Boundary hints of each Fallmatrix with numeric inputs: the boundaries in the changed code its rows' tests really
+     * reach (directly or indirectly, not mocked), with the boundary values none of its rows feeds in.
+     */
+    private static List<CaseMatrix> withBoundaries(List<CaseMatrix> matrices, List<TestInfo> tests,
+                                                   Map<String, List<CaseChecks.Boundary>> boundaries) {
+        Map<String, TestInfo> byId = new HashMap<>();
+        tests.forEach(t -> byId.put(t.segmentId(), t));
+        List<CaseMatrix> result = new ArrayList<>();
+        for (CaseMatrix m : matrices) {
+            Set<Long> inputs = new TreeSet<>();
+            for (CaseRow r : m.rows()) {
+                for (int c = 0; c < m.columns().size() && c < r.values().size(); c++) {
+                    Long n = CaseMatrices.INPUT.equals(m.columns().get(c).role()) ? CaseChecks.number(r.values().get(c)) : null;
+                    if (n != null) {
+                        inputs.add(n);
+                    }
+                }
+            }
+            Set<String> reached = new LinkedHashSet<>();
+            m.rows().stream().map(CaseRow::segmentId).filter(Objects::nonNull).distinct().map(byId::get).filter(Objects::nonNull)
+                    .forEach(t -> t.covers().stream().filter(c -> !c.mocked()).forEach(c -> reached.add(c.segmentId())));
+            List<MatrixBoundary> hints = new ArrayList<>();
+            if (!inputs.isEmpty()) {
+                for (String id : reached) {
+                    for (CaseChecks.Boundary b : boundaries.getOrDefault(id, List.of())) {
+                        hints.add(new MatrixBoundary(id, b.subject(), b.label(), b.values().stream().map(String::valueOf).toList(),
+                                CaseChecks.missingIn(b, inputs)));
+                    }
+                }
+            }
+            result.add(new CaseMatrix(m.id(), m.path(), m.title(), m.kind(), m.template(), m.columns(), m.rows(), List.copyOf(hints)));
+        }
+        return result;
     }
 
     /** The segment of a changed symbol (path + symbol of the new version), null for unchanged symbols. */
@@ -1099,7 +1165,7 @@ public final class Analyzer {
      * profile (Test-Steckbrief, {@link TestProfiles}).
      */
     private static List<TestInfo> tests(List<Work> works, List<FlowEdge> edges, List<DiffFile> files, TestProfiles profiles,
-                                        List<MockWarning> warnings) {
+                                        List<MockWarning> warnings, CaseChecks caseChecks, Map<String, CaseChecks.Evidence> evidence) {
         Map<String, Work> byId = new HashMap<>();
         works.forEach(w -> byId.put(w.id, w));
         Map<String, List<FlowEdge>> outgoing = testGraph(edges);
@@ -1115,9 +1181,10 @@ public final class Analyzer {
             Map<String, TestCoverage> covers = reach(t.id, outgoing, byId, mocks);
             warnings.addAll(mockWarnings(t.id, t.symbol.displayName(), t.file.path(), mocks, surroundings, works, profiles));
             List<TestSubject> subjects = subjects(t, covers.values(), byId, files);
+            List<String> targets = targets(covers.values(), subjects, byId);
             result.add(new TestInfo(t.id, t.symbol.displayName(), t.file.path(), subjects, List.copyOf(covers.values()),
-                    profiles.profile(t.file.path(), t.ctx.text, t.ctx.symbols, t.symbol,
-                            targets(covers.values(), subjects, byId), unit)));
+                    profiles.profile(t.file.path(), t.ctx.text, t.ctx.symbols, t.symbol, targets, unit)));
+            evidence.put(t.id, caseChecks.evidence(t.id, t.ctx.text, t.ctx.symbols, t.symbol, targets));
         }
         return result;
     }
@@ -1223,7 +1290,8 @@ public final class Analyzer {
      */
     private static List<ExistingTest> existingTests(List<Work> works, List<FlowEdge> edges, Model.RelatedTests related,
                                                     Map<String, String> relatedSources, TestProfiles profiles,
-                                                    List<MockWarning> warnings) {
+                                                    List<MockWarning> warnings, CaseChecks caseChecks,
+                                                    Map<String, CaseChecks.Evidence> evidence) {
         if (related == null || related.files() == null || relatedSources == null || relatedSources.isEmpty()) {
             return List.of();
         }
@@ -1310,6 +1378,7 @@ public final class Analyzer {
             result.add(new ExistingTest(id, t.file.path(), t.symbol.displayName(), t.symbol.startLine(),
                     x.reason(), List.copyOf(x.covers().values()),
                     profiles.profile(t.file.path(), t.ctx.text, t.ctx.symbols, t.symbol, targets, unit)));
+            evidence.put(id, caseChecks.evidence(id, t.ctx.text, t.ctx.symbols, t.symbol, targets));
             warnings.addAll(mockWarnings(id, t.symbol.displayName(), t.file.path(), x.mocks(), x.surroundings(), works, profiles));
         }
         return result;
@@ -1319,9 +1388,12 @@ public final class Analyzer {
      * Coverage from the code's side: for every testable changed function, which changed tests reach it directly or
      * only via other changed code, which existing tests reach it, how many branches it has and how much of it changed
      * (see Model.CodeCoverage). A reach of a mock of it (TestCoverage.mocked) does not cover it; such tests are listed
-     * as mockedTests.
+     * as mockedTests. findings: what the code can do against what the reaching tests check ({@link CaseChecks});
+     * boundaries (out): the boundaries found per segment, for the Fallmatrix.
      */
-    private List<CodeCoverage> coverage(List<Work> works, List<TestInfo> tests, List<ExistingTest> existingTests) {
+    private List<CodeCoverage> coverage(List<Work> works, List<TestInfo> tests, List<ExistingTest> existingTests,
+                                        CaseChecks caseChecks, Map<String, CaseChecks.Evidence> evidence,
+                                        Map<String, List<CaseChecks.Boundary>> boundaries) {
         Map<String, List<String>> direct = new HashMap<>();
         Map<String, List<String>> indirect = new HashMap<>();
         Map<String, List<String>> existing = new HashMap<>();
@@ -1354,8 +1426,14 @@ public final class Analyzer {
                 continue; // getters and setters: nothing a test would have to prove
             }
             int branches = Coverage.branches(body);
+            List<String> reaching = new ArrayList<>(d);
+            reaching.addAll(i);
+            reaching.addAll(e);
+            List<Integer> own = w.changed.stream().filter(l -> l.newLine() != null && "add".equals(l.type())).map(DiffLine::newLine).toList();
+            CaseChecks.Result checks = caseChecks.findings(w.ctx.text, w.symbol, own, branches, reaching, evidence);
+            boundaries.put(w.id, checks.boundaries());
             result.add(new CodeCoverage(w.id, status, List.copyOf(d), List.copyOf(i), branches, changed, Coverage.risk(changed, branches),
-                    List.copyOf(e), List.copyOf(mocked.getOrDefault(w.id, List.of()))));
+                    List.copyOf(e), List.copyOf(mocked.getOrDefault(w.id, List.of())), checks.findings()));
         }
         result.sort(Coverage.ORDER);
         return result;

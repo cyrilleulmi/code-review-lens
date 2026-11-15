@@ -418,6 +418,28 @@
   }
 }
 
+/* Fall- und Effekt-Abgleich: an open finding on this line */
+.case-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 10px;
+  padding: 0 6px;
+  height: 15px;
+  border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+  color: var(--warn);
+  font: 500 10px/1 var(--font-ui);
+  cursor: pointer;
+  vertical-align: middle;
+  white-space: nowrap;
+
+  &:hover {
+    background: color-mix(in srgb, var(--warn) 18%, transparent);
+  }
+}
+
 .check.part {
   border-color: var(--ok);
   background: linear-gradient(135deg, var(--ok) 50%, transparent 50%);

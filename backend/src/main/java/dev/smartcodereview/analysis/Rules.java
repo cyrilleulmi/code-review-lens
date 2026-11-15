@@ -109,6 +109,27 @@ public final class Rules {
     public record Mirror(String from, String to) {
     }
 
+    /**
+     * Fall- und Effekt-Abgleich (see {@link CaseChecks}), rules section "caseCheck". exceptions: regexes that find an
+     * error outcome in the code of a changed function (named group "type" = the exception type, optional). typedChecks:
+     * templates ({type} = the quoted type) that show a test expects that type; anyChecks: patterns of tests that expect
+     * some error without naming a type (count for every exception); statusChecks: templates ({status} = 404,
+     * {statusName} = NOT_FOUND, {statusCamel} = NotFound) of tests that expect the HTTP status an exception maps to.
+     * statuses: exception type or status constant -> HTTP status; statusNames: status -> constant name. effects: what a
+     * changed line does to the outside (field, persist, message), each a regex with the named group "name";
+     * fieldChecks / callChecks / readBack / httpChecks: templates ({name}, {segment}) searched in the assertions of
+     * the reaching tests. A rules file without the section or without one of its keys uses the built-in value.
+     */
+    public record CaseCheckRules(List<Pattern> exceptions, List<String> typedChecks, List<Pattern> anyChecks,
+                                 List<String> statusChecks, Map<String, Integer> statuses, Map<Integer, String> statusNames,
+                                 List<EffectRule> effects, List<String> fieldChecks, List<String> callChecks,
+                                 List<Pattern> readBack, List<String> httpChecks) {
+    }
+
+    /** An effect of a changed line (rules "caseCheck.effects"): kind field | persist | message; pattern with group "name". */
+    public record EffectRule(String kind, Pattern pattern) {
+    }
+
     /** Lines that never make a difference: blank, braces/brackets only, comments. */
     private static final Pattern TRIVIAL = Pattern.compile(
             "^\\s*$|^\\s*[{}()\\[\\];,]*\\s*$|^\\s*(//|/\\*|\\*|\\*/|#).*$|^\\s*\\}\\s*(else\\b.*)?\\{?\\s*$");
@@ -138,11 +159,14 @@ public final class Rules {
     public final CaseMatrixRules caseMatrix;
     /** Bestehende Tests: how many existing test files are loaded and where tests live (see {@link RelatedTestRules}). */
     public final RelatedTestRules relatedTests;
+    /** Fall- und Effekt-Abgleich: error outcomes, effects and how tests check them (see {@link CaseCheckRules}). */
+    public final CaseCheckRules caseCheck;
     public final String hash;
 
     private Rules(List<CategoryDef> categories, List<Rule> rules, List<Rule> aspects, List<Rule> concerns,
                   List<Pattern> assertions, List<Pattern> weakAssertions, List<Pattern> disabledTests,
-                  TestProfileRules testProfile, CaseMatrixRules caseMatrix, RelatedTestRules relatedTests, String hash) {
+                  TestProfileRules testProfile, CaseMatrixRules caseMatrix, RelatedTestRules relatedTests,
+                  CaseCheckRules caseCheck, String hash) {
         this.categories = categories;
         this.rules = rules;
         this.aspects = aspects;
@@ -153,6 +177,7 @@ public final class Rules {
         this.testProfile = testProfile;
         this.caseMatrix = caseMatrix;
         this.relatedTests = relatedTests;
+        this.caseCheck = caseCheck;
         this.hash = hash;
     }
 
@@ -166,7 +191,25 @@ public final class Rules {
         return new Rules(categories, rules(root.path("rules")), rules(root.path("aspects")), rules(root.path("concerns")),
                 section(root, "assertions"), section(root, "weakAssertions"), section(root, "disabledTests"),
                 testProfile(root.path("testProfile")), caseMatrix(root.path("caseMatrix")),
-                relatedTests(root.path("relatedTests")), hash);
+                relatedTests(root.path("relatedTests")), caseCheck(root.path("caseCheck")), hash);
+    }
+
+    /** The "caseCheck" section; every missing key is taken from the built-in rules. */
+    private static CaseCheckRules caseCheck(JsonNode node) {
+        JsonNode builtIn = defaults().path("caseCheck");
+        java.util.function.Function<String, JsonNode> key = k -> node.has(k) ? node.get(k) : builtIn.path(k);
+        Map<String, Integer> statuses = new LinkedHashMap<>();
+        key.apply("statuses").properties().forEach(e -> statuses.put(e.getKey(), e.getValue().asInt()));
+        Map<Integer, String> statusNames = new LinkedHashMap<>();
+        key.apply("statusNames").properties().forEach(e -> statusNames.put(Integer.parseInt(e.getKey()), e.getValue().asText()));
+        List<EffectRule> effects = new ArrayList<>();
+        for (JsonNode e : key.apply("effects")) {
+            effects.add(new EffectRule(e.path("kind").asText("field"), Pattern.compile(e.path("pattern").asText())));
+        }
+        return new CaseCheckRules(patterns(key.apply("exceptions"), false), strings(key.apply("typedChecks")),
+                patterns(key.apply("anyChecks"), false), strings(key.apply("statusChecks")), statuses, statusNames,
+                effects, strings(key.apply("fieldChecks")), strings(key.apply("callChecks")),
+                patterns(key.apply("readBack"), false), strings(key.apply("httpChecks")));
     }
 
     /** The "relatedTests" section; every missing key is taken from the built-in rules. */

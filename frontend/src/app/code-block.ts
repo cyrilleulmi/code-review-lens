@@ -1,11 +1,29 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { Blame, Comment, Commit, DisplayLine, LineMark, Segment } from './api';
+import { findingDetail, findingsByLine, lineChipText } from './case-checks';
 import { assertionDrop, bendsExpectations, describeChange, newlyDisabled } from './expectations';
 import { highlightLines } from './highlight';
 import { mockBadgeTitle } from './mock-boundaries';
 import { Icon, SymbolBadge } from './icon';
 import { areaColor, areaLabel, areaOfSegment, langColor, langLabel } from './look';
 import { ReviewStore } from './review.store';
+
+/**
+ * Scrolls to the row of a new-file line inside a rendered code block and flashes it; false when the row is not shown
+ * (block collapsed, line folded into a gap).
+ */
+export function flashLine(block: HTMLElement, line: number): boolean {
+  const row = block.querySelector<HTMLElement>(`.row[data-new="${line}"]`);
+  if (!row) {
+    return false;
+  }
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  row.classList.remove('flash-line');
+  void row.offsetWidth;
+  row.classList.add('flash-line');
+  setTimeout(() => row.classList.remove('flash-line'), 1600);
+  return true;
+}
 
 /** git blame of one display line (IntelliJ "Annotate"). */
 interface Annotation {
@@ -139,6 +157,26 @@ export class CodeBlock {
     const mocks = mocked ? ` · in ${mocked} ${mocked === 1 ? 'Test' : 'Tests'} nur gemockt (zählt nicht)` : '';
     const branches = `${c.branches} ${c.branches === 1 ? 'Verzweigung' : 'Verzweigungen'}`;
     return { status: c.status, label, title: `${tests}${old}${mocks} · ${branches} · statisch ermittelt – Klick: Abdeckung zeigen` };
+  });
+
+  /**
+   * Fall- und Effekt-Abgleich: line index -> chips for the open findings on that line («kein Test erwartet
+   * NotFoundException», «Grenze nicht geprüft: 1, 99», «Wirkung ungeprüft: jerseyNumberChangedAt»).
+   */
+  protected readonly caseNotes = computed(() => {
+    const result = new Map<number, { text: string; title: string }[]>();
+    const byLine = findingsByLine(this.store.coverage().get(this.segment().id));
+    if (!byLine.size) {
+      return result;
+    }
+    const testName = this.store.testName();
+    this.segment().lines.forEach((line, i) => {
+      const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
+      if (found) {
+        result.set(i, found.map((f) => ({ text: lineChipText(f), title: findingDetail(f, testName) + ' – statisch ermittelt, Klick: Abdeckung zeigen' })));
+      }
+    });
+    return result;
   });
 
   /** Test case that mocks changed code (Mock-Grenzen): header badge with the stubbed members; null otherwise. */

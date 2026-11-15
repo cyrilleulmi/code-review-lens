@@ -168,6 +168,19 @@ public final class TestProfiles {
      * (visible text) and code (strings blanked, for the brackets) are aligned.
      */
     private String inputs(String body, String code, List<String> targets) {
+        return inputs(body, code, targets, true);
+    }
+
+    /**
+     * Like {@link TestText#inputs}, but the argument lists of the target calls are kept whole (nested calls not
+     * collapsed): `update(id, new Request(null, 7))` keeps the 7 - the values the Fall- und Effekt-Abgleich compares
+     * with the boundaries of the code ({@link CaseChecks}).
+     */
+    public String fullInputs(TestText t, List<String> targets) {
+        return inputs(t.body(), t.bodyCode(), targets, false);
+    }
+
+    private String inputs(String body, String code, List<String> targets, boolean collapse) {
         List<Pattern> calls = new ArrayList<>(rules.inputCalls());
         for (String t : targets) {
             if (IDENTIFIER.matcher(t).matches()) {
@@ -185,7 +198,7 @@ public final class TestProfiles {
                 }
                 int close = matching(code, open);
                 if (close > open) {
-                    found.putIfAbsent(open, i < httpCalls ? body.substring(open, close + 1) : topLevel(body, code, open, close));
+                    found.putIfAbsent(open, i < httpCalls || !collapse ? body.substring(open, close + 1) : topLevel(body, code, open, close));
                 }
             }
         }

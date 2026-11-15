@@ -270,12 +270,37 @@ public final class Model {
      * (Analysis.existingTests) that reach it, directly or indirectly - also when the status is direct/indirect (old
      * tests that run through the change and may need adapting); null in analyses of older versions. Reaches of a
      * mocked collaborator (TestCoverage.mocked) do not count for the status or these lists; mockedTests: ids of the
-     * changed and existing tests that only reach a mock of it (null in analyses of older versions).
+     * changed and existing tests that only reach a mock of it (null in analyses of older versions). findings: what the
+     * code can do (error outcomes, boundaries, effects) compared with what the tests that really reach it check
+     * (Fall- und Effekt-Abgleich, see CaseFinding), ordered by line; null in analyses of older versions.
      */
     @RegisterForReflection
     public record CodeCoverage(String segmentId, String status, List<String> directTests, List<String> indirectTests,
                                int branches, int changedLines, int risk, List<String> existingTests,
-                               List<String> mockedTests) {
+                               List<String> mockedTests, List<CaseFinding> findings) {
+        public CodeCoverage(String segmentId, String status, List<String> directTests, List<String> indirectTests,
+                            int branches, int changedLines, int risk, List<String> existingTests, List<String> mockedTests) {
+            this(segmentId, status, directTests, indirectTests, branches, changedLines, risk, existingTests, mockedTests,
+                    List.of());
+        }
+    }
+
+    /**
+     * Fall- und Effekt-Abgleich: one thing the code of a changed function can do and whether a test that really reaches
+     * it (changed or existing, direct or indirect, not mocked) checks it - pattern-based, see analysis/CaseChecks.
+     * kind: "exception" (an error outcome: throw new X(…), throwError, errors.New; subject = the type or null) |
+     * "boundary" (comparisons of a value with a number or a same-file constant; subject = the compared value) |
+     * "effect" (a changed line sets a field, persists, sends a message or calls HTTP; subject = the field or call) |
+     * "branches" (information only: more decision points than reaching tests; checked is always false).
+     * line: where it is (new-file line); code: that line, trimmed; label: German short text (e.g. "wirft
+     * NotFoundException (404)", "Grenze 1…99", "setzt jerseyNumberChangedAt", "5 Verzweigungen, 1 Test").
+     * checked: a reaching test checks it (boundary: every boundary value is among the test inputs); checkedBy: those
+     * tests (segment ids of changed tests, "e1" … of existing ones). covered: for boundaries the numeric input values of
+     * the reaching tests (sorted), else empty; missing: boundary values no test feeds in, else empty.
+     */
+    @RegisterForReflection
+    public record CaseFinding(String kind, Integer line, String code, String label, String subject, boolean checked,
+                              List<String> checkedBy, List<String> covered, List<String> missing) {
     }
 
     /**
@@ -361,11 +386,25 @@ public final class Model {
      * common suite › shared call or test name; kind: "similar" (tests whose inputs are the same code apart from literal
      * values) | "parameterized" (@ValueSource/@CsvSource, it.each, Go table test). template: the code of the first row
      * with the columns as slots ‹1›, ‹2›, … (slot n = columns[n-1]). columns: input columns first, then expected ones.
-     * rows: in source order.
+     * rows: in source order. boundaries: boundaries in the code the rows' tests reach (Fall- und Effekt-Abgleich,
+     * see MatrixBoundary); empty when there are none, null in analyses of older versions.
      */
     @RegisterForReflection
     public record CaseMatrix(String id, String path, String title, String kind, String template,
-                             List<CaseColumn> columns, List<CaseRow> rows) {
+                             List<CaseColumn> columns, List<CaseRow> rows, List<MatrixBoundary> boundaries) {
+        public CaseMatrix(String id, String path, String title, String kind, String template,
+                          List<CaseColumn> columns, List<CaseRow> rows) {
+            this(id, path, title, kind, template, columns, rows, List.of());
+        }
+    }
+
+    /**
+     * A boundary in the code reached by the tests of a Fallmatrix (Fall- und Effekt-Abgleich). segmentId: the changed
+     * function with the comparison; subject: the compared value; label: e.g. "1…99"; values: its boundary values (both
+     * sides of each comparison, sorted); missing: those that are no input value of this matrix.
+     */
+    @RegisterForReflection
+    public record MatrixBoundary(String segmentId, String subject, String label, List<String> values, List<String> missing) {
     }
 
     /**
