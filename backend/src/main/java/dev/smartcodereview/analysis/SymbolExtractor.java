@@ -115,8 +115,10 @@ public final class SymbolExtractor {
 
             EachTable each = eachTable(text, li);
             if (each != null && each.name() != null) {
+                // the call after the table holds the body: a template table ends on a line of its own
+                int end = Math.max(text.statementEnd(li), text.statementEnd(each.endLine()));
                 symbols.add(new Symbol(each.name().isEmpty() ? each.keyword() : each.name(), each.suite() ? "suite" : "test",
-                        li + 1, text.statementEnd(li) + 1, null));
+                        li + 1, end + 1, null));
                 continue;
             }
             if ((m = TEST_BLOCK.matcher(line)).find()) {

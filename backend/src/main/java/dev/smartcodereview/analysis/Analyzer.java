@@ -66,6 +66,8 @@ import java.util.stream.Collectors;
  *   <li>Every segment lists its <em>places</em> (all groups that show it); each place needs its own "ok".</li>
  *   <li>Changed files are combined into <em>components</em> with the calls between them (overview diagram).</li>
  *   <li>The test names of changed test files are compared with their base version (<em>Spec-Diff</em>, {@link Specs}).</li>
+ *   <li>Similar and parameterised tests of changed test files become tables input → expected (<em>Fallmatrix</em>,
+ *       {@link CaseMatrices}).</li>
  * </ol>
  */
 public final class Analyzer {
@@ -89,7 +91,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 19;
+    public static final int VERSION = 20;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -291,24 +293,31 @@ public final class Analyzer {
         ArchitectureInfo architecture = new ArchitectureInfo(Structure.styleOf(evidence), evidence);
         Map<String, String> componentOf = new HashMap<>();
         List<Component> components = components(works, !evidence.isEmpty(), componentOf);
+        // the whole repository has no base: every test would be "added", a huge outline without information; the
+        // case matrices would list every similar test of the repository - both only make sense for a change
+        boolean repository = snapshot.pr().number() == 0;
+        Specs.SegmentLookup lookup = segmentLookup(works);
         return new Analysis(Model.SCHEMA_VERSION, Instant.now().toString(), snapshot.pr().headSha(), fingerprint(rules),
                 segments, categories, flows, tests, architecture, components, componentEdges(edges, componentOf),
                 coverage(works, tests),
-                // the whole repository has no base: every test would be "added", a huge outline without information
-                snapshot.pr().number() == 0 ? List.of()
-                        : specs(snapshot.files(), sources, baseSources == null ? Map.of() : baseSources, works));
+                repository ? List.of() : specs(snapshot.files(), sources, baseSources == null ? Map.of() : baseSources, lookup),
+                repository ? List.of() : new CaseMatrices(rules).all(snapshot.files(), sources, lookup));
     }
 
-    /** Spec-Diff: the test names of every changed test file, old against new version (see {@link Specs}). */
-    private List<SpecFile> specs(List<DiffFile> files, Map<String, String> sources, Map<String, String> baseSources,
-                                 List<Work> works) {
+    /** The segment of a changed symbol (path + symbol of the new version), null for unchanged symbols. */
+    private static Specs.SegmentLookup segmentLookup(List<Work> works) {
         Map<String, Map<Symbol, String>> segmentOf = new HashMap<>();
         for (Work w : works) {
             if (w.symbol != null) {
                 segmentOf.computeIfAbsent(w.file.path(), k -> new HashMap<>()).put(w.symbol, w.id);
             }
         }
-        Specs.SegmentLookup lookup = (path, symbol) -> segmentOf.getOrDefault(path, Map.of()).get(symbol);
+        return (path, symbol) -> segmentOf.getOrDefault(path, Map.of()).get(symbol);
+    }
+
+    /** Spec-Diff: the test names of every changed test file, old against new version (see {@link Specs}). */
+    private List<SpecFile> specs(List<DiffFile> files, Map<String, String> sources, Map<String, String> baseSources,
+                                 Specs.SegmentLookup lookup) {
         Expectations expectations = new Expectations(rules);
         List<SpecFile> result = new ArrayList<>();
         for (DiffFile f : files) {

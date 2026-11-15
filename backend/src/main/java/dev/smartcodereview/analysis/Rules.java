@@ -85,6 +85,15 @@ public final class Rules {
                                    List<MockRule> mocks, List<LevelRule> levels) {
     }
 
+    /**
+     * Fallmatrix (see {@link CaseMatrices}), rules section "caseMatrix". expectedNames: regexes on the name of a table
+     * column (method / callback parameter, struct field, table header); a match makes it an expected column. nameFields:
+     * regexes on Go struct field names that hold the name of a case (shown as the row name, not as a column). A rules
+     * file without the section or without one of its keys uses the built-in value for that key.
+     */
+    public record CaseMatrixRules(List<Pattern> expectedNames, List<Pattern> nameFields) {
+    }
+
     /** Lines that never make a difference: blank, braces/brackets only, comments. */
     private static final Pattern TRIVIAL = Pattern.compile(
             "^\\s*$|^\\s*[{}()\\[\\];,]*\\s*$|^\\s*(//|/\\*|\\*|\\*/|#).*$|^\\s*\\}\\s*(else\\b.*)?\\{?\\s*$");
@@ -110,11 +119,13 @@ public final class Rules {
     public final List<Pattern> disabledTests;
     /** Test-Steckbrief: scenario, assertion kinds, mocks and level of a test case (see {@link TestProfileRules}). */
     public final TestProfileRules testProfile;
+    /** Fallmatrix: which table columns are expectations and which hold case names (see {@link CaseMatrixRules}). */
+    public final CaseMatrixRules caseMatrix;
     public final String hash;
 
     private Rules(List<CategoryDef> categories, List<Rule> rules, List<Rule> aspects, List<Rule> concerns,
                   List<Pattern> assertions, List<Pattern> weakAssertions, List<Pattern> disabledTests,
-                  TestProfileRules testProfile, String hash) {
+                  TestProfileRules testProfile, CaseMatrixRules caseMatrix, String hash) {
         this.categories = categories;
         this.rules = rules;
         this.aspects = aspects;
@@ -123,6 +134,7 @@ public final class Rules {
         this.weakAssertions = weakAssertions;
         this.disabledTests = disabledTests;
         this.testProfile = testProfile;
+        this.caseMatrix = caseMatrix;
         this.hash = hash;
     }
 
@@ -135,7 +147,14 @@ public final class Rules {
         }
         return new Rules(categories, rules(root.path("rules")), rules(root.path("aspects")), rules(root.path("concerns")),
                 section(root, "assertions"), section(root, "weakAssertions"), section(root, "disabledTests"),
-                testProfile(root.path("testProfile")), hash);
+                testProfile(root.path("testProfile")), caseMatrix(root.path("caseMatrix")), hash);
+    }
+
+    /** The "caseMatrix" section; every missing key is taken from the built-in rules. */
+    private static CaseMatrixRules caseMatrix(JsonNode node) {
+        JsonNode builtIn = defaults().path("caseMatrix");
+        java.util.function.Function<String, JsonNode> key = k -> node.has(k) ? node.get(k) : builtIn.path(k);
+        return new CaseMatrixRules(patterns(key.apply("expectedNames"), false), patterns(key.apply("nameFields"), false));
     }
 
     /** The "testProfile" section; every missing key is taken from the built-in rules. */

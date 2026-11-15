@@ -315,16 +315,54 @@ public final class Model {
     }
 
     /**
+     * Fallmatrix: similar test cases of a changed test file (or the rows of one parameterised test) as a table input →
+     * expected (pattern-based, see analysis/CaseMatrices). id: "m1", "m2", … in order; path: the test file; title:
+     * common suite › shared call or test name; kind: "similar" (tests whose inputs are the same code apart from literal
+     * values) | "parameterized" (@ValueSource/@CsvSource, it.each, Go table test). template: the code of the first row
+     * with the columns as slots ‹1›, ‹2›, … (slot n = columns[n-1]). columns: input columns first, then expected ones.
+     * rows: in source order.
+     */
+    @RegisterForReflection
+    public record CaseMatrix(String id, String path, String title, String kind, String template,
+                             List<CaseColumn> columns, List<CaseRow> rows) {
+    }
+
+    /**
+     * A column of a Fallmatrix. label: where the value goes (`putJerseyNumber(…) Arg 1`, `number =`, a parameter name)
+     * or, for expected columns, what is checked (`statusCode`, `expect(el.textContent)`); role: "input" | "expected";
+     * values: for input columns the distinct values of all rows, sorted (numbers numerically) - what is covered; empty
+     * for expected columns.
+     */
+    @RegisterForReflection
+    public record CaseColumn(String label, String role, List<String> values) {
+    }
+
+    /**
+     * A row (one test case) of a Fallmatrix. name: the test name (parameterised: the display name of the case);
+     * segmentId: the test's segment when it has changed lines, else null (unchanged test of the file); line: where the
+     * test (parameterised: the row) starts in the new file. values: one per column, as written in the code (strings
+     * with quotes; null = the test does not check this, "✓" = checked without an expected value, e.g. assertNull).
+     * duplicateOf: index of an earlier row with the same input values (same case tested twice), else null;
+     * contradicts: such a duplicate expects something else for the same input.
+     */
+    @RegisterForReflection
+    public record CaseRow(String name, String segmentId, Integer line, List<String> values, Integer duplicateOf,
+                          boolean contradicts) {
+    }
+
+    /**
      * coverage: testable changed functions, "none" first, then "indirect", then "direct", each by risk (highest
      * first); null in analyses of older versions. specs: the test names of every changed test file as old/new outline
-     * (Spec-Diff), in path order; null in analyses of older versions.
+     * (Spec-Diff), in path order; null in analyses of older versions. caseMatrices: similar and parameterised tests of
+     * the changed test files as tables input → expected (Fallmatrix), by path and line; null in analyses of older
+     * versions.
      */
     @RegisterForReflection
     public record Analysis(int schemaVersion, String generatedAt, String headSha, String rulesHash,
                            List<Segment> segments, List<Category> categories, List<Flow> flows,
                            List<TestInfo> tests, ArchitectureInfo architecture,
                            List<Component> components, List<ComponentEdge> componentEdges,
-                           List<CodeCoverage> coverage, List<SpecFile> specs) {
+                           List<CodeCoverage> coverage, List<SpecFile> specs, List<CaseMatrix> caseMatrices) {
     }
 
     /**

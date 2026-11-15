@@ -49,10 +49,10 @@ public final class Expectations {
     /** Longest text of an assertion shown in the UI. */
     private static final int MAX_TEXT = 240;
     /** The equality family: expected first, actual second (JUnit, Kotlin, Go testify). */
-    private static final Pattern EQUALITY = Pattern.compile(
+    static final Pattern EQUALITY = Pattern.compile(
             "(?i)(assert)?(not)?(equals?|same|arrayequals|iterableequals|linesmatch|equalvalues|exactly|jsoneq|yamleq|elementsmatch|indelta|inepsilon)");
     /** Go test handle as first argument (testing.T / B / F, testify suites). */
-    private static final Pattern GO_HANDLE = Pattern.compile("t|b|f|s\\.T\\(\\)|suite\\.T\\(\\)");
+    static final Pattern GO_HANDLE = Pattern.compile("t|b|f|s\\.T\\(\\)|suite\\.T\\(\\)");
     private static final Pattern TRAILING_COMMA = Pattern.compile(",([)\\]}])");
 
     private final List<Pattern> assertions;

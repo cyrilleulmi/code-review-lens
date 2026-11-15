@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, computed, inject, input, linkedSignal } from '@angular/core';
+import { CaseMatrixOverview } from './case-matrix';
 import { CodeBlock } from './code-block';
 import { CoverageOverview } from './coverage-overview';
 import { Icon } from './icon';
@@ -10,7 +11,7 @@ import { TestOverview } from './test-overview';
 @Component({
   selector: 'app-group-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CodeBlock, CoverageOverview, Icon, SpecOverview, TestOverview],
+  imports: [CaseMatrixOverview, CodeBlock, CoverageOverview, Icon, SpecOverview, TestOverview],
   template: `
     <div class="view-head">
       <app-icon [name]="icon()" [size]="18" />
@@ -44,6 +45,9 @@ import { TestOverview } from './test-overview';
     }
     @if (coverage() && store.bundle()?.analysis?.specs?.length && stepIndex() === null) {
       <app-spec-overview (segmentClick)="openRef($event)" (lineClick)="openLine($event)" />
+    }
+    @if (coverage() && store.bundle()?.analysis?.caseMatrices?.length && stepIndex() === null) {
+      <app-case-matrix (segmentClick)="openRef($event)" />
     }
     @if (coverage() && store.bundle()?.analysis?.coverage && stepIndex() === null) {
       <app-coverage-overview (testClick)="openRef($event)" />
@@ -108,7 +112,7 @@ export class GroupView {
   readonly scope = input.required<string>();
   /** File view: marks apply to all places of a line. */
   readonly fileView = input(false);
-  /** Show the Spec-Diff and the coverage of the changed code above the blocks (test category). */
+  /** Show the Spec-Diff, the Fallmatrix and the coverage of the changed code above the blocks (test category). */
   readonly coverage = input(false);
 
   protected readonly progress = computed(() => this.store.progressOf(this.slots()));

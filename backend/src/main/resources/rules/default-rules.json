@@ -449,5 +449,22 @@
       {"level": "integration", "paths": ["**/*IT.java", "**/*IT.kt", "**/*IntegrationTest.*", "**/integration/**", "**/*.int-spec.*", "**/*.integration.*"], "code": ["@(QuarkusTest|QuarkusIntegrationTest|SpringBootTest|DataJpaTest|DataJdbcTest|DataMongoTest|DataR2dbcTest|JdbcTest|JooqTest|WebMvcTest|WebFluxTest|RestClientTest|AutoConfigureMockMvc|Testcontainers|Container|MicronautTest)\\b", "\\b(PostgreSQL|MySQL|MariaDB|MongoDB|Kafka|Generic|Oracle|MSSQLServer|Redis|Neo4j|RabbitMQ|LocalStack|Elasticsearch)Container\\b", "\\bRestAssured\\b", "\\bgiven\\s*\\(\\s*\\)\\s*\\.", "\\b(MockMvc|WebTestClient|TestRestTemplate)\\b", "['\\\"]supertest['\\\"]", "\\brequest\\s*\\(\\s*app\\b", "\\bdockertest\\b"]},
       {"level": "integration", "code": ["\\bprovideHttpClient\\s*\\(\\s*\\)"], "unless": ["\\bprovideHttpClientTesting\\s*\\(|\\bHttpClientTestingModule\\b|\\bHttpTestingController\\b"]}
     ]
+  },
+  "caseMatrix": {
+    "$comment": "Fallmatrix (docs/05-analyse.md, 5e). Columns of a parameter table (@ValueSource/@CsvSource method parameters, it.each callback parameters / object keys / template header, Go struct fields) are 'expected' when their name matches one of expectedNames (regexes, Java syntax, searched in the name) or when the name is used only inside assertions of the test body; else 'input'. nameFields: Go struct fields that name a case (t.Run(tt.name, …)); their value becomes the row name instead of a column. A rules file without this section, or without one of its keys, uses the built-in value for that key.",
+    "expectedNames": [
+      "(?i)^expect(ed)?\\w*$",
+      "(?i)^exp$",
+      "(?i)^want(ed)?\\w*$",
+      "(?i)^(result|outcome|output|out|answer)\\w*$",
+      "(?i)^(http)?status(code)?$",
+      "(?i)^(message|msg|error|err|errorMessage|errMsg)s?$",
+      "(?i)^(is)?(valid|ok|success|accepted|allowed)$",
+      "(?i)^response\\w*$",
+      "(?i)^should\\w*$"
+    ],
+    "nameFields": [
+      "(?i)^(name|desc|description|title|scenario|testName|caseName)$"
+    ]
   }
 }

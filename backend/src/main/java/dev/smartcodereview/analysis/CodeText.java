@@ -21,18 +21,25 @@ public final class CodeText {
 
     public final List<String> lines;
     public final List<String> code;
+    /**
+     * "Visible" copy: comments blanked, string contents kept (same length, same columns). Comes from the same scan,
+     * so it also knows strings that span lines (text blocks, template literals).
+     */
+    public final List<String> visible;
     /** For each line (0-based), the brace pair that was opened at that position; see {@link #pairAt}. */
     private final List<BracePair> pairs = new ArrayList<>();
 
-    private CodeText(List<String> lines, List<String> code) {
+    private CodeText(List<String> lines, List<String> code, List<String> visible) {
         this.lines = lines;
         this.code = code;
+        this.visible = visible;
     }
 
     public static CodeText of(String source) {
         List<String> lines = List.of(source.replace("\r\n", "\n").split("\n", -1));
         List<String> code = new ArrayList<>(lines.size());
-        CodeText ct = new CodeText(lines, code);
+        List<String> visible = new ArrayList<>(lines.size());
+        CodeText ct = new CodeText(lines, code, visible);
 
         enum Mode { CODE, BLOCK_COMMENT, SQ, DQ, TEMPLATE, TEXT_BLOCK }
         Deque<Mode> modes = new ArrayDeque<>();
@@ -43,6 +50,7 @@ public final class CodeText {
         for (int li = 0; li < lines.size(); li++) {
             String s = lines.get(li);
             StringBuilder out = new StringBuilder(s.length());
+            StringBuilder vis = new StringBuilder(s.length());
             if (modes.peek() == Mode.SQ || modes.peek() == Mode.DQ) {
                 modes.pop(); // single-line strings never continue
             }
@@ -50,6 +58,10 @@ public final class CodeText {
                 char c = s.charAt(i);
                 char next = i + 1 < s.length() ? s.charAt(i + 1) : 0;
                 Mode mode = modes.peek();
+                // every branch writes as many characters as it consumes: inside a string the visible copy keeps them
+                int from = i;
+                int written = out.length();
+                boolean inString = mode == Mode.SQ || mode == Mode.DQ || mode == Mode.TEXT_BLOCK || mode == Mode.TEMPLATE;
                 switch (mode) {
                     case BLOCK_COMMENT -> {
                         if (c == '*' && next == '/') {
@@ -138,8 +150,11 @@ public final class CodeText {
                         }
                     }
                 }
+                int n = out.length() - written;
+                vis.append(inString ? s.substring(from, Math.min(s.length(), from + n)) : out.substring(written));
             }
             code.add(out.toString());
+            visible.add(vis.length() == out.length() ? vis.toString() : out.toString());
         }
         ct.pairs.sort((a, b) -> a.openLine() != b.openLine() ? Integer.compare(a.openLine(), b.openLine())
                 : Integer.compare(a.openCol(), b.openCol()));

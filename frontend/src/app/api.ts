@@ -408,6 +408,48 @@ export interface Analysis {
   coverage?: CodeCoverage[] | null;
   /** Spec-Diff: test names of every changed test file, in path order (absent in older analyses) */
   specs?: SpecFile[] | null;
+  /** Fallmatrix: similar and parameterised tests as tables input → expected, by path and line (absent in older analyses) */
+  caseMatrices?: CaseMatrix[] | null;
+}
+
+export type CaseMatrixKind = 'similar' | 'parameterized';
+export type CaseColumnRole = 'input' | 'expected';
+
+/**
+ * Fallmatrix (Model.CaseMatrix): near-identical tests of a changed test file, or the rows of one parameterised test,
+ * as a table input → expected - pattern-based, deterministic. template: the code of the first row with the columns as
+ * slots ‹1›, ‹2›, … (slot n = columns[n-1]); columns: input columns first, then expected ones.
+ */
+export interface CaseMatrix {
+  id: string;
+  path: string;
+  title: string;
+  kind: CaseMatrixKind;
+  template: string;
+  columns: CaseColumn[];
+  rows: CaseRow[];
+}
+
+export interface CaseColumn {
+  /** where the value goes (`putJerseyNumber(…) Arg 1`, a parameter name) or what is checked (`statusCode`) */
+  label: string;
+  role: CaseColumnRole;
+  /** input columns: the distinct values of all rows, sorted - what is covered; empty for expected columns */
+  values: string[];
+}
+
+export interface CaseRow {
+  /** test name (parameterised: the display name of the case) */
+  name: string;
+  /** the test's segment when it has changed lines, null for unchanged tests of the file */
+  segmentId: string | null;
+  line: number | null;
+  /** one per column, as written (strings with quotes); null = not checked by this test, «✓» = checked without a value */
+  values: (string | null)[];
+  /** index of an earlier row with the same inputs (same case tested twice) */
+  duplicateOf: number | null;
+  /** such a duplicate expects something else */
+  contradicts: boolean;
 }
 
 export interface LogEntry {

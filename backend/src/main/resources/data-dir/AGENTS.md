@@ -72,6 +72,15 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    entries and without base. `assertionsBefore` / `assertionsAfter` = assertion statements in the test body
    (null for suites and missing sides); `disabled` = switched off now (xit, it.skip, @Disabled, t.Skip, ...).
    A test that now expects something else or less is how tests get bent to fit broken code: check these first.
+   `caseMatrices[]` (Fallmatrix, pattern-based, rules section `caseMatrix`; null in older analyses, empty for the
+   whole repository) = near-identical tests of a changed test file (`kind: similar`: same suite, same input code
+   once literals are masked, assertions may differ) and parameterised tests with ≥ 2 literal rows (`kind:
+   parameterized`: @ValueSource/@CsvSource/…, it.each, Go table tests) as a table input → expected. `id` (m1, …),
+   `path`, `title` (suite › shared call or test name), `template` (code of the first row, slot ‹n› = column n),
+   `columns[]` with `label`, `role` (input | expected), `values` (input columns: distinct covered values, sorted),
+   `rows[]` with `name`, `segmentId` (null = unchanged test), `line`, `values` (one per column, as written; null =
+   not checked), `duplicateOf` (index of an earlier row with the same inputs = the same case tested twice),
+   `contradicts` (that duplicate expects something else). Duplicates and contradictions are worth a comment.
 6. `architecture.style` = "hexagonal" when the repo uses ports & adapters, "layered" for domain / application /
    adapter packages without ports; then `segments[].layer` is domain | application | usecase | adapter.
    `segments[].frontend` marks web frontend code. `flows[].edges[].kind` = "http" for REST calls from the

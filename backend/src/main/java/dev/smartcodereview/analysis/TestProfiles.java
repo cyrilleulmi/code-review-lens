@@ -36,6 +36,7 @@ import java.util.regex.Pattern;
  * (1 each), @NullAndEmptySource (2); other sources (@MethodSource, @CsvFileSource, …) make the count unknown.
  * JS/TS it.each / test.each with a literal array (elements) or a template table (rows minus the header). Go table
  * tests: a `for _, tt := range tests` loop over a slice/map literal declared in the test body (its entries).
+ * {@link #table} reads the same sources with the values of each row (for the Fallmatrix, {@link CaseMatrices}).
  */
 public final class TestProfiles {
 
@@ -73,10 +74,11 @@ public final class TestProfiles {
      * The parts of a test case the profile looks at (see the class comment). nameWords: the test name and the names
      * of its enclosing describe blocks as lower-case words; bodyLine: first line of the body (1-based); inputs: the
      * argument lists of the calls to the targets and of the "inputCalls" (HTTP requests) in the body, one per line -
-     * what the test feeds the code under test.
+     * what the test feeds the code under test. bodyCode: the body with string contents blanked too (aligned with
+     * body: same length, same columns).
      */
     public record TestText(String nameWords, String head, String body, int bodyLine, String bodyWithoutAssertions,
-                           String surroundings, List<Assertion> assertions, String inputs) {
+                           String surroundings, List<Assertion> assertions, String inputs, String bodyCode) {
     }
 
     /**
@@ -156,7 +158,8 @@ public final class TestProfiles {
             rest.append(inAssertion[li] ? "" : v).append('\n');
         }
         return new TestText(nameWords(symbols, test), head.toString(), body.toString(), start[0] + 1, rest.toString(),
-                surroundings(text, symbols, test), assertions, inputs(body.toString(), bodyCode.toString(), targets));
+                surroundings(text, symbols, test), assertions, inputs(body.toString(), bodyCode.toString(), targets),
+                bodyCode.toString());
     }
 
     /**
@@ -226,12 +229,18 @@ public final class TestProfiles {
         return false;
     }
 
-    /** (line, col), 0-based, right after the first "{" or "=>" from (line, col) on; the start when there is none. */
+    /**
+     * (line, col), 0-based, right after the first "{" or "=>" from (line, col) on; the start when there is none. A "{"
+     * right after "(" or "," opens a destructured parameter or an object argument, not the body.
+     */
     private static int[] bodyStart(CodeText text, int line, int col, int lastLine) {
         for (int li = line; li <= lastLine && li < text.code.size(); li++) {
             String c = text.code.get(li);
             int from = li == line ? Math.min(col, c.length()) : 0;
             int brace = c.indexOf('{', from);
+            while (brace >= 0 && c.substring(from, brace).stripTrailing().matches("(?s).*[(,]")) {
+                brace = c.indexOf('{', brace + 1);
+            }
             int arrow = c.indexOf("=>", from);
             if (brace >= 0 || arrow >= 0) {
                 int end = brace < 0 ? arrow + 2 : arrow < 0 ? brace + 1 : Math.min(brace + 1, arrow + 2);
@@ -294,25 +303,7 @@ public final class TestProfiles {
 
     /** A line (0-based) with comments blanked but string contents kept (code and raw text are aligned). */
     static String visible(CodeText text, int li) {
-        String raw = text.lines.get(li);
-        String code = text.code.get(li);
-        StringBuilder sb = new StringBuilder(code.length());
-        char quote = 0;
-        for (int i = 0; i < code.length(); i++) {
-            char c = code.charAt(i);
-            if (quote == 0) {
-                if (c == '\'' || c == '"' || c == '`') {
-                    quote = c;
-                }
-                sb.append(c);
-            } else if (c == quote) {
-                quote = 0;
-                sb.append(c);
-            } else {
-                sb.append(c == ' ' && i < raw.length() ? raw.charAt(i) : c);
-            }
-        }
-        return sb.toString();
+        return text.visible.get(li);
     }
 
     // ------------------------------------------------------------------ scenario
@@ -654,6 +645,612 @@ public final class TestProfiles {
         return null;
     }
 
+    // ------------------------------------------------------------------ parameter tables with their values
+
+    /** Style of a parameter table: decides how a row's display name is formed (see {@link CaseMatrices}). */
+    public static final String JUNIT = "junit";
+    public static final String EACH = "each";
+    public static final String GO = "go";
+
+    /**
+     * The literal rows of a parameterised test. style: junit | each | go. labels: the column names - method parameters,
+     * the callback parameters / object keys / header of an it.each table, the struct fields of a Go table (may be fewer
+     * than the values of a row). rows: one per case, in source order. nameTemplate: the display-name pattern (JUnit
+     * name = "…", the it.each name with %s / $key), null if none. rowVar: the variable a row is reached through
+     * (Go: `tt` of `for _, tt := range tests`, it.each: a single callback parameter for object rows), null when the
+     * values are bound to names directly. endLine: last line (1-based) of a table that sits in the test body (Go), else 0.
+     */
+    public record Table(String style, List<String> labels, List<TableRow> rows, String nameTemplate, String rowVar, int endLine) {
+    }
+
+    /** One row: line (1-based) where it starts, its values as written (strings with quotes, null = missing), key: the map key of a Go map table, else null. */
+    public record TableRow(int line, List<String> values, String key) {
+    }
+
+    private static final Pattern GO_RANGE_VARS = Pattern.compile("\\bfor\\s+(\\w+)\\s*(?:,\\s*(\\w+)\\s*)?:=\\s*range\\s+(\\w+)\\s*\\{");
+    private static final Pattern GO_FIELD = Pattern.compile("^([A-Za-z_]\\w*(?:\\s*,\\s*[A-Za-z_]\\w*)*)\\s+\\S");
+    private static final Pattern GO_KEYED = Pattern.compile("^\\s*([A-Za-z_]\\w*)\\s*:(?!=)");
+    private static final Pattern EACH_CALLBACK = Pattern.compile(
+            "^\\s*,\\s*(?:async\\s+)?(?:function\\s*[\\w$]*\\s*)?\\(([^)]*)\\)|^\\s*,\\s*(?:async\\s+)?([A-Za-z_$][\\w$]*)\\s*=>");
+
+    /**
+     * The literal rows of a parameterised test, or null when it has none or they are not all literal (@MethodSource,
+     * it.each(variable), a Go table built elsewhere, ...).
+     */
+    public Table table(CodeText text, Symbol test) {
+        int decl = Expectations.declarationLine(text, test);
+        boolean[] junit = {false};
+        Table t = junitTable(text, test, decl, junit);
+        if (junit[0]) {
+            return t;
+        }
+        EachTable each = SymbolExtractor.eachTable(text, decl - 1);
+        if (each != null && !each.suite()) {
+            return eachValues(text, each);
+        }
+        return goValues(text, test, decl);
+    }
+
+    /** Text of lines from..to (0-based, inclusive) joined with "\n": code (strings blanked) and visible (strings kept). */
+    private static String[] lines(CodeText text, int from, int to) {
+        StringBuilder code = new StringBuilder();
+        StringBuilder vis = new StringBuilder();
+        for (int li = from; li <= to && li < text.code.size(); li++) {
+            if (li > from) {
+                code.append('\n');
+                vis.append('\n');
+            }
+            code.append(text.code.get(li));
+            vis.append(visible(text, li));
+        }
+        return new String[]{code.toString(), vis.toString()};
+    }
+
+    /** 1-based line of an offset in a text that starts at line first (0-based). */
+    private static int lineAt(String s, int offset, int first) {
+        int n = first + 1;
+        for (int i = 0; i < offset && i < s.length(); i++) {
+            if (s.charAt(i) == '\n') {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private static String clip(String vis, int[] piece) {
+        return vis.substring(piece[0], piece[1]).replaceAll("\\s+", " ").strip();
+    }
+
+    private static Table junitTable(CodeText text, Symbol test, int decl, boolean[] parameterized) {
+        List<TableRow> rows = new ArrayList<>();
+        List<String> header = null;
+        String nameTemplate = null;
+        boolean unknown = false;
+        for (int li = test.startLine() - 1; li < decl - 1; li++) {
+            Matcher m = NAME_START.matcher(text.code.get(li));
+            if (!m.find()) {
+                continue;
+            }
+            int end = SymbolExtractor.annotationEnd(text, li);
+            String[] both = lines(text, li, end);
+            String code = both[0];
+            String vis = both[1];
+            String name = m.group(1).substring(m.group(1).lastIndexOf('.') + 1);
+            switch (name) {
+                case "ParameterizedTest" -> {
+                    parameterized[0] = true;
+                    Matcher n = Pattern.compile("\\bname\\s*=\\s*\"").matcher(code);
+                    if (n.find()) {
+                        int close = code.indexOf('"', n.end());
+                        nameTemplate = close < 0 ? null : vis.substring(n.end(), close);
+                    }
+                }
+                case "ValueSource", "EnumSource" -> {
+                    Matcher v = Pattern.compile(name.equals("ValueSource") ? "=\\s*([{]?)" : "\\bnames\\s*=\\s*([{]?)").matcher(code);
+                    if (!v.find() || (name.equals("EnumSource") && code.contains("mode"))) {
+                        unknown = true;
+                        break;
+                    }
+                    List<int[]> pieces;
+                    if (v.group(1).isEmpty()) {
+                        int close = code.lastIndexOf(')');
+                        pieces = List.of(new int[]{v.end(), close < v.end() ? code.length() : close});
+                    } else {
+                        pieces = pieces(code, v.end() - 1);
+                    }
+                    if (pieces == null) {
+                        unknown = true;
+                        break;
+                    }
+                    for (int[] p : pieces) {
+                        String value = clip(vis, p);
+                        if (name.equals("EnumSource") && value.length() >= 2 && value.startsWith("\"")) {
+                            value = value.substring(1, value.length() - 1);
+                        }
+                        rows.add(new TableRow(lineAt(code, p[0], li), List.of(value), null));
+                    }
+                }
+                case "CsvSource" -> {
+                    header = csvRows(text, li, code, vis, rows, header);
+                    if (header == null && rows.isEmpty()) {
+                        unknown = true;
+                    }
+                }
+                case "NullSource" -> rows.add(new TableRow(li + 1, List.of("null"), null));
+                case "EmptySource" -> rows.add(new TableRow(li + 1, List.of("\"\""), null));
+                case "NullAndEmptySource" -> {
+                    rows.add(new TableRow(li + 1, List.of("null"), null));
+                    rows.add(new TableRow(li + 1, List.of("\"\""), null));
+                }
+                case "MethodSource", "ArgumentsSource", "CsvFileSource", "FieldSource" -> unknown = true;
+                default -> {
+                }
+            }
+            li = end;
+        }
+        if (!parameterized[0] || unknown || rows.isEmpty()) {
+            return null;
+        }
+        List<String> labels = methodParameters(text, test, decl);
+        if (labels.isEmpty() && header != null) {
+            labels = header;
+        }
+        return new Table(JUNIT, labels, rows, nameTemplate, null, 0);
+    }
+
+    /**
+     * The rows of a @CsvSource (array of strings, a single string or a text block), split at the delimiter outside
+     * single quotes; cells as written, an empty cell is null (as JUnit reads it). Returns the header of a text block
+     * with useHeadersInDisplayName = true (that line is no case), else an empty list; null when nothing was found.
+     */
+    private static List<String> csvRows(CodeText text, int li, String code, String vis, List<TableRow> rows, List<String> header) {
+        String delimiter = ",";
+        Matcher d = Pattern.compile("\\bdelimiter\\s*=\\s*'(.)'").matcher(vis);
+        Matcher ds = Pattern.compile("\\bdelimiterString\\s*=\\s*\"([^\"]+)\"").matcher(vis);
+        if (d.find()) {
+            delimiter = d.group(1);
+        } else if (ds.find()) {
+            delimiter = ds.group(1);
+        }
+        boolean headers = Pattern.compile("\\buseHeadersInDisplayName\\s*=\\s*true").matcher(code).find();
+        List<String> found = new ArrayList<>();
+        List<Integer> lines = new ArrayList<>();
+        int block = code.indexOf("\"\"\"");
+        if (block >= 0) {
+            int close = code.indexOf("\"\"\"", block + 3);
+            if (close < 0) {
+                return null;
+            }
+            int from = block + 3;
+            for (String l : vis.substring(from, close).split("\n", -1)) {
+                String t = l.strip();
+                if (!t.isEmpty() && !t.startsWith("#")) {
+                    found.add(t);
+                    lines.add(lineAt(code, from, li));
+                }
+                from += l.length() + 1;
+            }
+        } else {
+            int paren = code.indexOf('(');
+            int brace = code.indexOf('{', Math.max(paren, 0));
+            List<int[]> pieces;
+            if (brace >= 0) {
+                pieces = pieces(code, brace);
+            } else {
+                int q = paren < 0 ? -1 : code.indexOf('"', paren);
+                int q2 = q < 0 ? -1 : code.indexOf('"', q + 1);
+                pieces = q2 < 0 ? null : List.of(new int[]{q, q2 + 1});
+            }
+            if (pieces == null) {
+                return null;
+            }
+            for (int[] p : pieces) {
+                String s = vis.substring(p[0], p[1]).strip();
+                if (s.length() >= 2 && s.startsWith("\"") && s.endsWith("\"")) {
+                    found.add(s.substring(1, s.length() - 1));
+                    lines.add(lineAt(code, p[0], li));
+                }
+            }
+        }
+        List<String> head = List.of();
+        for (int i = 0; i < found.size(); i++) {
+            List<String> cells = csvCells(found.get(i), delimiter);
+            if (headers && i == 0) {
+                head = cells;
+                continue;
+            }
+            rows.add(new TableRow(lines.get(i), cells, null));
+        }
+        return header != null && head.isEmpty() ? header : head;
+    }
+
+    /** Cells of one CSV line: split at the delimiter outside '…', trimmed; an empty unquoted cell is "null". */
+    static List<String> csvCells(String line, String delimiter) {
+        List<String> cells = new ArrayList<>();
+        StringBuilder cell = new StringBuilder();
+        boolean quoted = false;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c == '\'') {
+                quoted = !quoted;
+            }
+            if (!quoted && line.startsWith(delimiter, i)) {
+                cells.add(cell.toString().strip());
+                cell.setLength(0);
+                i += delimiter.length() - 1;
+                continue;
+            }
+            cell.append(c);
+        }
+        cells.add(cell.toString().strip());
+        cells.replaceAll(c -> c.isEmpty() ? "null" : c);
+        return cells;
+    }
+
+    /** Names of the parameters of a test method: `void x(int number, @Foo String text)` -> [number, text]; Kotlin `a: Int` too. */
+    private static List<String> methodParameters(CodeText text, Symbol test, int decl) {
+        String line = text.code.get(decl - 1);
+        Matcher m = Pattern.compile("\\b" + Pattern.quote(test.name()) + "\\s*\\(").matcher(line);
+        if (!m.find()) {
+            return List.of();
+        }
+        int[] end = text.skipParens(decl - 1, m.end() - 1);
+        if (end == null) {
+            return List.of();
+        }
+        String params = lines(text, decl - 1, end[0])[0];
+        int open = m.end() - 1;
+        List<int[]> pieces = pieces(params, open);
+        List<String> names = new ArrayList<>();
+        if (pieces == null) {
+            return names;
+        }
+        for (int[] p : pieces) {
+            String param = params.substring(p[0], p[1]).replaceAll("@[\\w.]+(\\s*\\([^)]*\\))?", "").strip();
+            int colon = param.indexOf(':');
+            String part = colon >= 0 ? param.substring(0, colon) : param;
+            Matcher id = Pattern.compile("([A-Za-z_$][\\w$]*)\\s*$").matcher(part.strip());
+            names.add(id.find() ? id.group(1) : "");
+        }
+        return names;
+    }
+
+    /** The rows of an it.each table: a literal array (of arrays, objects or single values) or a template table. */
+    private static Table eachValues(CodeText text, EachTable each) {
+        String[] both = lines(text, each.line(), each.endLine());
+        String code = both[0];
+        String vis = both[1];
+        int from = each.col();
+        int to = code.length() - (text.code.get(each.endLine()).length() - each.endCol());
+        List<TableRow> rows = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+        Callback callback = eachCallback(text, each);
+        String rowVar = null;
+        if (each.template()) {
+            List<String> header = null;
+            int offset = from + 1;
+            for (String l : vis.substring(from + 1, Math.max(from + 1, to - 1)).split("\n", -1)) {
+                if (!l.isBlank()) {
+                    List<String> cells = templateCells(l);
+                    if (header == null) {
+                        header = cells;
+                    } else {
+                        rows.add(new TableRow(lineAt(code, offset, each.line()), cells, null));
+                    }
+                }
+                offset += l.length() + 1;
+            }
+            if (header == null || rows.isEmpty()) {
+                return null;
+            }
+            labels.addAll(header);
+            if (callback.names().size() == 1 && !callback.destructured()) {
+                rowVar = callback.names().getFirst();
+            }
+        } else {
+            int bracket = from + 1;
+            while (bracket < code.length() && Character.isWhitespace(code.charAt(bracket))) {
+                bracket++;
+            }
+            if (bracket >= code.length() || code.charAt(bracket) != '[') {
+                return null; // it.each(variable): rows not literal
+            }
+            List<int[]> elements = pieces(code, bracket);
+            if (elements == null || elements.isEmpty()) {
+                return null;
+            }
+            boolean objects = code.charAt(elements.getFirst()[0]) == '{';
+            for (int[] e : elements) {
+                char c = code.charAt(e[0]);
+                List<String> values = new ArrayList<>();
+                if (c == '[' || c == '{') {
+                    List<int[]> cells = pieces(code, e[0]);
+                    if (cells == null) {
+                        return null;
+                    }
+                    for (int[] cell : cells) {
+                        if (c == '{') {
+                            int colon = topLevelColon(code, cell[0], cell[1]);
+                            String key = (colon < 0 ? vis.substring(cell[0], cell[1]) : vis.substring(cell[0], colon)).strip()
+                                    .replaceAll("^['\"]|['\"]$", "");
+                            String value = colon < 0 ? key : clip(vis, new int[]{colon + 1, cell[1]});
+                            int k = labels.indexOf(key);
+                            if (k < 0) {
+                                labels.add(key);
+                                k = labels.size() - 1;
+                            }
+                            while (values.size() <= k) {
+                                values.add(null);
+                            }
+                            values.set(k, value);
+                        } else {
+                            values.add(clip(vis, cell));
+                        }
+                    }
+                } else {
+                    values.add(clip(vis, e));
+                }
+                rows.add(new TableRow(lineAt(code, e[0], each.line()), values, null));
+            }
+            if (objects) {
+                if (callback.names().size() == 1 && !callback.destructured()) {
+                    rowVar = callback.names().getFirst();
+                }
+            } else {
+                labels.addAll(callback.names());
+            }
+        }
+        int width = labels.size();
+        for (TableRow r : rows) {
+            width = Math.max(width, r.values().size());
+        }
+        List<TableRow> padded = new ArrayList<>();
+        for (TableRow r : rows) {
+            List<String> v = new ArrayList<>(r.values());
+            while (v.size() < width) {
+                v.add(null);
+            }
+            padded.add(new TableRow(r.line(), v, null));
+        }
+        return new Table(EACH, labels, padded, each.name(), rowVar, 0);
+    }
+
+    /** The cells of a template-table line: split at "|" outside ${…}; ${x} -> x. */
+    private static List<String> templateCells(String line) {
+        List<String> cells = new ArrayList<>();
+        int depth = 0;
+        StringBuilder cell = new StringBuilder();
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+            } else if (c == '|' && depth == 0 && (i + 1 >= line.length() || line.charAt(i + 1) != '|')
+                    && (i == 0 || line.charAt(i - 1) != '|')) {
+                cells.add(cell.toString());
+                cell.setLength(0);
+                continue;
+            }
+            cell.append(c);
+        }
+        cells.add(cell.toString());
+        List<String> result = new ArrayList<>();
+        for (String c : cells) {
+            String t = c.strip();
+            if (t.startsWith("${") && t.endsWith("}")) {
+                t = t.substring(2, t.length() - 1).strip();
+            }
+            result.add(t);
+        }
+        return result;
+    }
+
+    /** Index of the first ":" at depth 0 in code[from, to), or -1. */
+    private static int topLevelColon(String code, int from, int to) {
+        int depth = 0;
+        for (int i = from; i < to; i++) {
+            char c = code.charAt(i);
+            if (c == '(' || c == '[' || c == '{') {
+                depth++;
+            } else if (c == ')' || c == ']' || c == '}') {
+                depth--;
+            } else if (c == ':' && depth == 0) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * The parameters of the callback after the name of an it.each block: `('name', async (typed, status) => …)` ->
+     * [typed, status]; a destructured object or array `({ a, b }) =>` -> [a, b]; `row =>` -> [row].
+     */
+    private record Callback(List<String> names, boolean destructured) {
+        static final Callback NONE = new Callback(List.of(), false);
+    }
+
+    private static Callback eachCallback(CodeText text, EachTable each) {
+        String code = lines(text, each.endLine(), Math.min(each.endLine() + 4, text.code.size() - 1))[0];
+        int i = each.endCol();
+        while (i < code.length() && Character.isWhitespace(code.charAt(i))) {
+            i++;
+        }
+        if (i >= code.length() || code.charAt(i) != '(') {
+            return Callback.NONE;
+        }
+        i++;
+        while (i < code.length() && Character.isWhitespace(code.charAt(i))) {
+            i++;
+        }
+        if (i >= code.length() || "'\"`".indexOf(code.charAt(i)) < 0) {
+            return Callback.NONE;
+        }
+        int close = code.indexOf(code.charAt(i), i + 1);
+        if (close < 0) {
+            return Callback.NONE;
+        }
+        Matcher m = EACH_CALLBACK.matcher(code.substring(close + 1));
+        if (!m.find()) {
+            return Callback.NONE;
+        }
+        if (m.group(2) != null) {
+            return new Callback(List.of(m.group(2)), false);
+        }
+        String params = m.group(1).strip();
+        if (params.startsWith("{") || params.startsWith("[")) {
+            // destructured: the names inside are the columns
+            String inner = params.replaceAll("^[\\[{]|[\\]}][^\\]}]*$", "");
+            List<String> names = new ArrayList<>();
+            for (String p : inner.split(",")) {
+                Matcher id = Pattern.compile("^\\s*([A-Za-z_$][\\w$]*)").matcher(p);
+                if (id.find()) {
+                    names.add(id.group(1));
+                }
+            }
+            return new Callback(names, true);
+        }
+        List<String> names = new ArrayList<>();
+        for (String p : params.split(",")) {
+            Matcher id = Pattern.compile("^\\s*(?:\\.\\.\\.)?([A-Za-z_$][\\w$]*)").matcher(p);
+            if (id.find()) {
+                names.add(id.group(1));
+            }
+        }
+        return new Callback(names, false);
+    }
+
+    /**
+     * The entries of a Go table test (see {@link #goTable}) with their values: positional entries in field order,
+     * keyed entries (`name: "x"`) by field; for a map table the key of each entry.
+     */
+    private static Table goValues(CodeText text, Symbol test, int decl) {
+        int last = Math.min(test.endLine(), text.code.size());
+        String[] both = lines(text, decl - 1, last - 1);
+        String body = both[0];
+        String vis = both[1];
+        Matcher range = GO_RANGE_VARS.matcher(body);
+        while (range.find()) {
+            String var = Pattern.quote(range.group(3));
+            Matcher declaration = Pattern.compile("\\b" + var + "\\s*:?=\\s*(\\[\\]|map\\[[^\\]]*\\])\\s*(struct\\s*\\{|\\*?([\\w.]+)\\s*\\{)")
+                    .matcher(body);
+            if (!declaration.find() || declaration.start() > range.start()) {
+                continue;
+            }
+            boolean map = declaration.group(1).startsWith("map");
+            int open = declaration.end() - 1;
+            List<String> fields;
+            if (declaration.group(2).startsWith("struct")) {
+                int close = matching(body, open);
+                if (close < 0) {
+                    continue;
+                }
+                fields = goFields(body.substring(open + 1, close));
+                open = close + 1;
+                while (open < body.length() && Character.isWhitespace(body.charAt(open))) {
+                    open++;
+                }
+                if (open >= body.length() || body.charAt(open) != '{') {
+                    continue;
+                }
+            } else {
+                fields = goNamedFields(text, declaration.group(3));
+            }
+            List<int[]> entries = pieces(body, open);
+            if (entries == null || entries.isEmpty()) {
+                continue;
+            }
+            int tableEnd = matching(body, open);
+            List<TableRow> rows = new ArrayList<>();
+            List<String> labels = new ArrayList<>(fields);
+            for (int[] e : entries) {
+                int start = e[0];
+                String key = null;
+                if (map) {
+                    int colon = topLevelColon(body, e[0], e[1]);
+                    if (colon < 0) {
+                        continue;
+                    }
+                    key = vis.substring(e[0], colon).strip();
+                    start = colon + 1;
+                }
+                int brace = body.indexOf('{', start);
+                if (brace < 0 || brace >= e[1]) {
+                    continue;
+                }
+                List<int[]> cells = pieces(body, brace);
+                if (cells == null) {
+                    continue;
+                }
+                List<String> values = new ArrayList<>();
+                for (int i = 0; i < cells.size(); i++) {
+                    int[] cell = cells.get(i);
+                    Matcher keyed = GO_KEYED.matcher(body.substring(cell[0], cell[1]));
+                    int k = i;
+                    int from = cell[0];
+                    if (keyed.find()) {
+                        k = labels.indexOf(keyed.group(1));
+                        if (k < 0) {
+                            labels.add(keyed.group(1));
+                            k = labels.size() - 1;
+                        }
+                        from = cell[0] + keyed.end();
+                    }
+                    while (values.size() <= k) {
+                        values.add(null);
+                    }
+                    values.set(k, clip(vis, new int[]{from, cell[1]}));
+                }
+                rows.add(new TableRow(lineAt(body, e[0], decl - 1), values, key));
+            }
+            if (rows.isEmpty()) {
+                continue;
+            }
+            int width = labels.size();
+            for (TableRow r : rows) {
+                width = Math.max(width, r.values().size());
+            }
+            List<TableRow> padded = new ArrayList<>();
+            for (TableRow r : rows) {
+                List<String> v = new ArrayList<>(r.values());
+                while (v.size() < width) {
+                    v.add(null);
+                }
+                padded.add(new TableRow(r.line(), v, r.key()));
+            }
+            String rowVar = range.group(2) != null ? range.group(2) : null;
+            return new Table(GO, labels, padded, null, rowVar,
+                    tableEnd < 0 ? 0 : lineAt(body, tableEnd, decl - 1));
+        }
+        return null;
+    }
+
+    /** Field names of a Go struct body: `name string`, `a, b int` (embedded types and tags are skipped). */
+    private static List<String> goFields(String structBody) {
+        List<String> names = new ArrayList<>();
+        for (String decl : structBody.split("[\n;]")) {
+            Matcher m = GO_FIELD.matcher(decl.strip());
+            if (m.find()) {
+                for (String n : m.group(1).split(",")) {
+                    names.add(n.strip());
+                }
+            }
+        }
+        return names;
+    }
+
+    /** Fields of a named struct type declared in the file (`type testCase struct {…}`). */
+    private static List<String> goNamedFields(CodeText text, String type) {
+        String name = type.substring(type.lastIndexOf('.') + 1);
+        String all = String.join("\n", text.code);
+        Matcher m = Pattern.compile("\\btype\\s+" + Pattern.quote(name) + "\\s+struct\\s*\\{").matcher(all);
+        if (!m.find()) {
+            return List.of();
+        }
+        int close = matching(all, m.end() - 1);
+        return close < 0 ? List.of() : goFields(all.substring(m.end(), close));
+    }
+
     private static String joined(CodeText text, int line, int col, int endLine, int endCol) {
         StringBuilder sb = new StringBuilder();
         for (int li = line; li <= endLine; li++) {
@@ -670,9 +1267,19 @@ public final class TestProfiles {
      * pieces between commas at depth 1, so a trailing comma does not count. Null when the bracket is not closed.
      */
     static Integer elements(String code, int open) {
+        List<int[]> pieces = pieces(code, open);
+        return pieces == null ? null : pieces.size();
+    }
+
+    /**
+     * The top-level elements of the bracket opened at index open (strings already blanked) as [start, end) without
+     * surrounding whitespace; empty pieces (a trailing comma) are left out. Null when the bracket is not closed.
+     */
+    static List<int[]> pieces(String code, int open) {
+        List<int[]> result = new ArrayList<>();
         int depth = 0;
-        int count = 0;
-        boolean content = false;
+        int start = -1;
+        int end = -1;
         for (int i = open; i < code.length(); i++) {
             char c = code.charAt(i);
             if (c == '(' || c == '[' || c == '{') {
@@ -683,17 +1290,23 @@ public final class TestProfiles {
             } else if (c == ')' || c == ']' || c == '}') {
                 depth--;
                 if (depth == 0) {
-                    return content ? count + 1 : count;
+                    if (start >= 0) {
+                        result.add(new int[]{start, end});
+                    }
+                    return result;
                 }
             } else if (c == ',' && depth == 1) {
-                if (content) {
-                    count++;
+                if (start >= 0) {
+                    result.add(new int[]{start, end});
                 }
-                content = false;
+                start = -1;
                 continue;
             }
             if (depth >= 1 && !Character.isWhitespace(c)) {
-                content = true;
+                if (start < 0) {
+                    start = i;
+                }
+                end = i + 1;
             }
         }
         return null;
