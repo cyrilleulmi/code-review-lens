@@ -6,6 +6,8 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+## [0.6.0] – 2026-11-15
+
 ### Neu
 - **Light Mode:** Neben dem dunklen Design (Standard) gibt es ein helles nach IntelliJ New UI «Light», mit eigenen Syntaxfarben, Diff-, Schicht-, Sprach- und Verbindungsfarben. Der Kontrast-Knopf in der Toolbar wechselt sofort; die Wahl gilt pro Browser und wird schon vor dem ersten Zeichnen angewendet.
 - **Englisch:**
@@ -101,7 +103,8 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 ### Neu
 - Erster PoC: offene GitHub-PRs (eigene und Review-Anfragen), Zerlegung in Segmente, Quick wins per Regeln (ohne KI), Datenflüsse in Aufrufreihenfolge mit Diagramm, zeilenweises «ok» lokal in JSON-Dateien für Agenten, Inline-Kommentare werden sofort veröffentlicht, IntelliJ-artiges UI.
 
-[Unreleased]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.2.0...v0.3.0
