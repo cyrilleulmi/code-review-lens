@@ -46,8 +46,13 @@ export class Overview {
         segmentCount: new Set(ids).size,
         progress: this.store.progressOf(this.store.slotsFor({ kind: 'category', id: c.id })),
         stats: tests.length
-          ? t('{n} Testfälle · erreichen {covered} geänderte Codestellen', { n: tests.length, covered })
-          : t(isFlowView(c) ? '{n} Flows · {blocks} Blöcke' : '{n} Gruppen · {blocks} Blöcke', { n: c.groups.length, blocks: new Set(ids).size }),
+          ? t(tests.length === 1 ? '{n} Testfall · erreicht {covered} geänderte Codestellen' : '{n} Testfälle · erreichen {covered} geänderte Codestellen',
+            { n: tests.length, covered })
+          : [
+            isFlowView(c) ? t(c.groups.length === 1 ? '{n} Flow' : '{n} Flows', { n: c.groups.length })
+              : t(c.groups.length === 1 ? '{n} Gruppe' : '{n} Gruppen', { n: c.groups.length }),
+            t(new Set(ids).size === 1 ? '{n} Block' : '{n} Blöcke', { n: new Set(ids).size }),
+          ].join(' · '),
         tooltip: [
           c.builds ? t('Aufbau: {text}', { text: serverText(c.builds) }) : '',
           c.divides ? t('Unterteilung: {text}', { text: serverText(c.divides) }) : '',

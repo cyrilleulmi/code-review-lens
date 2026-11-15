@@ -35,7 +35,8 @@
     <span><b>{{ percent(total) }}%</b> · {{ t(store.isRepo() ? '{ok} von {total} Zeilen als ok markiert' : '{ok} von {total} geänderten Zeilen als ok markiert', { ok: total.ok, total: total.total }) }}</span>
     @if (multiPlaced()) {
       <span class="multi" [title]="t('Diese Blöcke erscheinen in mehreren Kategorien oder Flows und brauchen an jedem Ort ein eigenes Ok')">
-        <app-icon name="layers" [size]="12" /> {{ t('{n} Blöcke an mehreren Orten', { n: multiPlaced() }) }}</span>
+        <app-icon name="layers" [size]="12" /> {{ t(multiPlaced() === 1 ? '{n} Block an mehreren Orten' : '{n} Blöcke an mehreren Orten', { n: multiPlaced() }) }}
+</span>
     }
   </div>
 </div>

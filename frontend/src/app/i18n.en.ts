@@ -191,8 +191,6 @@ export const EN: Record<string, string> = {
   "Kommentieren": "Comment",
   "Letzte Markierungen": "Recent marks",
   "{n} Testfälle · erreichen {covered} geänderte Codestellen": "{n} test cases · reach {covered} changed code locations",
-  "{n} Flows · {blocks} Blöcke": "{n} flows · {blocks} blocks",
-  "{n} Gruppen · {blocks} Blöcke": "{n} groups · {blocks} blocks",
   "Aufbau: {text}": "Composition: {text}",
   "Unterteilung: {text}": "Grouping: {text}",
 
@@ -633,4 +631,14 @@ export const EN: Record<string, string> = {
 
   // ------------------------------------------------------------------ coverage view
   "kein Test prüft das": "no test checks this",
+
+  // ------------------------------------------------------------------ overview
+  "{n} Testfall · erreicht {covered} geänderte Codestellen": "{n} test case · reaches {covered} changed code locations",
+  "{n} Flow": "{n} flow",
+  "{n} Flows": "{n} flows",
+  "{n} Gruppe": "{n} group",
+  "{n} Gruppen": "{n} groups",
+  "{n} Block": "{n} block",
+  "{n} Blöcke": "{n} blocks",
+  "{n} Block an mehreren Orten": "{n} block at several places",
 };
