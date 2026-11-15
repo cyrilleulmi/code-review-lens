@@ -293,5 +293,161 @@
     "^\\s*(t|b)\\.Skip(Now|f)?\\s*\\(",
     "^\\s*pending\\s*\\(",
     "^\\s*this\\.skip\\s*\\("
-  ]
+  ],
+  "testProfile": {
+    "$comment": "Test-Steckbrief (one line per changed test case; docs/05-analyse.md, 5d). All entries are regexes (Java syntax). errorCode: searched in the test itself - its annotations and its body, comments removed, string contents kept. edgeCode: searched only in the inputs of the code under test - the parameter sources (@ValueSource, @CsvSource, @NullSource, @EmptySource, @NullAndEmptySource, the it.each table, a Go test table) and the argument lists '(…)' of the calls to the test's targets (the changed code it calls directly, also inside assertions: expect(valid(null))) and of the 'inputCalls'; literals in fixtures, builders, setup and expected values do not count, and without a target call or parameter source edge comes only from the name. inputCalls: regexes that end at the '(' of a call whose arguments are inputs (HTTP requests: given().body(…), .put(…), http.post(…), fetch(…)). errorName / edgeName: searched in the test name and the names of its enclosing describe blocks, split into lower-case words ('rejectsInvalidNumber' -> 'rejects invalid number', 'TestCreate_Empty' -> 'test create empty'). The first hit decides, in this order: errorCode, errorName -> 'error'; edgeName, edgeCode -> 'edge'; else 'normal'. assertionKinds: every assertion statement of the test body (rules 'assertions') gets the first kind, in this order, with a matching pattern; 'existence' also takes every 'weakAssertions' match; no match = 'other'. mocks: collaborators replaced in the test, searched in the test and its surroundings (fields and annotations of the enclosing classes, setup blocks and code of the enclosing describe blocks, top-level code of the file; not other tests or sibling suites). A string is a regex with a named group: 'type' = the collaborator's name, 'ref' = a variable holding a mock (named after its declared type, else after the variable with a capital first letter), 'module' = a module path (its last segment). An object {pattern, name} adds the fixed name when the pattern occurs. Names lose mock/fake/stub/spy pre- and suffixes; the unit under test (from the test file name) is left out. levels: the first entry whose 'paths' (globs) match the test file, or one of whose 'code' patterns occurs in the surroundings while none of 'unless' does, sets the level; else 'unit'. A rules file without this section, or without one of its keys, uses the built-in value for that key.",
+    "errorCode": [
+      "\\bassertThrows\\w*\\s*\\(",
+      "\\bassertThat(ThrownBy|ExceptionOfType|IllegalArgumentException|IllegalStateException|NullPointerException|IOException)\\s*\\(",
+      "\\bcatchThrowable(OfType)?\\s*\\(",
+      "\\bassertFails(With)?\\s*[<({]",
+      "\\bshouldThrow\\w*\\s*[<({]",
+      "(?<!\\.not)\\.toThrow\\w*\\s*\\(",
+      "\\.rejects\\b",
+      "\\.(expectError|verifyError)\\w*\\s*\\(",
+      "@Test\\s*\\(\\s*expected\\s*=",
+      "\\.expect\\s*\\(\\s*\\w+(Exception|Error)\\.class",
+      "\\bfail\\s*\\([^;]*\\)\\s*;?\\s*\\}\\s*catch\\b",
+      "\\bcatch\\s*(\\([^)]*\\))?\\s*\\{[^}]*\\b(expect|assert\\w*)\\s*\\(",
+      "\\b(assert|require)\\.(Error|ErrorIs|ErrorAs|ErrorContains|EqualError|Panics\\w*)\\s*\\(",
+      "\\berr\\s*==\\s*nil\\s*\\{",
+      "\\b(assertRaises\\w*|pytest\\.raises)\\s*\\(",
+      "\\.thenThrow\\s*\\(|\\bdoThrow\\s*\\(|\\.willThrow\\s*\\(|\\.mockRejectedValue\\w*\\s*\\(|\\.and\\.throwError\\s*\\(|\\bthrowError\\s*\\(",
+      "\\bnew\\s+HttpErrorResponse\\s*\\(|\\.error\\s*\\(\\s*new\\s+\\w*Event\\b",
+      "\\.statusCode\\s*\\(\\s*[45]\\d\\d\\b",
+      "\\b(status|expectStatus)\\s*\\(\\s*\\)\\s*\\.\\s*is(BadRequest|Unauthorized|PaymentRequired|Forbidden|NotFound|MethodNotAllowed|NotAcceptable|Conflict|Gone|PreconditionFailed|PayloadTooLarge|UnsupportedMediaType|UnprocessableEntity|TooManyRequests|InternalServerError|NotImplemented|BadGateway|ServiceUnavailable|GatewayTimeout|4xxClientError|5xxServerError)\\s*\\(",
+      "\\bstatus\\s*:\\s*[45]\\d\\d\\b",
+      "\\.(toBe|toEqual|toStrictEqual|isEqualTo|shouldBe)\\s*\\(\\s*[45]\\d\\d\\s*\\)",
+      "\\.expect\\s*\\(\\s*[45]\\d\\d\\b",
+      "\\bassert(Equals)?\\s*\\(\\s*[45]\\d\\d\\s*,",
+      "\\b(HttpStatus(Code)?|Status)\\.(BAD_REQUEST|UNAUTHORIZED|PAYMENT_REQUIRED|FORBIDDEN|NOT_FOUND|METHOD_NOT_ALLOWED|NOT_ACCEPTABLE|CONFLICT|GONE|PRECONDITION_FAILED|PAYLOAD_TOO_LARGE|UNSUPPORTED_MEDIA_TYPE|UNPROCESSABLE_ENTITY|TOO_MANY_REQUESTS|INTERNAL_SERVER_ERROR|NOT_IMPLEMENTED|BAD_GATEWAY|SERVICE_UNAVAILABLE|GATEWAY_TIMEOUT)\\b",
+      "\\bhttp\\.Status(BadRequest|Unauthorized|PaymentRequired|Forbidden|NotFound|MethodNotAllowed|NotAcceptable|Conflict|Gone|PreconditionFailed|PayloadTooLarge|UnsupportedMediaType|UnprocessableEntity|TooManyRequests|InternalServerError|NotImplemented|BadGateway|ServiceUnavailable|GatewayTimeout)\\b",
+      "\\bexpect\\s*\\([^;\\n]*\\b(errors?|errorMessage|hasErrors?|alert)\\b[^;\\n]*?\\)\\s*\\.(?!not\\b|toBeNull|toBeFalsy|toBeUndefined|toBeFalse|toEqual\\s*\\(\\s*(\\[\\s*\\]|\\{\\s*\\}|null)\\s*\\)|toHaveLength\\s*\\(\\s*0)",
+      "\\bassertThat\\s*\\([^;\\n]*\\b(errors?|errorMessage|hasErrors?|alert)\\b[^;\\n]*?\\)\\s*\\.(?!isNull|isEmpty|isFalse|doesNotContain|hasSize\\s*\\(\\s*0)",
+      "\\b(assertTrue|assertNotNull)\\s*\\([^;\\n]*\\b(errors?|errorMessage|hasErrors?|alert)\\b"
+    ],
+    "errorName": [
+      "(?U)(?<!\\bnot |\\bno |\\bnever |\\bwithout |\\bkein |\\bkeine |\\bohne |\\bnicht )\\b(rejects?|rejected|rejecting|refuses?|refused|fails?|failed|failing|failure|throws?|throwing|thrown|invalid|illegal|errors?|exceptions?|denied|denies|deny|forbidden|unauthori[sz]ed|not found|bad request|conflict|[45]\\d\\d|ungültig\\w*|fehler\\w*|fehlschlag\\w*|schlägt fehl|abgelehnt|lehnt \\w+ ab|wirft|verweiger\\w*|verboten|nicht gefunden|unzulässig\\w*)\\b"
+    ],
+    "edgeName": [
+      "(?U)(?<!\\bnot |\\bnon |\\bnicht )\\b(empty|blank|null|nil|undefined|zero|boundary|boundaries|limits?|max|maximum|min|minimum|edge|overflow|underflow|negative|leer\\w*|grenze\\w*|grenzwert\\w*|grenzfall|maximal\\w*|minimal\\w*)\\b"
+    ],
+    "edgeCode": [
+      "[(,\\[{]\\s*(null|nil|undefined|None)\\s*(?=[,)\\]}])",
+      "[(,\\[{\\\"]\\s*(\\\"\\\"|''|``)\\s*(?=[,)\\]}\\\"])",
+      "[(,\\[]\\s*(\\[\\s*\\]|\\{\\s*\\})\\s*(?=[,)\\]])",
+      "[(,]\\s*((List|Set|Map)\\.of|emptyList|emptySet|emptyMap|listOf|setOf|mapOf|arrayOf)\\s*\\(\\s*\\)",
+      "[(,]\\s*new\\s+(Array|Linked|Hash|Tree)?(List|Set|Map)\\w*\\s*(<[^>]*>)?\\s*\\(\\s*\\)",
+      "[(,]\\s*\\[\\]\\w+\\{\\s*\\}",
+      "\\bCollections\\.empty\\w*\\s*\\(|\\bOptional\\.empty\\s*\\(",
+      "@(NullSource|EmptySource|NullAndEmptySource)\\b",
+      "\\b(Integer|Long|Short|Byte|Double|Float)\\.(MAX_VALUE|MIN_VALUE)\\b|\\bNumber\\.(MAX_SAFE_INTEGER|MIN_SAFE_INTEGER|MAX_VALUE|MIN_VALUE|POSITIVE_INFINITY|NEGATIVE_INFINITY)\\b|\\bmath\\.(MaxInt\\d*|MinInt\\d*|MaxUint\\d*|MaxFloat\\d+|Inf)\\b"
+    ],
+    "inputCalls": [
+      "\\bgiven\\s*\\(\\s*\\)(?:(?!\\.then\\s*\\()[^;])*?\\.body\\s*\\(",
+      "\\.(bodyValue|content|send|queryParams?|formParams?|pathParams?|param|params|multiPart)\\s*\\(",
+      "(?:\\b(?:http|httpClient|client|api|request|mockMvc|webTestClient|restTemplate|testRestTemplate|rest)\\w*\\s*|\\b(?:when|given)\\s*\\(\\s*\\)\\s*|\\b\\w+\\s*\\(\\s*app\\s*\\)\\s*)\\.\\s*(?:get|post|put|patch|delete|head|request|exchange|perform|postForEntity|getForEntity|getForObject)\\s*(?:<[^<>()]*>)?\\s*\\(",
+      "\\b(?:fetch|axios)\\s*\\(",
+      "\\b(?:httptest\\.NewRequest|http\\.NewRequest\\w*)\\s*\\("
+    ],
+    "assertionKinds": {
+      "exception": [
+        "\\bassertThrows\\w*\\s*\\(",
+        "\\bassertThat(ThrownBy|ExceptionOfType|Code)\\s*\\(",
+        "\\bassertDoesNotThrow\\s*\\(",
+        "\\.toThrow\\w*\\s*\\(",
+        "\\.rejects\\b",
+        "\\bshould(Throw|NotThrow)\\w*",
+        "\\bassertFails\\w*",
+        "\\.(expectError|verifyError)\\w*\\s*\\(",
+        "\\b(assert|require)\\.(Error|ErrorIs|ErrorAs|ErrorContains|EqualError|Panics\\w*|NotPanics)\\s*\\(",
+        "\\bisInstanceOf\\s*\\(\\s*\\w*(Exception|Error)\\.class"
+      ],
+      "http": [
+        "\\.statusCode\\s*\\(",
+        "\\b(status|expectStatus)\\s*\\(\\s*\\)",
+        "\\.andExpect\\s*\\(\\s*(status|header|content|jsonPath|redirectedUrl|forwardedUrl)\\b",
+        "\\.expect(Status|Header|Body)\\w*\\s*\\(",
+        "\\.body\\s*\\(",
+        "\\.expect\\s*\\(\\s*[1-5]\\d\\d\\b",
+        "\\b(res|resp|response|httpResponse|rec|recorder|rr|w)\\s*\\.\\s*(status|statusCode|getStatus|getStatusCode|StatusCode|Code|body|getBody|headers?|getHeader\\w*)\\b",
+        "\\.getResponse\\s*\\(\\s*\\)\\s*\\.\\s*(getStatus|getContentAsString|getHeader)",
+        "\\breq\\w*\\.request\\.(method|body|url|urlWithParams|params|headers)\\b",
+        "\\bHttpStatus(Code)?\\.",
+        "\\bhttp\\.Status\\w+"
+      ],
+      "snapshot": [
+        "\\.toMatch(Inline|File)?Snapshot\\s*\\(",
+        "\\.toHaveScreenshot\\s*\\(",
+        "\\.toMatchImageSnapshot\\s*\\(",
+        "\\bApprovals\\.verify\\w*\\s*\\(",
+        "\\bsnaps\\.Match\\w*\\s*\\(",
+        "\\bcupaloy\\."
+      ],
+      "interaction": [
+        "\\bverify\\w*\\s*[({]",
+        "\\bcoVerify\\w*\\s*[({]",
+        "\\bthen\\s*\\(\\s*\\w+\\s*\\)\\s*\\.\\s*should",
+        "\\.toHaveBeenCalled\\w*\\s*\\(",
+        "\\.toHaveBeen(Last|Nth)CalledWith\\s*\\(",
+        "\\.toBeCalled\\w*\\s*\\(",
+        "\\.toHaveReturned\\w*\\s*\\(",
+        "\\.expect(One|None)\\s*\\(",
+        "\\.(AssertExpectations|AssertCalled|AssertNotCalled|AssertNumberOfCalls)\\s*\\(",
+        "\\.(calledWith|calledOnce|calledTwice|callCount)\\b"
+      ],
+      "existence": [
+        "\\.(not\\.)?toBeNull\\s*\\(",
+        "\\.toBeUndefined\\s*\\(",
+        "\\.toBeDefined\\s*\\(",
+        "\\.(not\\.)?toBeTruthy\\s*\\(",
+        "\\.(not\\.)?toBeFalsy\\s*\\(",
+        "\\.(not\\.)?toBeInTheDocument\\s*\\(",
+        "\\bassert(Not)?Null\\s*\\(",
+        "\\.is(Not)?Null\\s*\\(\\s*\\)",
+        "\\.is(Not)?Empty\\s*\\(\\s*\\)",
+        "\\.is(Not)?Present\\s*\\(\\s*\\)",
+        "\\b(assert|require)\\.(Nil|NotNil|Empty|NotEmpty|Zero|NotZero)\\s*\\(",
+        "\\b(notNullValue|nullValue)\\s*\\("
+      ],
+      "equality": [
+        "\\.(not\\.)?(toBe|toEqual|toStrictEqual|toBeCloseTo|toMatchObject|toHaveLength|toHaveProperty|toContain|toContainEqual|toMatch|toHaveText|toHaveTextContent|toHaveValue|toHaveClass|toHaveSize|toBeTrue|toBeFalse|toBeGreaterThan\\w*|toBeLessThan\\w*|toBeInstanceOf)\\s*\\(",
+        "\\bassert(Not)?(Equals|Same|ArrayEquals|IterableEquals|LinesMatch)\\s*\\(",
+        "\\bassert(True|False)\\s*\\(",
+        "\\.(isEqualTo|isNotEqualTo|isSameAs|isNotSameAs|isEqualByComparingTo|usingRecursiveComparison|containsExactly\\w*|containsOnly\\w*|contains|doesNotContain|hasSize|isCloseTo|startsWith|endsWith|matches|isTrue|isFalse|isGreaterThan\\w*|isLessThan\\w*|isBetween|extracting|hasFieldOrPropertyWithValue|isInstanceOf)\\s*\\(",
+        "\\b(assert|require)\\.(Equal|EqualValues|Exactly|NotEqual|JSONEq|YAMLEq|ElementsMatch|Contains|NotContains|Len|InDelta|InEpsilon|Greater\\w*|Less\\w*|True|False|Subset|Same)\\s*\\(",
+        "\\bshould(Be|NotBe|Equal|NotEqual|Contain|NotContain|Have|NotHave|Match|Start|End)\\w*",
+        "\\.(equal|eql|equals|deep\\.equal)\\s*\\(",
+        "\\bassert\\.(strict)?(deep)?(equal|Equal)\\s*\\(",
+        "\\bassertThat\\s*\\([^;]*,\\s*(is|equalTo|contains\\w*|hasSize|hasItems?|not)\\s*\\("
+      ]
+    },
+    "mocks": [
+      "@(?:Mock|MockBean|MockitoBean|InjectMock|InjectSpy|Spy|SpyBean|MockitoSpyBean)\\b(?:\\s*\\([^)]*\\))?\\s+(?:(?:private|protected|public|final|static)\\s+)*(?<type>[A-Z][\\w$]*)",
+      "@(?:MockK|RelaxedMockK|SpyK|MockkBean|Mock|MockBean|MockitoBean|InjectMock)\\b(?:\\s*\\([^)]*\\))?\\s+(?:(?:private|protected|public|internal|lateinit|var|val)\\s+)+[\\w$]+\\s*:\\s*(?<type>[A-Z][\\w$]*)",
+      "\\b(?:Mockito\\.)?(?:mock|spy)\\s*\\(\\s*(?<type>[A-Z][\\w$]*)\\.class",
+      "\\b(?:mock|mockk|spyk)\\s*<\\s*(?<type>[A-Z][\\w$]*)",
+      "\\b(?:when|given)\\s*\\(\\s*(?:this\\.)?(?<ref>[A-Za-z_$][\\w$]*)\\s*\\.\\s*[\\w$]+\\s*\\(",
+      "\\b(?:every|coEvery|verify|coVerify)\\s*\\{\\s*(?<ref>[A-Za-z_$][\\w$]*)\\s*\\.",
+      "\\bverify\\s*\\(\\s*(?:this\\.)?(?<ref>[A-Za-z_$][\\w$]*)\\s*[,)]",
+      "\\.when\\s*\\(\\s*(?:this\\.)?(?<ref>[A-Za-z_$][\\w$]*)\\s*\\)",
+      "\\bjasmine\\.createSpyObj\\s*(?:<[^>]*>)?\\s*\\(\\s*['\\\"`](?<type>[\\w$.-]+)",
+      "\\bjasmine\\.createSpyObj\\s*<\\s*(?<type>[A-Z][\\w$]*)\\s*>",
+      "\\b(?:const|let|var)\\s+(?<type>[\\w$]+)\\s*(?::[^=;]+)?=\\s*(?:jest\\.fn|vi\\.fn|jasmine\\.createSpy|sinon\\.(?:stub|spy|fake))\\s*\\(",
+      "\\b(?:jasmine\\.|jest\\.|vi\\.)?spyOn\\s*\\(\\s*(?:this\\.)?(?<ref>[\\w$]+)\\s*,",
+      "\\bsinon\\.(?:stub|spy|mock)\\s*\\(\\s*(?<ref>[\\w$]+)\\s*[,)]",
+      "\\b(?:vi|jest)\\.(?:mock|doMock)\\s*\\(\\s*['\\\"`](?<module>[^'\\\"`]+)",
+      "\\bprovide\\s*:\\s*(?<type>[A-Z][\\w$]*)\\s*,\\s*use(?:Value|Class|Factory|Existing)\\b",
+      "\\bMock(?:Provider|Component|Directive|Pipe|Module|Service|Instance)\\s*\\(\\s*(?<type>[A-Z][\\w$]*)",
+      "&?\\b(?:[Ff]ake|[Mm]ock|[Ss]tub)(?<type>[A-Z]\\w*)\\s*\\{",
+      "\\b(?:NewMock|mocks\\.New)(?<type>[A-Z]\\w*)\\s*\\(",
+      {"pattern": "\\bHttpTestingController\\b|\\bprovideHttpClientTesting\\s*\\(|\\bHttpClientTestingModule\\b", "name": "HTTP"},
+      {"pattern": "\\b(MockWebServer|WireMock\\w*|MockRestServiceServer|MockAdapter|nock|setupServer)\\b|\\bhttptest\\.NewServer\\b|['\\\"]msw['\\\"]", "name": "HTTP"}
+    ],
+    "levels": [
+      {"level": "e2e", "paths": ["**/e2e/**", "**/cypress/**", "**/playwright/**", "**/*.e2e-spec.*", "**/*.e2e.*", "**/*.cy.*"], "code": ["\\bcy\\.(visit|request)\\s*\\(", "['\\\"]@playwright/test['\\\"]", "\\bpage\\.goto\\s*\\(", "\\bbrowser\\.(url|get)\\s*\\(", "\\bSelenide\\b", "\\bWebDriver\\b"]},
+      {"level": "integration", "paths": ["**/*IT.java", "**/*IT.kt", "**/*IntegrationTest.*", "**/integration/**", "**/*.int-spec.*", "**/*.integration.*"], "code": ["@(QuarkusTest|QuarkusIntegrationTest|SpringBootTest|DataJpaTest|DataJdbcTest|DataMongoTest|DataR2dbcTest|JdbcTest|JooqTest|WebMvcTest|WebFluxTest|RestClientTest|AutoConfigureMockMvc|Testcontainers|Container|MicronautTest)\\b", "\\b(PostgreSQL|MySQL|MariaDB|MongoDB|Kafka|Generic|Oracle|MSSQLServer|Redis|Neo4j|RabbitMQ|LocalStack|Elasticsearch)Container\\b", "\\bRestAssured\\b", "\\bgiven\\s*\\(\\s*\\)\\s*\\.", "\\b(MockMvc|WebTestClient|TestRestTemplate)\\b", "['\\\"]supertest['\\\"]", "\\brequest\\s*\\(\\s*app\\b", "\\bdockertest\\b"]},
+      {"level": "integration", "code": ["\\bprovideHttpClient\\s*\\(\\s*\\)"], "unless": ["\\bprovideHttpClientTesting\\s*\\(|\\bHttpClientTestingModule\\b|\\bHttpTestingController\\b"]}
+    ]
+  }
 }

@@ -66,10 +66,11 @@ public final class Expectations {
     }
 
     /**
-     * One assertion statement. line: first line (1-based); text: shown (trimmed lines joined); norm: compared
-     * (without whitespace); subject: key for pairing; weak: only checks existence / truthiness.
+     * One assertion statement. line / endLine: first and last line (1-based); text: shown (trimmed lines joined);
+     * norm: compared (without whitespace); subject: key for pairing; weak: only checks existence / truthiness;
+     * code: the statement with string contents and comments blanked (lines joined, untruncated).
      */
-    public record Assertion(int line, String text, String norm, String subject, boolean weak) {
+    public record Assertion(int line, String text, String norm, String subject, boolean weak, int endLine, String code) {
     }
 
     /**
@@ -112,18 +113,23 @@ public final class Expectations {
                 }
                 end = closeBrackets(code, end + 1);
             }
-            result.add(assertion(raw, code, i, end, firstLine + i));
+            result.add(assertion(raw, code, i, end, firstLine));
             i = end;
         }
         return result;
     }
 
-    /** The first line (1-based) of a symbol that is not blank, a comment or an annotation: its declaration. */
-    private static int declarationLine(CodeText text, Symbol s) {
+    /**
+     * The first line (1-based) of a symbol that is not blank, a comment or an annotation (also not a continuation
+     * line of an annotation whose arguments span lines): its declaration.
+     */
+    static int declarationLine(CodeText text, Symbol s) {
         int last = Math.min(s.endLine(), text.lines.size());
         for (int li = s.startLine(); li <= last; li++) {
             String t = text.code.get(li - 1).strip();
-            if (!t.isEmpty() && !t.startsWith("@")) {
+            if (t.startsWith("@")) {
+                li = SymbolExtractor.annotationEnd(text, li - 1) + 1;
+            } else if (!t.isEmpty()) {
                 return li;
             }
         }
@@ -154,7 +160,7 @@ public final class Expectations {
         return d;
     }
 
-    private Assertion assertion(String[] rawLines, String[] codeLines, int from, int to, int line) {
+    private Assertion assertion(String[] rawLines, String[] codeLines, int from, int to, int firstLine) {
         StringBuilder raw = new StringBuilder();
         StringBuilder code = new StringBuilder();
         for (int i = from; i <= to; i++) {
@@ -175,7 +181,7 @@ public final class Expectations {
         String r = raw.toString();
         String c = code.toString();
         String shown = r.length() > MAX_TEXT ? r.substring(0, MAX_TEXT - 1) + "…" : r;
-        return new Assertion(line, shown, norm(r), subject(r, c), find(weak, c) != null);
+        return new Assertion(firstLine + from, shown, norm(r), subject(r, c), find(weak, c) != null, firstLine + to, c);
     }
 
     /** Without whitespace, without trailing ";" and without a trailing "," before a closing bracket. */
@@ -284,7 +290,9 @@ public final class Expectations {
                 return li;
             }
             String t = c.strip();
-            if (!t.isEmpty() && !t.startsWith("@")) {
+            if (t.startsWith("@")) {
+                li = Math.max(li, SymbolExtractor.annotationEnd(text, li - 1) + 1); // skip the arguments of a multi-line annotation
+            } else if (!t.isEmpty()) {
                 break; // the declaration line
             }
         }

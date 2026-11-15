@@ -40,6 +40,14 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    A segment at several places needs one ok per place.
 5. `tests[]` → per changed test case: `subjects` (components under test) and `covers` (reached segments,
    `direct` or `via` another segment, `line` = call site in the test). `segments[].testedBy` is the reverse.
+   `profile` (Test-Steckbrief, pattern-based, rules section `testProfile`; null in older analyses): `targets`
+   (names of the changed code it calls directly, else the unit from the file name), `scenario` (error = expects a
+   failure | edge = null/empty/limit values in the inputs of the code under test: arguments of calls to the targets and of HTTP requests, parameter sources - not fixtures or expected values | normal) with `scenarioBy` (code | name) and `scenarioReason` (the
+   matched text), `assertions` (count in the test body) and `assertionKinds` ({equality, exception, interaction,
+   existence, http, snapshot, other: count}), `mocks` (replaced collaborators in the test, its setup and enclosing
+   classes/suites; "HTTP" = mocked backend), `level` (unit | integration | e2e) with `levelBy` (path | code) and
+   `levelReason`, `parameterized` / `cases` (rows of @ParameterizedTest sources, it.each tables, Go table tests;
+   null = unknown) / `casesSource`. Read error and edge tests first; tests without assertions check nothing.
    `coverage[]` is the view from the code (static; only changed tests and changed code): one entry per testable
    changed function (function/method/component outside tests whose category has `needsTests`, default true;
    false for quick wins, tests, styles, config, API contracts; trivial getters/setters whose body is only

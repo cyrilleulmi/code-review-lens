@@ -205,10 +205,33 @@ public final class Model {
     public record TestCoverage(String segmentId, boolean direct, String via, Integer line) {
     }
 
-    /** One changed test case (it/test block, @Test method, Go TestXxx) and what it exercises - found statically. */
+    /**
+     * One changed test case (it/test block, @Test method, Go TestXxx) and what it exercises - found statically.
+     * profile: the test in one line (Test-Steckbrief); null in analyses of older versions.
+     */
     @RegisterForReflection
     public record TestInfo(String segmentId, String name, String path, List<TestSubject> subjects,
-                           List<TestCoverage> covers) {
+                           List<TestCoverage> covers, TestProfile profile) {
+    }
+
+    /**
+     * Test-Steckbrief: what a test case checks, in one line (pattern-based, rules section "testProfile"; see
+     * analysis/TestProfiles). targets: names of the changed code it calls directly, else the unit from the test file
+     * name. scenario: "error" (expects a failure) | "edge" (empty/null/limit inputs) | "normal"; scenarioBy: "code" |
+     * "name" (where the pattern matched; null for normal), scenarioReason: the matched text. assertions: assertion
+     * statements in the test body; assertionKinds: their count per kind (exception, http, snapshot, interaction,
+     * existence, equality - the order of the rules - then other; only kinds that occur). mocks: collaborators replaced
+     * in the test or its surroundings (fields, setup blocks, enclosing suites), in order of appearance, "HTTP" for a
+     * mocked HTTP backend. level: "unit" |
+     * "integration" | "e2e"; levelBy: "path" | "code" (null for unit), levelReason: the matched glob or text.
+     * parameterized: runs once per row of a table (@ParameterizedTest, it.each, Go table test); cases: number of rows
+     * when the table is literal, else null; casesSource: where the rows come from (@CsvSource, it.each, table, ...).
+     */
+    @RegisterForReflection
+    public record TestProfile(List<String> targets, String scenario, String scenarioBy, String scenarioReason,
+                              int assertions, Map<String, Integer> assertionKinds, List<String> mocks,
+                              String level, String levelBy, String levelReason,
+                              boolean parameterized, Integer cases, String casesSource) {
     }
 
     /**

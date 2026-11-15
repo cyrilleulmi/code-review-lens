@@ -11,7 +11,8 @@ import java.util.List;
  * names inside strings/comments do not confuse them. Also computes matching brace pairs.
  *
  * Deliberately simple: no regex literals, single/double-quoted strings end at the line end (limits the
- * damage of apostrophes in JSX text), template literals with ${...} are understood.
+ * damage of apostrophes in JSX text), template literals with ${...} and text blocks ("""…""", Java/Kotlin/Python)
+ * are understood.
  */
 public final class CodeText {
 
@@ -33,7 +34,7 @@ public final class CodeText {
         List<String> code = new ArrayList<>(lines.size());
         CodeText ct = new CodeText(lines, code);
 
-        enum Mode { CODE, BLOCK_COMMENT, SQ, DQ, TEMPLATE }
+        enum Mode { CODE, BLOCK_COMMENT, SQ, DQ, TEMPLATE, TEXT_BLOCK }
         Deque<Mode> modes = new ArrayDeque<>();
         modes.push(Mode.CODE);
         // brace stack entries: {line, col, isTemplateExpr(1/0)}
@@ -70,6 +71,18 @@ public final class CodeText {
                             out.append(' ');
                         }
                     }
+                    case TEXT_BLOCK -> {
+                        if (c == '\\') {
+                            out.append(next == 0 ? " " : "  ");
+                            i++;
+                        } else if (s.startsWith("\"\"\"", i)) {
+                            modes.pop();
+                            out.append("\"\"\"");
+                            i += 2;
+                        } else {
+                            out.append(' ');
+                        }
+                    }
                     case TEMPLATE -> {
                         if (c == '\\') {
                             out.append(next == 0 ? " " : "  ");
@@ -97,6 +110,10 @@ public final class CodeText {
                         } else if (c == '\'') {
                             modes.push(Mode.SQ);
                             out.append(c);
+                        } else if (c == '"' && s.startsWith("\"\"\"", i)) {
+                            modes.push(Mode.TEXT_BLOCK); // Java/Kotlin/Python text block: spans lines
+                            out.append("\"\"\"");
+                            i += 2;
                         } else if (c == '"') {
                             modes.push(Mode.DQ);
                             out.append(c);

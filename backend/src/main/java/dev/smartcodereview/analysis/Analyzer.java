@@ -57,7 +57,8 @@ import java.util.stream.Collectors;
  *       point gets a <em>flow</em> with everything it reaches, in call order. A function reached from two entry
  *       points is part of both flows.</li>
  *   <li>Changed test cases are linked to the changed code they reach through the same call graph; seen from the
- *       code, every testable changed function gets a coverage status (direct, indirect, none) and a branch count.</li>
+ *       code, every testable changed function gets a coverage status (direct, indirect, none) and a branch count.
+ *       Every changed test case gets a profile (<em>Test-Steckbrief</em>, {@link TestProfiles}).</li>
  *   <li>Frontend REST calls are matched to backend endpoints (http edges), so a flow can run from a component
  *       through the API client into the backend.</li>
  *   <li>Ports &amp; adapters projects get a layer per segment (domain, use case, application, adapter); frontend
@@ -88,7 +89,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 18;
+    public static final int VERSION = 19;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -277,7 +278,7 @@ public final class Analyzer {
                 }
             }
         }
-        List<TestInfo> tests = tests(works, edges, snapshot.files());
+        List<TestInfo> tests = tests(works, edges, snapshot.files(), new TestProfiles(rules));
         Map<String, List<String>> testedBy = new HashMap<>();
         for (TestInfo t : tests) {
             t.covers().forEach(c -> testedBy.computeIfAbsent(c.segmentId(), k -> new ArrayList<>()).add(t.segmentId()));
@@ -1063,9 +1064,10 @@ public final class Analyzer {
 
     /**
      * For every changed test case: the changed code it reaches through calls (directly, via test helpers, or
-     * indirectly via other changed code), and the components it is about (naming convention + called code).
+     * indirectly via other changed code), the components it is about (naming convention + called code) and its
+     * profile (Test-Steckbrief, {@link TestProfiles}).
      */
-    private static List<TestInfo> tests(List<Work> works, List<FlowEdge> edges, List<DiffFile> files) {
+    private static List<TestInfo> tests(List<Work> works, List<FlowEdge> edges, List<DiffFile> files, TestProfiles profiles) {
         Map<String, Work> byId = new HashMap<>();
         works.forEach(w -> byId.put(w.id, w));
         Map<String, List<FlowEdge>> outgoing = new HashMap<>();
@@ -1104,8 +1106,11 @@ public final class Analyzer {
                     }
                 }
             }
-            result.add(new TestInfo(t.id, t.symbol.displayName(), t.file.path(), subjects(t, covers.values(), byId, files),
-                    List.copyOf(covers.values())));
+            List<TestSubject> subjects = subjects(t, covers.values(), byId, files);
+            String unit = unitOf(t.file.path());
+            result.add(new TestInfo(t.id, t.symbol.displayName(), t.file.path(), subjects, List.copyOf(covers.values()),
+                    profiles.profile(t.file.path(), t.ctx.text, t.ctx.symbols, t.symbol,
+                            targets(covers.values(), subjects, byId), unit)));
         }
         return result;
     }
@@ -1180,6 +1185,30 @@ public final class Analyzer {
             subjects.put(w.file.path(), new TestSubject(name, w.file.path(), true, "call"));
         }
         return List.copyOf(subjects.values());
+    }
+
+    /** The unit under test from the test file name (PlayerResourceTest.java -> PlayerResource), or null. */
+    private static String unitOf(String path) {
+        Matcher m = TEST_FILE.matcher(fileName(path));
+        return !m.matches() ? null : m.group(1) != null ? m.group(1) : m.group(2);
+    }
+
+    /**
+     * What a test exercises, short: the names of the changed code it calls directly (call order, no duplicates), else
+     * the component from the test file name.
+     */
+    private static List<String> targets(Collection<TestCoverage> covers, List<TestSubject> subjects, Map<String, Work> byId) {
+        Set<String> names = new LinkedHashSet<>();
+        for (TestCoverage c : covers) {
+            Work w = byId.get(c.segmentId());
+            if (c.direct() && w != null) {
+                names.add(w.symbol != null ? w.symbol.name() : fileName(w.file.path()));
+            }
+        }
+        if (names.isEmpty()) {
+            subjects.stream().filter(s -> "name".equals(s.how())).forEach(s -> names.add(s.path() == null ? s.name() : stemOf(s.name())));
+        }
+        return List.copyOf(names);
     }
 
     private static String fileName(String path) {

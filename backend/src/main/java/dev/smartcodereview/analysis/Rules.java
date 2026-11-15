@@ -11,6 +11,7 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -54,6 +55,36 @@ public final class Rules {
         }
     }
 
+    /**
+     * A collaborator replaced in a test (rules "testProfile.mocks"): a regex with a named group "type" (the name),
+     * "ref" (a variable holding a mock, resolved to its declared type) or "module" (a module path, its last segment
+     * counts); or, with name set, a regex that adds this fixed name ("HTTP").
+     */
+    public record MockRule(Pattern pattern, String name) {
+    }
+
+    /**
+     * A test level (rules "testProfile.levels"): applies when a glob of paths matches the test file, or one of the
+     * code patterns occurs around the test and none of unless does.
+     */
+    public record LevelRule(String level, List<String> globs, List<Pattern> paths, List<Pattern> code, List<Pattern> unless) {
+    }
+
+    /**
+     * Test-Steckbrief (see {@link TestProfiles}), rules section "testProfile". errorCode: regexes searched in the test
+     * (head and body, comments removed, string contents kept). edgeCode: regexes searched only in the inputs of the
+     * code under test - the parameter sources (@ValueSource, @CsvSource, @NullSource, it.each table, Go table) and the
+     * argument lists of calls to the targets and of the inputCalls. inputCalls: regexes ending at the "(" of a call
+     * whose arguments are inputs (HTTP requests: given().body(, http.put(, …). errorName / edgeName: regexes searched
+     * in the test name split into lower-case words. assertionKinds: kind -> regexes on an assertion statement,
+     * checked in this order (existence additionally takes "weakAssertions"). A rules file without the section or
+     * without one of its keys uses the built-in value for that key.
+     */
+    public record TestProfileRules(List<Pattern> errorCode, List<Pattern> errorName, List<Pattern> edgeName,
+                                   List<Pattern> edgeCode, List<Pattern> inputCalls, Map<String, List<Pattern>> assertionKinds,
+                                   List<MockRule> mocks, List<LevelRule> levels) {
+    }
+
     /** Lines that never make a difference: blank, braces/brackets only, comments. */
     private static final Pattern TRIVIAL = Pattern.compile(
             "^\\s*$|^\\s*[{}()\\[\\];,]*\\s*$|^\\s*(//|/\\*|\\*|\\*/|#).*$|^\\s*\\}\\s*(else\\b.*)?\\{?\\s*$");
@@ -77,10 +108,13 @@ public final class Rules {
     public final List<Pattern> assertions;
     public final List<Pattern> weakAssertions;
     public final List<Pattern> disabledTests;
+    /** Test-Steckbrief: scenario, assertion kinds, mocks and level of a test case (see {@link TestProfileRules}). */
+    public final TestProfileRules testProfile;
     public final String hash;
 
     private Rules(List<CategoryDef> categories, List<Rule> rules, List<Rule> aspects, List<Rule> concerns,
-                  List<Pattern> assertions, List<Pattern> weakAssertions, List<Pattern> disabledTests, String hash) {
+                  List<Pattern> assertions, List<Pattern> weakAssertions, List<Pattern> disabledTests,
+                  TestProfileRules testProfile, String hash) {
         this.categories = categories;
         this.rules = rules;
         this.aspects = aspects;
@@ -88,6 +122,7 @@ public final class Rules {
         this.assertions = assertions;
         this.weakAssertions = weakAssertions;
         this.disabledTests = disabledTests;
+        this.testProfile = testProfile;
         this.hash = hash;
     }
 
@@ -99,7 +134,29 @@ public final class Rules {
                     c.path("builds").asText(""), c.path("divides").asText(""), c.path("needsTests").asBoolean(true)));
         }
         return new Rules(categories, rules(root.path("rules")), rules(root.path("aspects")), rules(root.path("concerns")),
-                section(root, "assertions"), section(root, "weakAssertions"), section(root, "disabledTests"), hash);
+                section(root, "assertions"), section(root, "weakAssertions"), section(root, "disabledTests"),
+                testProfile(root.path("testProfile")), hash);
+    }
+
+    /** The "testProfile" section; every missing key is taken from the built-in rules. */
+    private static TestProfileRules testProfile(JsonNode node) {
+        JsonNode builtIn = defaults().path("testProfile");
+        java.util.function.Function<String, JsonNode> key = k -> node.has(k) ? node.get(k) : builtIn.path(k);
+        Map<String, List<Pattern>> kinds = new LinkedHashMap<>();
+        key.apply("assertionKinds").properties().forEach(e -> kinds.put(e.getKey(), patterns(e.getValue(), false)));
+        List<MockRule> mocks = new ArrayList<>();
+        for (JsonNode m : key.apply("mocks")) {
+            mocks.add(m.isObject() ? new MockRule(Pattern.compile(m.path("pattern").asText()), m.path("name").asText(null))
+                    : new MockRule(Pattern.compile(m.asText()), null));
+        }
+        List<LevelRule> levels = new ArrayList<>();
+        for (JsonNode l : key.apply("levels")) {
+            levels.add(new LevelRule(l.path("level").asText(), strings(l.path("paths")), patterns(l.path("paths"), true),
+                    patterns(l.path("code"), false), patterns(l.path("unless"), false)));
+        }
+        return new TestProfileRules(patterns(key.apply("errorCode"), false), patterns(key.apply("errorName"), false),
+                patterns(key.apply("edgeName"), false), patterns(key.apply("edgeCode"), false),
+                patterns(key.apply("inputCalls"), false), kinds, mocks, levels);
     }
 
     /** A list of regexes; taken from the built-in rules when the given rules file has no such section. */

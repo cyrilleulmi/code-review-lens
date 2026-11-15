@@ -64,6 +64,7 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | FR-ANA-15 | Das System muss eigene Regeln aus `<data>/rules.json` verwenden und die Analyse bei Änderung automatisch neu berechnen. | Ungültige Datei → Fehlermeldung `rules.json ist ungültig`; neue Regeln wirken beim nächsten Öffnen. | M |
 | FR-ANA-16 | Die Analyse muss deterministisch sein. | Gleicher Snapshot + gleiche Regeln + gleiche Version = byte-gleiches Ergebnis (abgesehen von `generatedAt`). | M (Vergleich vor/nach Performance-Änderung, PR #1) |
 | FR-ANA-17 | Das System muss bei bestehenden Tests geänderte Erwartungen erkennen: geänderte, entfernte und abgeschwächte Assertions sowie aus- und wieder eingeschaltete Tests. | Musterbasiert (`assertions`, `weakAssertions`, `disabledTests` in `rules.json`); Paarung über den geprüften Gegenstand, bei `assertEquals(erwartet, tatsächlich)` das zweite Argument; reines Umformatieren ist keine Änderung; eine ausgeschaltete Suite schaltet ihre Tests aus; Anzahl Assertions alt/neu; im UI Warnmarkierung mit Details im Spec-Diff, Warnzeile auf der Kachel Tests, Abzeichen im Code-Block (B12b, 05-analyse 5c). | T: ExpectationsTest (6 Tests); expectations.spec.ts |
+| FR-ANA-18 | Das System muss für jeden geänderten Testfall einen Steckbrief liefern: was er prüft, Fall (Fehler-, Grenz-, Normalfall), Ebene (Unit, Integration, E2E), Anzahl und Art der Assertions, ersetzte Abhängigkeiten (Mocks) und Anzahl parametrisierter Fälle – und alle Tests als Tabelle zeigen. | Musterbasiert (Abschnitt `testProfile` in `rules.json`, fehlende Schlüssel aus den eingebauten Regeln), jede Einstufung mit Fundstelle (`…By`, `…Reason`); Grenzfall im Code nur aus Eingaben des geprüften Codes (Ziel- und HTTP-Aufrufe, Parameterquellen), nicht aus Testdaten; Mocks auch aus Feldern, Setup-Blöcken und umschliessenden Suites, nicht aus Geschwister-Suites; Fälle aus `@ValueSource`/`@CsvSource`/`@EnumSource`, `it.each`, Go-Tabellentests; im UI Zeile pro Test mit Tooltips, Umschalter «Liste \| Tabelle», sortierbare Tabelle, Zusammenfassung mit Filter (B12c, 05-analyse 5d). | T: TestProfilesTest (11 Tests); test-profile.spec.ts |
 
 ## 5. Darstellung und Navigation (FR-UI)
 
@@ -198,6 +199,8 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | `frontend/src/app/acceptance.spec.ts` | 5 | FR-REV-04, -05, -07 (UI-Seite) |
 | `analysis/ExpectationsTest` | 6 | FR-ANA-17 |
 | `frontend/src/app/expectations.spec.ts` | 4 | FR-ANA-17 (Markierungen und Warnzeile im UI) |
+| `analysis/TestProfilesTest` | 11 | FR-ANA-18 |
+| `frontend/src/app/test-profile.spec.ts` | 5 | FR-ANA-18 (Steckbrief-Zeile, Zusammenfassung, Filter, Sortierung im UI) |
 | `commits/AttributionTest` | 7 | FR-COM-02, -03 |
 | `gitlab/ProviderUrlTest` | 3 | FR-ZUG-03, FR-REP-01 |
 | `repo/RepositorySnapshotTest` | 1 | FR-REP-02, -03 |
@@ -207,5 +210,5 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 * Alle Provider-Abbildungen (FR-ZUG-01, -02, -04, -06, FR-SNP-01, FR-KOM-01 bis -04, FR-COM-01, FR-BLA-05, FR-REP-04): kein Test gegen aufgezeichnete Antworten von GitHub/GitLab. GitHub-Blame (GraphQL) und alle GitLab-Teile von Commits, Blame und Repository-Modus sind auch manuell noch nicht live geprüft.
 * `ReviewService` (Caching, Invalidierung, `mark` mit Schreiben/Lesen von `review.json`, Fortschritt): kein Test, nur über `LineAcceptance` indirekt.
 * REST-API (FR-AGT-01): kein `@QuarkusTest`.
-* UI (FR-UI-*, FR-COM-04 bis -06, FR-BLA-01 bis -04): ausser `acceptance.spec.ts` keine Frontend-Tests.
+* UI (FR-UI-*, FR-COM-04 bis -06, FR-BLA-01 bis -04): ausser `acceptance.spec.ts`, `expectations.spec.ts` und `test-profile.spec.ts` (reine Hilfsfunktionen) keine Frontend-Tests.
 * NFR-10 (Pfad-Sicherheit), FR-BET-06 (Health).

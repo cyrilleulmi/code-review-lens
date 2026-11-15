@@ -253,6 +253,44 @@ export interface TestInfo {
   path: string;
   subjects: TestSubject[];
   covers: TestCoverage[];
+  /** Test-Steckbrief; null in analyses of older versions */
+  profile: TestProfile | null;
+}
+
+export type TestScenario = 'error' | 'edge' | 'normal';
+export type TestLevel = 'unit' | 'integration' | 'e2e';
+export type AssertionKind = 'equality' | 'exception' | 'interaction' | 'existence' | 'http' | 'snapshot' | 'other';
+
+/**
+ * Test-Steckbrief (Model.TestProfile): what a test checks, in one line - pattern-based (rules section
+ * "testProfile"), deterministic.
+ */
+export interface TestProfile {
+  /** changed code the test calls directly (symbol names), else the unit from the test file name */
+  targets: string[];
+  /** error = expects a failure, edge = empty/null/limit inputs, normal = everything else */
+  scenario: TestScenario;
+  /** where the scenario pattern matched (null for normal) */
+  scenarioBy: 'code' | 'name' | null;
+  /** the matched text */
+  scenarioReason: string | null;
+  /** assertion statements in the test body */
+  assertions: number;
+  /** count per kind, only kinds that occur */
+  assertionKinds: Partial<Record<AssertionKind, number>>;
+  /** collaborators replaced in the test or its surroundings ("HTTP" = mocked backend) */
+  mocks: string[];
+  level: TestLevel;
+  /** null for unit */
+  levelBy: 'path' | 'code' | null;
+  /** the matched glob or code */
+  levelReason: string | null;
+  /** runs once per row of a table (@ParameterizedTest, it.each, Go table test) */
+  parameterized: boolean;
+  /** rows when the table is literal, else null */
+  cases: number | null;
+  /** @CsvSource, @ValueSource, it.each, table, ... */
+  casesSource: string | null;
 }
 
 export type CoverageStatus = 'direct' | 'indirect' | 'none';
