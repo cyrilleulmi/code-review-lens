@@ -19,6 +19,7 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 - Die Regeln für Zeilen an mehreren Orten stehen an einer Stelle (`LineAcceptance`) statt doppelt in Backend und UI verstreut. Dateiformat von `review.json` unverändert.
 - `Analyzer.VERSION` 14: Analysen enthalten pro Kategorie `builds`, `divides`, `view`, `origin`; gespeicherte Analysen werden neu berechnet.
 - **Analyse viel schneller bei vielen Segmenten:** Die Import-Prüfung zwischen zwei Dateien wird pro Datei zwischengespeichert statt für jedes Paar von Segmenten neu gerechnet (eigenes Repo als Ganzes: 29 s → 2,5 s, Ergebnis identisch).
+- **Scroll-Position pro Ansicht:** Jeder Flow, jede Kategorie, Gruppe und Datei merkt sich, wie weit sie gescrollt war; eine Ansicht, die zum ersten Mal geöffnet wird, beginnt oben statt an der Position der vorherigen. Springt ein Link zu einem Block, gilt der Block.
 
 ## [0.5.0] – 2026-11-13
 

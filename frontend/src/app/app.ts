@@ -1,5 +1,8 @@
-import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, ElementRef, HostListener, Injector, afterNextRender, computed, effect, inject, signal, untracked, viewChild,
+} from '@angular/core';
 import { prLabel } from './api';
+import { ScrollMemory, viewKey } from './scroll-memory';
 import { FlowView } from './flow-view';
 import { GroupView } from './group-view';
 import { Icon } from './icon';
@@ -80,8 +83,43 @@ export class App {
   protected readonly prLabel = prLabel;
   private dragStart: { x: number; width: number } | null = null;
 
+  private readonly injector = inject(Injector);
+  private readonly scroller = viewChild<ElementRef<HTMLElement>>('scroller');
+  private readonly scrolls = new ScrollMemory();
+  /** The view the editor shows; its scroll position is remembered separately from every other view. */
+  private readonly view = computed(() => {
+    const pr = this.store.prKey();
+    return pr ? viewKey(pr, this.store.selection()) : null;
+  });
+
   constructor() {
     this.store.init();
+    // Remember where each view is scrolled to (a plain listener: scrolling needs no change detection).
+    effect((onCleanup) => {
+      const el = this.scroller()?.nativeElement;
+      if (!el) return;
+      const remember = () => {
+        const key = untracked(this.view);
+        if (key) this.scrolls.save(key, el.scrollTop);
+      };
+      el.addEventListener('scroll', remember, { passive: true });
+      onCleanup(() => el.removeEventListener('scroll', remember));
+    });
+    // Another view: open it where it was left (at the top the first time), unless it is opened to show a block.
+    effect(() => {
+      const key = this.view();
+      untracked(() => {
+        const el = this.scroller()?.nativeElement;
+        if (!el || !key) return;
+        el.scrollTop = 0;
+        const top = this.store.focusSegment() ? 0 : this.scrolls.positionOf(key);
+        if (top > 0) {
+          afterNextRender({ write: () => {
+            if (this.view() === key) el.scrollTop = top;
+          } }, { injector: this.injector });
+        }
+      });
+    });
     // Switch to the review tool window whenever another PR has been opened.
     let lastPr: string | null = null;
     effect(() => {
