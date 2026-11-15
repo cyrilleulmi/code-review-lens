@@ -21,6 +21,7 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 - `Analyzer.VERSION` 14: Analysen enthalten pro Kategorie `builds`, `divides`, `view`, `origin`; gespeicherte Analysen werden neu berechnet.
 - **Dokumentation für Architekt:innen:** Architektur-Überblick mit Diagrammen, Laufzeitsichten und Architekturentscheiden ([docs/09](docs/09-architektur-ueberblick.md)), alle Funktionen als Anforderungen mit Nachweis ([docs/10](docs/10-anforderungen.md)), belegte Verbesserungsmöglichkeiten ([docs/11](docs/11-verbesserungen.md)) und eine überarbeitete Roadmap ([docs/07](docs/07-roadmap.md)).
 - `Analyzer.VERSION` 15: Analysen enthalten `coverage[]`, die Kategorie Tests hat die Ansicht `view: "tests"`; gespeicherte Analysen werden neu berechnet.
+- **Nie mehr Cache leeren nach einem Update:** `index.html` wird bei jedem Laden neu geprüft (`no-cache`), die gehashten JS-, CSS- und Schriftdateien sind unveränderlich und werden ein Jahr gecacht, API-Antworten nie. Das Favicon steckt direkt im `index.html`, es gibt keine ungehashte Datei mehr, die die Seite braucht.
 - **Analyse viel schneller bei vielen Segmenten:** Die Import-Prüfung zwischen zwei Dateien wird pro Datei zwischengespeichert statt für jedes Paar von Segmenten neu gerechnet (eigenes Repo als Ganzes: 29 s → 2,5 s, Ergebnis identisch).
 
 ## [0.5.0] – 2026-11-13

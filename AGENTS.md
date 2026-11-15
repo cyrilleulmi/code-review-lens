@@ -20,6 +20,10 @@ design decisions are in `docs/` (German): architecture overview `docs/09`, requi
   resources must be added to `quarkus.native.resources.includes`.
 - **UI look:** IntelliJ New UI dark. Colours only as tokens in `frontend/src/styles.scss` (incl. the palettes `--edge-n` for
   connections, `--area-*` for layers, `--lang-*` for languages; helpers in `frontend/src/app/look.ts`), never inline hex values.
+- **No cache resets:** every file the UI loads has a content hash in its name (Angular `outputHashing: all`), except
+  `index.html`. Don't add unhashed files referenced by the page (no `public/` assets; inline small ones like the
+  favicon). Cache headers live in `application.properties` (`quarkus.http.filter.*`): hashed = immutable,
+  everything else `no-cache`, `/api` `no-store`.
 - **Provider-neutral:** only `github/` and `gitlab/` know their host; everything else talks to `ReviewProvider`.
   GitLab merge requests are "pull requests" internally; nested groups are encoded as `group~sub` in `PrRef.owner`.
 
