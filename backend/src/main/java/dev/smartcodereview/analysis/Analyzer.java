@@ -36,6 +36,7 @@ import dev.smartcodereview.model.Model.SpecFile;
 import dev.smartcodereview.model.Model.TestCoverage;
 import dev.smartcodereview.model.Model.TestInfo;
 import dev.smartcodereview.model.Model.TestProfile;
+import dev.smartcodereview.model.Model.TestSmell;
 import dev.smartcodereview.model.Model.TestSubject;
 
 import java.time.Instant;
@@ -109,7 +110,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 24;
+    public static final int VERSION = 25;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -315,8 +316,19 @@ public final class Analyzer {
         Map<String, TestRules.TestFacts> testFacts = new LinkedHashMap<>();
         Map<String, List<TestRules.EndpointAt>> endpoints = endpoints(works, operations);
         List<MockWarning> mockWarnings = new ArrayList<>();
+        // the whole repository has no base: every test would be "added", a huge outline without information; the
+        // case matrices would list every similar test of the repository - both only make sense for a change
+        boolean repository = snapshot.pr().number() == 0;
+        Specs.SegmentLookup lookup = segmentLookup(works);
+        List<SpecFile> specList = repository ? List.of()
+                : specs(snapshot.files(), sources, baseSources == null ? Map.of() : baseSources, lookup);
+        Set<String> newTests = new HashSet<>();
+        for (SpecFile f : specList) {
+            f.entries().stream().filter(e -> "test".equals(e.kind()) && Specs.ADDED.equals(e.status()) && e.segmentId() != null)
+                    .forEach(e -> newTests.add(e.segmentId()));
+        }
         List<TestInfo> tests = tests(works, edges, snapshot.files(), profiles, mockWarnings, caseChecks, testEvidence,
-                testRules, testFacts);
+                testRules, testFacts, new TestSmells(rules), newTests);
         List<TestRules.EndpointAt> changedEndpoints = endpoints.values().stream().flatMap(List::stream).toList();
         List<ExistingTest> existingTests = existingTests(works, edges, related, relatedSources, profiles, mockWarnings,
                 caseChecks, testEvidence, testRules, testFacts, changedEndpoints);
@@ -335,10 +347,6 @@ public final class Analyzer {
         ArchitectureInfo architecture = new ArchitectureInfo(Structure.styleOf(evidence), evidence);
         Map<String, String> componentOf = new HashMap<>();
         List<Component> components = components(works, !evidence.isEmpty(), componentOf);
-        // the whole repository has no base: every test would be "added", a huge outline without information; the
-        // case matrices would list every similar test of the repository - both only make sense for a change
-        boolean repository = snapshot.pr().number() == 0;
-        Specs.SegmentLookup lookup = segmentLookup(works);
         List<CaseMatrix> matrices = repository ? List.of() : new CaseMatrices(rules).all(snapshot.files(), sources, lookup);
         addMatrixInputs(matrices, testEvidence);
         Map<String, List<CaseChecks.Boundary>> boundaries = new HashMap<>();
@@ -349,7 +357,7 @@ public final class Analyzer {
         return new Analysis(Model.SCHEMA_VERSION, Instant.now().toString(), snapshot.pr().headSha(), fingerprint(rules),
                 segments, categories, flows, tests, architecture, components, componentEdges(edges, componentOf),
                 coverage,
-                repository ? List.of() : specs(snapshot.files(), sources, baseSources == null ? Map.of() : baseSources, lookup),
+                specList,
                 withBoundaries(matrices, tests, boundaries),
                 existingTests, related, List.copyOf(mockWarnings), MockBoundaries.flowCoverage(flows, tests, existingTests),
                 ruleChecks);
@@ -1179,7 +1187,8 @@ public final class Analyzer {
      */
     private static List<TestInfo> tests(List<Work> works, List<FlowEdge> edges, List<DiffFile> files, TestProfiles profiles,
                                         List<MockWarning> warnings, CaseChecks caseChecks, Map<String, CaseChecks.Evidence> evidence,
-                                        TestRules testRules, Map<String, TestRules.TestFacts> facts) {
+                                        TestRules testRules, Map<String, TestRules.TestFacts> facts,
+                                        TestSmells smells, Set<String> newTests) {
         Map<String, Work> byId = new HashMap<>();
         works.forEach(w -> byId.put(w.id, w));
         Map<String, List<FlowEdge>> outgoing = testGraph(edges);
@@ -1197,7 +1206,23 @@ public final class Analyzer {
             List<TestSubject> subjects = subjects(t, covers.values(), byId, files);
             List<String> targets = targets(covers.values(), subjects, byId);
             TestProfile profile = profiles.profile(t.file.path(), t.ctx.text, t.ctx.symbols, t.symbol, targets, unit);
-            result.add(new TestInfo(t.id, t.symbol.displayName(), t.file.path(), subjects, List.copyOf(covers.values()), profile));
+            Set<String> realKeys = new HashSet<>();
+            List<TestSmells.MockedMember> mockedMembers = new ArrayList<>();
+            for (TestCoverage c : covers.values()) {
+                Work w = byId.get(c.segmentId());
+                if (w == null || !c.direct()) {
+                    continue;
+                }
+                if (!c.mocked()) {
+                    realKeys.addAll(ownerKeys(w));
+                } else if (w.symbol != null && w.symbol.name() != null) {
+                    mockedMembers.add(new TestSmells.MockedMember(w.symbol.name(), ownerKeys(w)));
+                }
+            }
+            List<TestSmell> testSmells = smells.detect(new TestSmells.Input(t.ctx.text, t.ctx.symbols, t.symbol, profile, unit,
+                    realKeys, mockedMembers, newTests.contains(t.id)));
+            result.add(new TestInfo(t.id, t.symbol.displayName(), t.file.path(), subjects, List.copyOf(covers.values()), profile,
+                    testSmells));
             CaseChecks.Evidence e = caseChecks.evidence(t.id, t.ctx.text, t.ctx.symbols, t.symbol, targets);
             evidence.put(t.id, e);
             facts.put(t.id, testFacts(t.id, t.ctx.text, t.ctx.symbols, t.symbol, e, profile, testRules));

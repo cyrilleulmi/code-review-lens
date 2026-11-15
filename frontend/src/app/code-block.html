@@ -29,6 +29,11 @@
       <app-icon [name]="ex.warn ? 'warning' : 'info'" [size]="11" /> {{ ex.label }}
     </span>
   }
+  @if (smellBadge(); as sm) {
+    <span class="expect warn" [title]="sm.title" (click)="$event.stopPropagation()">
+      <app-icon name="warning" [size]="11" /> {{ sm.text }}
+    </span>
+  }
   @if (mockWarning(); as mw) {
     <span class="expect warn" [title]="mw.title" (click)="$event.stopPropagation()">
       <app-icon name="warning" [size]="11" /> mockt geänderten Code
@@ -140,6 +145,11 @@
               </button>
             }
             @for (n of caseNotes().get(i) ?? []; track $index) {
+              <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
+                <app-icon name="warning" [size]="10" /> {{ n.text }}
+              </button>
+            }
+            @for (n of smellNotes().get(i) ?? []; track $index) {
               <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
                 <app-icon name="warning" [size]="10" /> {{ n.text }}
               </button>

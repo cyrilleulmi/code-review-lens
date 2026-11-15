@@ -209,11 +209,28 @@ public final class Model {
 
     /**
      * One changed test case (it/test block, @Test method, Go TestXxx) and what it exercises - found statically.
-     * profile: the test in one line (Test-Steckbrief); null in analyses of older versions.
+     * profile: the test in one line (Test-Steckbrief); null in analyses of older versions. smells: signs that the test
+     * is worth less than it looks (see TestSmell), empty when there are none and in analyses of older versions.
      */
     @RegisterForReflection
     public record TestInfo(String segmentId, String name, String path, List<TestSubject> subjects,
-                           List<TestCoverage> covers, TestProfile profile) {
+                           List<TestCoverage> covers, TestProfile profile, List<TestSmell> smells) {
+        public TestInfo(String segmentId, String name, String path, List<TestSubject> subjects, List<TestCoverage> covers,
+                        TestProfile profile) {
+            this(segmentId, name, path, subjects, covers, profile, List.of());
+        }
+    }
+
+    /**
+     * A test smell: a sign that a changed test case is worth less than it looks (Test-Smells, pattern-based, rules
+     * section "testSmells"; see analysis/TestSmells). kind: "no-assertion" | "weak-only" (all assertions only check
+     * existence/truthiness) | "focused" (fit, it.only: CI skips all other tests) | "sleep" (fixed wait) |
+     * "mocks-subject" (the test replaces the unit it tests by a mock or spy) | "disabled" (a new test that is switched
+     * off). label / hint: German texts from the rules. line: where it shows (new-file line), null when the smell is
+     * about the whole test (or lies outside of it); code: that line, trimmed, or null.
+     */
+    @RegisterForReflection
+    public record TestSmell(String kind, String label, Integer line, String code, String hint) {
     }
 
     /**

@@ -54,6 +54,9 @@
         @if (c.warning) {
           <span class="warning" title="Bestehende Tests erwarten jetzt etwas anderes oder weniger, oder sind ausgeschaltet (musterbasiert erkannt) – Details in der Spezifikation der Tests">{{ c.warning }}</span>
         }
+        @if (c.smells) {
+          <span class="warning" title="Geänderte Tests mit Hinweisen, dass sie weniger wert sind, als sie aussehen (keine oder nur schwache Assertions, fokussiert, sleep, mockt die getestete Einheit, neu deaktiviert; musterbasiert erkannt) – Details in der Testübersicht, Spalte «Smells»">{{ c.smells }}</span>
+        }
         @if (c.rules) {
           <span class="warning" title="Für diese Änderungen erwarten die Regeln einen Test einer bestimmten Form (z. B. verweigerter Zugriff, Test über HTTP), der fehlt – Details unter «Erwartete Tests (Regeln)»">{{ c.rules }}</span>
         }

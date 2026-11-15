@@ -166,6 +166,19 @@ public final class Rules {
                                  boolean http) {
     }
 
+    /**
+     * Test-Smell (see {@link TestSmells}), an entry of the rules section "testSmells" (key = smell kind). label / hint:
+     * German, shown in the UI. patterns: the regex lists of the smell by key (patterns, unless, timerPatterns,
+     * fakeTimers, observing, stubbing); targetPatterns: templates with {target}. A smell with enabled = false is
+     * never reported.
+     */
+    public record SmellRule(boolean enabled, String label, String hint, Map<String, List<Pattern>> patterns,
+                            List<String> targetPatterns) {
+        public List<Pattern> list(String key) {
+            return patterns.getOrDefault(key, List.of());
+        }
+    }
+
     /** Lines that never make a difference: blank, braces/brackets only, comments. */
     private static final Pattern TRIVIAL = Pattern.compile(
             "^\\s*$|^\\s*[{}()\\[\\];,]*\\s*$|^\\s*(//|/\\*|\\*|\\*/|#).*$|^\\s*\\}\\s*(else\\b.*)?\\{?\\s*$");
@@ -207,12 +220,15 @@ public final class Rules {
      * optionally followed by "+" for a concatenated value) and optionally "method" (GET, post, …; missing = GET).
      */
     public final List<Pattern> testHttpCalls;
+    /** Test-Smells by kind (see {@link SmellRule}), in the order of the built-in rules. */
+    public final Map<String, SmellRule> testSmells;
     public final String hash;
 
     private Rules(List<CategoryDef> categories, List<Rule> rules, List<Rule> aspects, List<Rule> concerns,
                   List<Pattern> assertions, List<Pattern> weakAssertions, List<Pattern> disabledTests,
                   TestProfileRules testProfile, CaseMatrixRules caseMatrix, RelatedTestRules relatedTests,
-                  CaseCheckRules caseCheck, List<TestRule> testRules, List<Pattern> testHttpCalls, String hash) {
+                  CaseCheckRules caseCheck, List<TestRule> testRules, List<Pattern> testHttpCalls,
+                  Map<String, SmellRule> testSmells, String hash) {
         this.categories = categories;
         this.rules = rules;
         this.aspects = aspects;
@@ -226,6 +242,7 @@ public final class Rules {
         this.caseCheck = caseCheck;
         this.testRules = testRules;
         this.testHttpCalls = testHttpCalls;
+        this.testSmells = testSmells;
         this.hash = hash;
     }
 
@@ -240,7 +257,27 @@ public final class Rules {
                 section(root, "assertions"), section(root, "weakAssertions"), section(root, "disabledTests"),
                 testProfile(root.path("testProfile")), caseMatrix(root.path("caseMatrix")),
                 relatedTests(root.path("relatedTests")), caseCheck(root.path("caseCheck")), testRules(root.path("testRules")),
-                section(root, "testHttpCalls"), hash);
+                section(root, "testHttpCalls"), testSmells(root.path("testSmells")), hash);
+    }
+
+    /** The "testSmells" section; every missing smell or key is taken from the built-in rules. */
+    private static Map<String, SmellRule> testSmells(JsonNode node) {
+        JsonNode builtIn = defaults().path("testSmells");
+        Map<String, SmellRule> result = new LinkedHashMap<>();
+        builtIn.properties().forEach(e -> {
+            if (e.getKey().startsWith("$") || !e.getValue().isObject()) {
+                return;
+            }
+            JsonNode own = node.path(e.getKey());
+            java.util.function.Function<String, JsonNode> key = k -> own.has(k) ? own.get(k) : e.getValue().path(k);
+            Map<String, List<Pattern>> lists = new LinkedHashMap<>();
+            for (String k : List.of("patterns", "unless", "timerPatterns", "fakeTimers", "observing", "stubbing")) {
+                lists.put(k, patterns(key.apply(k), false));
+            }
+            result.put(e.getKey(), new SmellRule(key.apply("enabled").asBoolean(true), key.apply("label").asText(e.getKey()),
+                    key.apply("hint").asText(""), lists, strings(key.apply("targetPatterns"))));
+        });
+        return result;
     }
 
     /**

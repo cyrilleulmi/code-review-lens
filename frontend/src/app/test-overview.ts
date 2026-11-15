@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
-import { Segment } from './api';
+import { Segment, TestSmell } from './api';
 import { Icon, SymbolBadge } from './icon';
 import { ReviewStore } from './review.store';
 import {
@@ -19,6 +19,7 @@ import {
   sameFilter,
   sortRows,
 } from './test-profile';
+import { smellDetail, smellText } from './test-smells';
 
 interface CoverRow {
   segment: Segment;
@@ -45,6 +46,7 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
   { id: 'assertions', label: 'Assertions', num: true, tip: 'Anzahl Assertions im Testrumpf und ihre Art' },
   { id: 'mocks', label: 'Mocks', tip: 'Ersetzte Abhängigkeiten (Test, Setup, umschliessende Klasse/Suite)' },
   { id: 'cases', label: 'Fälle', num: true, tip: 'Parametrisierte Fälle (@ParameterizedTest, it.each, Go-Tabellentest)' },
+  { id: 'smells', label: 'Smells', tip: 'Test-Smells: Hinweise, dass der Test weniger wert ist, als er aussieht (keine Assertion, nur schwache Assertions, fokussiert, sleep, mockt die getestete Einheit, deaktiviert)' },
 ];
 
 /**
@@ -121,9 +123,16 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
                   </td>
                   <td class="code" [title]="r.parts.mocks?.tip ?? ''">{{ p.mocks.join(', ') || '–' }}</td>
                   <td class="num" [title]="r.parts.cases?.tip ?? ''">{{ casesOf(r) }}</td>
+                  <td class="smells">
+                    @for (s of r.smells ?? []; track s.kind) {
+                      <span class="smell" [title]="detail(s)">{{ text(s) }}</span>
+                    } @empty {
+                      <span class="dim">–</span>
+                    }
+                  </td>
                 </tr>
               } @empty {
-                <tr><td colspan="7" class="none">Kein Test passt auf den Filter.</td></tr>
+                <tr><td colspan="8" class="none">Kein Test passt auf den Filter.</td></tr>
               }
             </tbody>
           </table>
@@ -134,7 +143,7 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
             <button type="button" class="name" (click)="testClick.emit(t.id)" title="Zum Testcode">
               <app-symbol-badge kind="test" /> {{ t.name }}
             </button>
-            @if (t.parts.length) {
+            @if (t.parts.length || t.smells.length) {
               <div class="profile">
                 @for (part of t.parts; track part.key) {
                   @if (!$first) {
@@ -145,6 +154,9 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
                   } @else {
                     <span class="part" [class.zero]="part.key === 'assertions' && !t.assertions" [title]="part.tip">{{ part.text }}</span>
                   }
+                }
+                @for (s of t.smells; track s.kind) {
+                  <span class="smell" [title]="detail(s)">{{ text(s) }}</span>
                 }
               </div>
             }
@@ -211,6 +223,10 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
     .sc-edge { color: var(--accent-fg); border-color: color-mix(in srgb, var(--accent) 50%, transparent);
       background: color-mix(in srgb, var(--accent) 12%, transparent); }
     .sc-normal { color: var(--fg-muted); }
+    .smell { padding: 0 6px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius: 4px; font-size: 11px;
+      white-space: nowrap; color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); cursor: help; }
+    td.smells { display: table-cell; }
+    td.smells .smell + .smell { margin-left: 4px; }
     .lbl { color: var(--fg-dim); font-size: 11.5px; padding-top: 3px; }
     .vals { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
     .subject, .cover { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 2px 8px; border: 1px solid var(--border-strong);
@@ -281,6 +297,7 @@ export class TestOverview {
         scenario: t.profile?.scenario ?? 'normal',
         assertions: t.profile?.assertions ?? 0,
         parts: t.profile ? profileParts(t.profile) : [],
+        smells: t.smells ?? [],
         covers: t.covers
           .filter((c) => segs.has(c.segmentId))
           .map((c): CoverRow => {
@@ -302,15 +319,16 @@ export class TestOverview {
         id: t!.segmentId,
         name: t!.name,
         profile: t!.profile!,
+        smells: t!.smells ?? [],
         parts: Object.fromEntries(profileParts(t!.profile!).map((p) => [p.key, p])),
       }));
   });
 
-  protected readonly summary = computed(() => profileSummary(this.tableRows().map((r) => r.profile)));
+  protected readonly summary = computed(() => profileSummary(this.tableRows().map((r) => r.profile), this.tableRows().filter((r) => r.smells?.length).length));
 
   protected readonly shownRows = computed(() => {
     const f = this.filter();
-    return sortRows(this.tableRows().filter((r) => matchesFilter(r.profile, f)), this.sort()) as TableRow[];
+    return sortRows(this.tableRows().filter((r) => matchesFilter(r.profile, f, r.smells)), this.sort()) as TableRow[];
   });
 
   protected setMode(mode: ViewMode): void {
@@ -338,6 +356,14 @@ export class TestOverview {
   protected kindsOf(r: TableRow): string | null {
     const kinds = assertionKinds(r.profile).map((k) => ASSERTION_LABELS[k.kind]);
     return kinds.length ? kinds.join(', ') : null;
+  }
+
+  protected text(s: TestSmell): string {
+    return smellText(s);
+  }
+
+  protected detail(s: TestSmell): string {
+    return smellDetail(s);
   }
 
   protected casesOf(r: TableRow): string {

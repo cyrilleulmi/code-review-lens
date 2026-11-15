@@ -257,6 +257,19 @@ export interface TestInfo {
   covers: TestCoverage[];
   /** Test-Steckbrief; null in analyses of older versions */
   profile: TestProfile | null;
+  /** Test-Smells: signs that the test is worth less than it looks (absent in analyses of older versions) */
+  smells?: TestSmell[];
+}
+
+export type TestSmellKind = 'no-assertion' | 'weak-only' | 'focused' | 'sleep' | 'mocks-subject' | 'disabled';
+
+/** Model.TestSmell: label and hint are German texts from the rules; line/code: where it shows (null: the whole test). */
+export interface TestSmell {
+  kind: TestSmellKind;
+  label: string;
+  line: number | null;
+  code: string | null;
+  hint: string;
 }
 
 export type TestScenario = 'error' | 'edge' | 'normal';

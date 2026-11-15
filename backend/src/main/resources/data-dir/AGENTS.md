@@ -45,6 +45,12 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
 5. `tests[]` → per changed test case: `subjects` (components under test) and `covers` (reached segments,
    `direct` or `via` another segment, `line` = call site in the test, `mocked` = the segment belongs to a collaborator
    the test mocks: only the mock runs, the walk stops there). `segments[].testedBy` is the reverse (without mocked).
+   `smells[]` (Test-Smells, pattern-based, rules section `testSmells`; absent in older analyses, empty for none) = signs
+   that the test is worth less than it looks: `kind` (no-assertion | weak-only = only existence/truthiness checks |
+   focused = fit/it.only, CI would skip all other tests | sleep = fixed wait, not with fake timers | mocks-subject =
+   the test mocks or spies the unit it tests | disabled = a NEW test that is switched off), `label` + `hint` (German),
+   `line` + `code` (where it shows, null for the whole test). A smell is worth a review comment: the test proves less
+   than its name says.
    `profile` (Test-Steckbrief, pattern-based, rules section `testProfile`; null in older analyses): `targets`
    (names of the changed code it calls directly, else the unit from the file name), `scenario` (error = expects a
    failure | edge = null/empty/limit values in the inputs of the code under test: arguments of calls to the targets and of HTTP requests, parameter sources - not fixtures or expected values | normal) with `scenarioBy` (code | name) and `scenarioReason` (the

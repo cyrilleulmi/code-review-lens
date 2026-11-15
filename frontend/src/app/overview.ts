@@ -5,6 +5,7 @@ import { expectationTotals, expectationWarning } from './expectations';
 import { ComponentDiagram } from './component-diagram';
 import { Icon } from './icon';
 import { unmetWarning } from './rule-checks';
+import { countWithSmells, smellsSummary } from './test-smells';
 import { ReviewStore } from './review.store';
 
 /** Start page of an opened PR: description, the suggested review order, general comments. */
@@ -39,6 +40,8 @@ export class Overview {
         warning: isTestsView(c) ? expectationWarning(expectationTotals(this.store.bundle()!.analysis.specs ?? [])) : null,
         // Erwartungs-Regeln without a test of the expected form
         rules: isTestsView(c) ? unmetWarning(this.store.ruleChecks()) : null,
+        // Test-Smells: «3 Tests mit Smells»
+        smells: isTestsView(c) ? smellsSummary(countWithSmells(tests)) : null,
       };
     }),
   );

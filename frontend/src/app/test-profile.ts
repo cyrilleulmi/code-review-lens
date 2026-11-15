@@ -1,4 +1,5 @@
-import { AssertionKind, TestLevel, TestProfile, TestScenario } from './api';
+import { AssertionKind, TestLevel, TestProfile, TestScenario, TestSmell } from './api';
+import { smellsSummary } from './test-smells';
 
 /** Test-Steckbrief: labels, the one-line profile, the summary over all tests, filtering and sorting of the table. */
 
@@ -107,7 +108,8 @@ function casesTip(p: TestProfile): string {
 export type ProfileFilter =
   | { kind: 'scenario'; value: TestScenario }
   | { kind: 'level'; value: TestLevel }
-  | { kind: 'parameterized' };
+  | { kind: 'parameterized' }
+  | { kind: 'smells' };
 
 export interface SummaryPart {
   text: string;
@@ -122,9 +124,10 @@ export interface ProfileSummary {
 
 /**
  * «14 Tests · 9 Normalfall, 4 Fehlerfall, 1 Grenzfall · 11 Unit, 3 Integration · 2 parametrisiert (9 Fälle)»:
- * counts per scenario and level (most first, zeros left out) and the parameterised tests with their known cases.
+ * counts per scenario and level (most first, zeros left out) and the parameterised tests with their known cases;
+ * smelly: how many tests have Test-Smells, shown as a last part «5 Tests mit Smells» (none when 0).
  */
-export function profileSummary(profiles: TestProfile[]): ProfileSummary {
+export function profileSummary(profiles: TestProfile[], smelly = 0): ProfileSummary {
   const count = <T extends string>(order: T[], of: (p: TestProfile) => T) =>
     order
       .map((value) => ({ value, n: profiles.filter((p) => of(p) === value).length }))
@@ -141,10 +144,15 @@ export function profileSummary(profiles: TestProfile[]): ProfileSummary {
     const casesPart = !known.length ? '' : ` (${known.length < parameterized.length ? 'mind. ' : ''}${cases} ${cases === 1 ? 'Fall' : 'Fälle'})`;
     groups.push([{ text: `${parameterized.length} parametrisiert${casesPart}`, filter: { kind: 'parameterized' } }]);
   }
+  const smells = smellsSummary(smelly);
+  if (smells) {
+    groups.push([{ text: smells, filter: { kind: 'smells' } }]);
+  }
   return { total: profiles.length, groups: groups.filter((g) => g.length) };
 }
 
-export function matchesFilter(p: TestProfile, f: ProfileFilter | null): boolean {
+/** smells: the Test-Smells of the test (for the filter «Tests mit Smells»). */
+export function matchesFilter(p: TestProfile, f: ProfileFilter | null, smells: TestSmell[] = []): boolean {
   if (!f) return true;
   switch (f.kind) {
     case 'scenario':
@@ -153,12 +161,14 @@ export function matchesFilter(p: TestProfile, f: ProfileFilter | null): boolean 
       return p.level === f.value;
     case 'parameterized':
       return p.parameterized;
+    case 'smells':
+      return smells.length > 0;
   }
 }
 
 export function sameFilter(a: ProfileFilter | null, b: ProfileFilter | null): boolean {
   if (!a || !b) return a === b;
-  return a.kind === b.kind && (a.kind === 'parameterized' || a.value === (b as { value: string }).value);
+  return a.kind === b.kind && (a.kind === 'parameterized' || a.kind === 'smells' || a.value === (b as { value: string }).value);
 }
 
 // ------------------------------------------------------------------ table
@@ -168,9 +178,11 @@ export interface ProfileRow {
   id: string;
   name: string;
   profile: TestProfile;
+  /** Test-Smells of the test (absent: none) */
+  smells?: TestSmell[];
 }
 
-export type ProfileColumn = 'name' | 'targets' | 'scenario' | 'level' | 'assertions' | 'mocks' | 'cases';
+export type ProfileColumn = 'name' | 'targets' | 'scenario' | 'level' | 'assertions' | 'mocks' | 'cases' | 'smells';
 export interface ProfileSort {
   column: ProfileColumn;
   desc: boolean;
@@ -195,6 +207,8 @@ function key(r: ProfileRow, column: ProfileColumn): string | number {
     case 'cases':
       // not parameterised < unknown number < known numbers
       return !p.parameterized ? -2 : p.cases ?? -1;
+    case 'smells':
+      return r.smells?.length ?? 0;
   }
 }
 

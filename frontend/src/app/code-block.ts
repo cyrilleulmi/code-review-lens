@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { Blame, Comment, Commit, DisplayLine, LineMark, Segment } from './api';
+import { smellBadgeText, smellBadgeTitle, smellDetail, smellText, smellsByLine } from './test-smells';
 import { findingDetail, findingsByLine, lineChipText } from './case-checks';
 import { ruleChipText, ruleDetail, unmetByLine } from './rule-checks';
 import { assertionDrop, bendsExpectations, describeChange, newlyDisabled } from './expectations';
@@ -195,6 +196,28 @@ export class CodeBlock {
       const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
       if (found) {
         result.set(i, found.map((c) => ({ text: ruleChipText(c), title: ruleDetail(c, testName) + ' – statisch ermittelt, Klick: Tests zeigen' })));
+      }
+    });
+    return result;
+  });
+
+  /** Test case with Test-Smells: header badge («Smell: keine Assertion»); null when it has none. */
+  protected readonly smellBadge = computed(() => {
+    const smells = this.store.tests().get(this.segment().id)?.smells ?? [];
+    return smells.length ? { text: smellBadgeText(smells), title: smellBadgeTitle(smells) } : null;
+  });
+
+  /** Test-Smells with a line: line index -> chips at that line. */
+  protected readonly smellNotes = computed(() => {
+    const result = new Map<number, { text: string; title: string }[]>();
+    const byLine = smellsByLine(this.store.tests().get(this.segment().id)?.smells);
+    if (!byLine.size) {
+      return result;
+    }
+    this.segment().lines.forEach((line, i) => {
+      const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
+      if (found) {
+        result.set(i, found.map((s) => ({ text: `Smell: ${smellText(s)}`, title: smellDetail(s) + ' – Klick: Testübersicht zeigen' })));
       }
     });
     return result;
