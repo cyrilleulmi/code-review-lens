@@ -51,6 +51,9 @@
         <span class="label">{{ c.label }}</span>
         <span class="desc">{{ c.description }}</span>
         <span class="stats">{{ c.stats }}</span>
+        @if (c.warning) {
+          <span class="warning" title="Bestehende Tests erwarten jetzt etwas anderes oder weniger, oder sind ausgeschaltet (musterbasiert erkannt) – Details in der Spezifikation der Tests">{{ c.warning }}</span>
+        }
       </span>
       <span class="ring" [style.--p]="percent(c.progress)">
         <span>{{ percent(c.progress) }}%</span>

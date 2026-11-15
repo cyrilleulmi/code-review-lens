@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { Blame, Comment, Commit, DisplayLine, LineMark, Segment } from './api';
+import { assertionDrop, bendsExpectations, describeChange, newlyDisabled } from './expectations';
 import { highlightLines } from './highlight';
 import { Icon, SymbolBadge } from './icon';
 import { areaColor, areaLabel, areaOfSegment, langColor, langLabel } from './look';
@@ -131,6 +132,24 @@ export class CodeBlock {
         + (c.indirectTests.length ? `, ${c.indirectTests.length} indirekt` : '');
     const branches = `${c.branches} ${c.branches === 1 ? 'Verzweigung' : 'Verzweigungen'}`;
     return { status: c.status, label, title: `${tests} · ${branches} · statisch ermittelt – Klick: Abdeckung zeigen` };
+  });
+
+  /** Test case whose expectations changed or that is switched off (Spec-Diff): header badge; null otherwise. */
+  protected readonly expectation = computed(() => {
+    const e = this.store.expectationsBySegment().get(this.segment().id);
+    if (!e) return null;
+    const disabled = newlyDisabled(e) || !!e.disabled;
+    const bends = bendsExpectations(e) || !!assertionDrop(e);
+    if (!disabled && !bends) return null;
+    const details = (e.expectations ?? []).map(describeChange);
+    const drop = assertionDrop(e);
+    if (drop) details.push(`${drop.before} → ${drop.after} Assertions`);
+    if (e.disabled && !newlyDisabled(e)) details.push('war schon vorher deaktiviert');
+    return {
+      label: disabled ? 'deaktiviert' : 'Erwartung geändert',
+      warn: newlyDisabled(e) || bends,
+      title: details.join('\n') + '\n– Musterbasiert erkannt (Spec-Diff)',
+    };
   });
 
   protected openCoverage(event: Event): void {

@@ -63,6 +63,7 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | FR-ANA-14 | Jede Kategorie muss ein eigenständiges Modul sein, das sich selbst beschreibt. | Gleiche Schnittstelle (`info`, `groups`, `view`, `origin`); Entfernen eines Moduls ändert die anderen nicht; `builds`/`divides` aus Regeln abgeleitet oder überschrieben. | T: CategoryModulesTest (5 Tests); AnalyzerTest › everyCategoryDescribesItselfAndFlowsKeepTheirOwnView |
 | FR-ANA-15 | Das System muss eigene Regeln aus `<data>/rules.json` verwenden und die Analyse bei Änderung automatisch neu berechnen. | Ungültige Datei → Fehlermeldung `rules.json ist ungültig`; neue Regeln wirken beim nächsten Öffnen. | M |
 | FR-ANA-16 | Die Analyse muss deterministisch sein. | Gleicher Snapshot + gleiche Regeln + gleiche Version = byte-gleiches Ergebnis (abgesehen von `generatedAt`). | M (Vergleich vor/nach Performance-Änderung, PR #1) |
+| FR-ANA-17 | Das System muss bei bestehenden Tests geänderte Erwartungen erkennen: geänderte, entfernte und abgeschwächte Assertions sowie aus- und wieder eingeschaltete Tests. | Musterbasiert (`assertions`, `weakAssertions`, `disabledTests` in `rules.json`); Paarung über den geprüften Gegenstand, bei `assertEquals(erwartet, tatsächlich)` das zweite Argument; reines Umformatieren ist keine Änderung; eine ausgeschaltete Suite schaltet ihre Tests aus; Anzahl Assertions alt/neu; im UI Warnmarkierung mit Details im Spec-Diff, Warnzeile auf der Kachel Tests, Abzeichen im Code-Block (B12b, 05-analyse 5c). | T: ExpectationsTest (6 Tests); expectations.spec.ts |
 
 ## 5. Darstellung und Navigation (FR-UI)
 
@@ -195,6 +196,8 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | `analysis/CategoryModulesTest` | 5 | FR-ANA-14, NFR-13 |
 | `review/LineAcceptanceTest` | 9 | FR-REV-04 bis -07, -09 |
 | `frontend/src/app/acceptance.spec.ts` | 5 | FR-REV-04, -05, -07 (UI-Seite) |
+| `analysis/ExpectationsTest` | 6 | FR-ANA-17 |
+| `frontend/src/app/expectations.spec.ts` | 4 | FR-ANA-17 (Markierungen und Warnzeile im UI) |
 | `commits/AttributionTest` | 7 | FR-COM-02, -03 |
 | `gitlab/ProviderUrlTest` | 3 | FR-ZUG-03, FR-REP-01 |
 | `repo/RepositorySnapshotTest` | 1 | FR-REP-02, -03 |

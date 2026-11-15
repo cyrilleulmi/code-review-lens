@@ -23,6 +23,11 @@
   box-shadow: 0 0 0 2px rgba(53, 116, 240, 0.35);
 }
 
+/* a line jumped to from outside (e.g. an assertion in the Spec-Diff) */
+.row.flash-line {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 .head {
   display: flex;
   align-items: center;
@@ -107,6 +112,26 @@
 .chip.cat-styles {
   background: rgba(95, 184, 101, 0.13);
   color: #79c27e;
+}
+
+/* test case whose expectations changed or that is switched off (Spec-Diff) */
+.expect {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 1px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--fg-muted);
+  font-size: 11px;
+  cursor: help;
+}
+
+.expect.warn {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
 }
 
 /* coverage of a testable changed function (static): untested, only indirectly tested, tested */

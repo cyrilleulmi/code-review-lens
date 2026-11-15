@@ -1,8 +1,13 @@
 package dev.smartcodereview.analysis;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.MissingNode;
 import dev.smartcodereview.model.Model.DiffLine;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -62,13 +67,27 @@ public final class Rules {
     public final List<Rule> aspects;
     /** Cross-cutting concerns (security, messaging, transactions, persistence): every matching rule adds a category. */
     public final List<Rule> concerns;
+    /**
+     * Changed expectations in tests (see {@link Expectations}): "assertions" = a line of test code that checks
+     * something (expect(…), assertEquals(…), verify(…), t.Error…); "weakAssertions" = an assertion that only checks
+     * existence or truthiness; "disabledTests" = a test or suite that is switched off (xit, it.skip, @Disabled,
+     * t.Skip). All are regexes, searched (find) in the code with string contents and comments blanked out. A rules
+     * file without one of these sections uses the built-in default for it.
+     */
+    public final List<Pattern> assertions;
+    public final List<Pattern> weakAssertions;
+    public final List<Pattern> disabledTests;
     public final String hash;
 
-    private Rules(List<CategoryDef> categories, List<Rule> rules, List<Rule> aspects, List<Rule> concerns, String hash) {
+    private Rules(List<CategoryDef> categories, List<Rule> rules, List<Rule> aspects, List<Rule> concerns,
+                  List<Pattern> assertions, List<Pattern> weakAssertions, List<Pattern> disabledTests, String hash) {
         this.categories = categories;
         this.rules = rules;
         this.aspects = aspects;
         this.concerns = concerns;
+        this.assertions = assertions;
+        this.weakAssertions = weakAssertions;
+        this.disabledTests = disabledTests;
         this.hash = hash;
     }
 
@@ -79,7 +98,32 @@ public final class Rules {
                     c.path("description").asText(""), c.path("icon").asText("code"),
                     c.path("builds").asText(""), c.path("divides").asText(""), c.path("needsTests").asBoolean(true)));
         }
-        return new Rules(categories, rules(root.path("rules")), rules(root.path("aspects")), rules(root.path("concerns")), hash);
+        return new Rules(categories, rules(root.path("rules")), rules(root.path("aspects")), rules(root.path("concerns")),
+                section(root, "assertions"), section(root, "weakAssertions"), section(root, "disabledTests"), hash);
+    }
+
+    /** A list of regexes; taken from the built-in rules when the given rules file has no such section. */
+    private static List<Pattern> section(JsonNode root, String name) {
+        JsonNode node = root.get(name);
+        if (node == null || !node.isArray()) {
+            node = defaults().path(name);
+        }
+        return patterns(node, false);
+    }
+
+    private static volatile JsonNode defaults;
+
+    private static JsonNode defaults() {
+        JsonNode d = defaults;
+        if (d == null) {
+            try (InputStream in = Rules.class.getResourceAsStream("/rules/default-rules.json")) {
+                d = in == null ? MissingNode.getInstance() : new ObjectMapper().readTree(in);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            defaults = d;
+        }
+        return d;
     }
 
     private static List<Rule> rules(JsonNode array) {

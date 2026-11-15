@@ -256,10 +256,29 @@ public final class Model {
      * segmentId: the segment of this suite/test when it has changed lines (null for removed and untouched entries).
      * line: start line in the new file, oldLine: in the base version (null where that side does not exist).
      * depth: indentation in the outline (number of enclosing suites as shown).
+     * expectations: how the assertions of this test changed against the base version (see ExpectationChange; for
+     * suites only "disabled"/"enabled"; empty for added and removed entries and without base version).
+     * assertionsBefore / assertionsAfter: assertion statements in the test body in the base / new version (null for
+     * suites and where that side does not exist). disabled: the test or suite is switched off now (itself or an
+     * enclosing suite: xit, it.skip, @Disabled, t.Skip, ...); false for removed entries.
      */
     @RegisterForReflection
     public record SpecEntry(String name, List<String> suites, String kind, String status, String previousName,
-                            String segmentId, Integer line, Integer oldLine, int depth) {
+                            String segmentId, Integer line, Integer oldLine, int depth,
+                            List<ExpectationChange> expectations, Integer assertionsBefore, Integer assertionsAfter,
+                            boolean disabled) {
+    }
+
+    /**
+     * A changed expectation in a test (pattern-based, rules "assertions" / "weakAssertions" / "disabledTests").
+     * kind: "changed" (same subject, other expected value or matcher) | "weakened" (changed to a matcher that only
+     * checks existence/truthiness, or removed while only such matchers remain) | "removed" | "added" | "disabled" /
+     * "enabled" (the test or an enclosing suite was switched off / on again). oldText / newText: the assertion
+     * statement (lines joined, trimmed) in the base / new version, for disabled/enabled the line that switches the test
+     * off; oldLine / newLine: its first line in the base / new file. Each side is null where it does not exist.
+     */
+    @RegisterForReflection
+    public record ExpectationChange(String kind, String oldText, String newText, Integer oldLine, Integer newLine) {
     }
 
     /**

@@ -292,6 +292,29 @@ export interface SpecEntry {
   oldLine: number | null;
   /** indentation in the outline */
   depth: number;
+  /** changed expectations against the base version (absent in older analyses) */
+  expectations?: ExpectationChange[] | null;
+  /** assertion statements in the test body, base / new version (null for suites and missing sides) */
+  assertionsBefore?: number | null;
+  assertionsAfter?: number | null;
+  /** switched off now (itself or an enclosing suite: xit, it.skip, @Disabled, t.Skip …) */
+  disabled?: boolean;
+}
+
+export type ExpectationKind = 'changed' | 'weakened' | 'removed' | 'added' | 'disabled' | 'enabled';
+
+/**
+ * A changed expectation in a test (Model.ExpectationChange), pattern-based: changed = same subject, other expected
+ * value or matcher; weakened = to a matcher that only checks existence/truthiness; disabled/enabled = the test or an
+ * enclosing suite was switched off/on. Texts: the assertion statement (or the switching line); null where that side
+ * does not exist.
+ */
+export interface ExpectationChange {
+  kind: ExpectationKind;
+  oldText: string | null;
+  newText: string | null;
+  oldLine: number | null;
+  newLine: number | null;
 }
 
 /** The test names of a changed test file, old against new version (Model.SpecFile). */

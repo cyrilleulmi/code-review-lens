@@ -88,7 +88,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 17;
+    public static final int VERSION = 18;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -308,11 +308,12 @@ public final class Analyzer {
             }
         }
         Specs.SegmentLookup lookup = (path, symbol) -> segmentOf.getOrDefault(path, Map.of()).get(symbol);
+        Expectations expectations = new Expectations(rules);
         List<SpecFile> result = new ArrayList<>();
         for (DiffFile f : files) {
             if (Specs.isTestFile(rules, f)) {
                 SpecFile spec = Specs.of(f, sources.get(f.path()),
-                        Specs.ADDED.equals(f.status()) ? null : baseSources.get(Specs.basePath(f)), lookup);
+                        Specs.ADDED.equals(f.status()) ? null : baseSources.get(Specs.basePath(f)), lookup, expectations);
                 if (spec != null) {
                     result.add(spec);
                 }

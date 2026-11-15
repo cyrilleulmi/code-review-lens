@@ -297,11 +297,11 @@ class SpecsTest {
         return spec.entries().stream().map(e -> e.kind() + " " + e.name() + " " + e.status() + " " + e.depth()).toList();
     }
 
-    private static SpecEntry entry(SpecFile spec, String name) {
+    static SpecEntry entry(SpecFile spec, String name) {
         return spec.entries().stream().filter(e -> e.name().equals(name)).findFirst().orElseThrow(() -> new AssertionError(name));
     }
 
-    private static SpecFile only(Analysis analysis) {
+    static SpecFile only(Analysis analysis) {
         assertNotNull(analysis.specs());
         assertEquals(1, analysis.specs().size());
         return analysis.specs().getFirst();
@@ -312,7 +312,7 @@ class SpecsTest {
         return analysis.segments().stream().filter(s -> s.id().equals(id)).findFirst().orElseThrow();
     }
 
-    private static Analysis analyse(List<DiffFile> files, Map<String, String> sources, Map<String, String> base) throws Exception {
+    static Analysis analyse(List<DiffFile> files, Map<String, String> sources, Map<String, String> base) throws Exception {
         Snapshot snapshot = new Snapshot(1, "now", info(), files);
         return new Analyzer(defaultRules()).analyze(snapshot, new HashMap<>(sources), null, base);
     }
@@ -326,7 +326,7 @@ class SpecsTest {
     }
 
     /** A real line diff (longest common subsequence) as one hunk with full context. */
-    private static DiffFile modified(String path, String before, String after) {
+    static DiffFile modified(String path, String before, String after) {
         String[] a = lines(before);
         String[] b = lines(after);
         int[][] lcs = new int[a.length + 1][b.length + 1];
@@ -353,7 +353,7 @@ class SpecsTest {
         return new DiffFile(path, null, "modified", adds, dels, Languages.of(path), false, PatchParser.parse(patch));
     }
 
-    private static DiffFile added(String path, String content) {
+    static DiffFile added(String path, String content) {
         String[] l = lines(content);
         StringBuilder patch = new StringBuilder("@@ -0,0 +1," + l.length + " @@\n");
         for (String s : l) {
@@ -362,7 +362,7 @@ class SpecsTest {
         return new DiffFile(path, null, "added", l.length, 0, Languages.of(path), false, PatchParser.parse(patch.toString()));
     }
 
-    private static DiffFile removed(String path, String content) {
+    static DiffFile removed(String path, String content) {
         String[] l = lines(content);
         StringBuilder patch = new StringBuilder("@@ -1," + l.length + " +0,0 @@\n");
         for (String s : l) {

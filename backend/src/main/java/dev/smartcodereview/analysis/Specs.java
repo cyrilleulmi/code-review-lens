@@ -3,6 +3,7 @@ package dev.smartcodereview.analysis;
 import dev.smartcodereview.analysis.SymbolExtractor.Symbol;
 import dev.smartcodereview.model.Model.DiffFile;
 import dev.smartcodereview.model.Model.DiffLine;
+import dev.smartcodereview.model.Model.ExpectationChange;
 import dev.smartcodereview.model.Model.Hunk;
 import dev.smartcodereview.model.Model.SpecEntry;
 import dev.smartcodereview.model.Model.SpecFile;
@@ -34,6 +35,9 @@ import java.util.Set;
  * </ol>
  * Order: new file order; a removed entry goes after its previous sibling of the old file (and that sibling's
  * children), else first in its suite, else to the top.
+ * <p>
+ * Each matched entry also carries its changed expectations (assertions old against new, switched off / on; see
+ * {@link Expectations}), each test its number of assertions on both sides.
  */
 public final class Specs {
 
@@ -80,13 +84,19 @@ public final class Specs {
         Node partner;
         boolean renamed;
         String previousName;
+        final CodeText text;
+        /** the line that switches this entry off (its own or an enclosing suite's), 0 = active */
+        int disabledLine;
+        /** assertion statements of a test (null for suites) */
+        List<Expectations.Assertion> assertions;
 
-        Node(Symbol symbol, String body, List<String> suites) {
+        Node(Symbol symbol, String body, List<String> suites, CodeText text) {
             this.name = symbol.name();
             this.kind = "test".equals(symbol.kind()) ? "test" : "suite";
             this.symbol = symbol;
             this.body = body;
             this.suites = suites;
+            this.text = text;
         }
 
         String key() {
@@ -104,15 +114,16 @@ public final class Specs {
      * The outline of one changed test file. source: new version (null for removed files); base: old version (null
      * for added files or when it could not be loaded). Returns null when there is nothing to show.
      */
-    public static SpecFile of(DiffFile file, String source, String base, SegmentLookup segments) {
+    public static SpecFile of(DiffFile file, String source, String base, SegmentLookup segments,
+                              Expectations expectations) {
         boolean removedFile = REMOVED.equals(file.status());
         boolean baseNeeded = !ADDED.equals(file.status());
         boolean baseAvailable = !baseNeeded || base != null;
         if (!removedFile && source == null) {
             return null; // new version not loaded: nothing to anchor the outline on
         }
-        List<Node> news = removedFile ? List.of() : extract(source, file.path());
-        List<Node> olds = base == null ? List.of() : extract(base, basePath(file));
+        List<Node> news = removedFile ? List.of() : extract(source, file.path(), expectations);
+        List<Node> olds = base == null ? List.of() : extract(base, basePath(file), expectations);
         if (news.isEmpty() && olds.isEmpty() && baseAvailable) {
             return null; // a test helper or fixture without test cases
         }
@@ -144,7 +155,7 @@ public final class Specs {
 
         List<Item> items = new ArrayList<>();
         Map<Node, Item> itemOf = new HashMap<>();
-        CodeText newText = removedFile ? null : CodeText.of(source);
+        CodeText newText = news.isEmpty() ? null : news.getFirst().text;
         for (Node n : news) {
             String status;
             if (n.partner != null) {
@@ -155,9 +166,14 @@ public final class Specs {
                 status = onlyAdded(n.symbol, newText, addedLines) ? ADDED
                         : n.changed || hasDeletion(n.symbol, deletionAnchors) ? CHANGED : UNCHANGED;
             }
+            Node o = n.partner;
             Item item = new Item(new SpecEntry(n.name, List.copyOf(n.suites), n.kind, status, n.previousName,
                     segments.segmentOf(file.path(), n.symbol), n.symbol.startLine(),
-                    n.partner == null ? null : n.partner.symbol.startLine(), n.suites.size()));
+                    o == null ? null : o.symbol.startLine(), n.suites.size(),
+                    o == null ? List.of() : expectationChanges(o, n, expectations),
+                    o == null || o.assertions == null ? null : o.assertions.size(),
+                    n.assertions == null ? null : n.assertions.size(),
+                    n.disabledLine > 0));
             items.add(item);
             itemOf.put(n, item);
             if (n.partner != null) {
@@ -219,8 +235,9 @@ public final class Specs {
             depth = anchor.depth() + 1;
             index = items.indexOf(anchor) + 1;
         }
+        // a removed test takes its assertions with it: only their number, not each one
         Item item = new Item(new SpecEntry(o.name, List.copyOf(o.suites), o.kind, REMOVED, null, null, null,
-                o.symbol.startLine(), depth));
+                o.symbol.startLine(), depth, List.of(), o.assertions == null ? null : o.assertions.size(), null, false));
         items.add(index, item);
         itemOf.put(o, item);
     }
@@ -286,8 +303,27 @@ public final class Specs {
         n.previousName = o.suites.equals(n.suites) ? o.name : String.join(" › ", o.path());
     }
 
-    /** Suites and tests of a source, in file order (outer before inner). */
-    private static List<Node> extract(String source, String path) {
+    /**
+     * Changed expectations of a matched entry: switched off / on (the test itself or an enclosing suite), and for
+     * tests the assertion statements old against new (see {@link Expectations}).
+     */
+    private static List<ExpectationChange> expectationChanges(Node o, Node n, Expectations expectations) {
+        List<ExpectationChange> result = new ArrayList<>();
+        if (n.disabledLine > 0 && o.disabledLine == 0) {
+            result.add(new ExpectationChange(Expectations.DISABLED, null,
+                    Expectations.lineText(n.text, n.disabledLine), null, n.disabledLine));
+        } else if (n.disabledLine == 0 && o.disabledLine > 0) {
+            result.add(new ExpectationChange(Expectations.ENABLED, Expectations.lineText(o.text, o.disabledLine), null,
+                    o.disabledLine, null));
+        }
+        if (o.assertions != null && n.assertions != null) {
+            result.addAll(expectations.compare(o.assertions, n.assertions));
+        }
+        return result;
+    }
+
+    /** Suites and tests of a source, in file order (outer before inner), with their assertions and disabled state. */
+    private static List<Node> extract(String source, String path, Expectations expectations) {
         CodeText text = CodeText.of(source);
         List<Symbol> symbols = SymbolExtractor.extract(text, path);
         List<Symbol> tests = symbols.stream().filter(s -> "test".equals(s.kind())).toList();
@@ -302,8 +338,12 @@ public final class Specs {
         Map<Symbol, Node> bySymbol = new HashMap<>();
         for (Symbol s : all) {
             List<Symbol> chain = suites.stream().filter(c -> c != s && encloses(c, s)).sorted(OUTER_FIRST).toList();
-            Node n = new Node(s, body(text, s), new ArrayList<>(chain.stream().map(Symbol::name).toList()));
+            Node n = new Node(s, body(text, s), new ArrayList<>(chain.stream().map(Symbol::name).toList()), text);
             n.parent = chain.isEmpty() ? null : bySymbol.get(chain.getLast());
+            boolean test = "test".equals(n.kind);
+            int own = expectations.disabledLine(text, s, test);
+            n.disabledLine = own > 0 || n.parent == null ? own : n.parent.disabledLine;
+            n.assertions = test ? expectations.assertions(text, s) : null;
             bySymbol.put(s, n);
             nodes.add(n);
         }

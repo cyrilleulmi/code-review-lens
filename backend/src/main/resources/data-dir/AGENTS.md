@@ -56,6 +56,14 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    `oldLine` (base version), `depth` (indentation). Matched by full path, renames = same text apart from
    whitespace and the name. `baseAvailable: false` = the old version could not be loaded, only the new side is
    listed. Entries in new file order, removed ones after their previous old sibling. Null in older analyses.
+   Changed expectations (pattern-based, rules `assertions` / `weakAssertions` / `disabledTests`): `expectations[]`
+   per matched entry with `kind` (changed = same subject, other expected value/matcher | weakened = to a matcher
+   that only checks existence/truthiness, or removed while only such remain | removed | added | disabled |
+   enabled = the test or an enclosing suite was switched off/on), `oldText` / `newText` (the assertion statement,
+   or the switching line), `oldLine` / `newLine` (null where that side does not exist); empty for added/removed
+   entries and without base. `assertionsBefore` / `assertionsAfter` = assertion statements in the test body
+   (null for suites and missing sides); `disabled` = switched off now (xit, it.skip, @Disabled, t.Skip, ...).
+   A test that now expects something else or less is how tests get bent to fit broken code: check these first.
 6. `architecture.style` = "hexagonal" when the repo uses ports & adapters, "layered" for domain / application /
    adapter packages without ports; then `segments[].layer` is domain | application | usecase | adapter.
    `segments[].frontend` marks web frontend code. `flows[].edges[].kind` = "http" for REST calls from the

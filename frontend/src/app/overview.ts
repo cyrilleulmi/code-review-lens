@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { isFlowView, isTestsView, ownerLabel } from './api';
 import { CommitList } from './commit-list';
+import { expectationTotals, expectationWarning } from './expectations';
 import { ComponentDiagram } from './component-diagram';
 import { Icon } from './icon';
 import { ReviewStore } from './review.store';
@@ -33,6 +34,8 @@ export class Overview {
           ? `${tests.length} Testfälle · erreichen ${covered} geänderte Codestellen`
           : `${c.groups.length} ${isFlowView(c) ? 'Flows' : 'Gruppen'} · ${new Set(ids).size} Blöcke`,
         enabled: !this.store.disabledCategories().has(c.id),
+        // tests bent to fit the code: changed/removed/weakened assertions, switched-off tests (Spec-Diff)
+        warning: isTestsView(c) ? expectationWarning(expectationTotals(this.store.bundle()!.analysis.specs ?? [])) : null,
       };
     }),
   );

@@ -15,6 +15,7 @@ import {
   ReviewBundle,
   ReviewState,
   Segment,
+  SpecEntry,
   TestInfo,
   errorMessage,
   isTestsView,
@@ -245,6 +246,19 @@ export class ReviewStore {
     const map = new Map<string, CodeCoverage>();
     for (const c of this.bundle()?.analysis.coverage ?? []) {
       map.set(c.segmentId, c);
+    }
+    return map;
+  });
+
+  /** Spec-Diff entries of tests with changed expectations or switched off, by segment id (code block badge). */
+  readonly expectationsBySegment = computed(() => {
+    const map = new Map<string, SpecEntry>();
+    for (const f of this.bundle()?.analysis.specs ?? []) {
+      for (const e of f.entries) {
+        if (e.segmentId && (e.expectations?.length || e.disabled)) {
+          map.set(e.segmentId, e);
+        }
+      }
     }
     return map;
   });

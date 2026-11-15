@@ -71,9 +71,12 @@ public final class SymbolExtractor {
             "^\\s*(?:@\\w+(?:\\([^)]*\\))?\\s+)*(?:(?:public|private|protected|static|final|synchronized|abstract|default|override|suspend|fun|async|virtual)\\s+)*"
                     + "(?:<[^>]+>\\s+)?([A-Za-z_$][\\w$.]*(?:<[^()]*>)?(?:\\[\\])*\\??)\\s+([A-Za-z_$][\\w$]*)\\s*\\(");
     /** Object/class property holding a function: `name: async (x) => {`, `name = (x) => {`. */
-    /** JS/TS test blocks: `describe('…', …)`, `it.only("…", …)`, `test.each(rows)('…', …)`. Strings are blanked, quotes stay. */
+    /**
+     * JS/TS test blocks: `describe('…', …)`, `it.only("…", …)`, `test.each(rows)('…', …)`, Jasmine/Jest `xit` /
+     * `fdescribe` (switched off / focused). Strings are blanked, quotes stay.
+     */
     private static final Pattern TEST_BLOCK = Pattern.compile(
-            "^\\s*(describe|context|suite|it|test|specify)(?:\\.(?:only|skip|todo|concurrent|each\\b[^(]*\\([^)]*\\)))*\\s*\\(\\s*(['\"`])");
+            "^\\s*(?:x|f)?(describe|context|suite|it|test|specify)(?:\\.(?:only|skip|todo|concurrent|each\\b[^(]*\\([^)]*\\)))*\\s*\\(\\s*(['\"`])");
     private static final Pattern SETUP_BLOCK = Pattern.compile("^\\s*(beforeEach|beforeAll|afterEach|afterAll)\\s*\\(");
     /** JUnit annotations of a test method. */
     private static final Pattern TEST_ANNOTATION = Pattern.compile("@(Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)\\b");

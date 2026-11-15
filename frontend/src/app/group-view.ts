@@ -3,7 +3,7 @@ import { CodeBlock } from './code-block';
 import { CoverageOverview } from './coverage-overview';
 import { Icon } from './icon';
 import { ReviewStore, Slot } from './review.store';
-import { SpecOverview } from './spec-overview';
+import { SpecLineTarget, SpecOverview } from './spec-overview';
 import { TestOverview } from './test-overview';
 
 /** A list of code blocks: a category, a group (e.g. "Übersetzungen") or a file. */
@@ -43,7 +43,7 @@ import { TestOverview } from './test-overview';
       <p class="empty">Keine Änderungen in dieser Auswahl.</p>
     }
     @if (coverage() && store.bundle()?.analysis?.specs?.length && stepIndex() === null) {
-      <app-spec-overview (segmentClick)="openRef($event)" />
+      <app-spec-overview (segmentClick)="openRef($event)" (lineClick)="openLine($event)" />
     }
     @if (coverage() && store.bundle()?.analysis?.coverage && stepIndex() === null) {
       <app-coverage-overview (testClick)="openRef($event)" />
@@ -179,6 +179,24 @@ export class GroupView {
 
   protected markAll(): void {
     this.store.toggle(this.store.linesOf(this.slots()), this.scope());
+  }
+
+  /**
+   * A line of a test (an assertion in the Spec-Diff): scroll to that row of the block when it is shown here and
+   * expanded, else to the block (or to its place elsewhere).
+   */
+  protected openLine(target: SpecLineTarget): void {
+    const block = (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>(`app-code-block[data-segment="${target.segmentId}"]`);
+    const row = block?.querySelector<HTMLElement>(`.row[data-${target.old ? 'old' : 'new'}="${target.line}"]`);
+    if (!row || this.stepIndex() != null) {
+      this.openRef(target.segmentId);
+      return;
+    }
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.remove('flash-line');
+    void row.offsetWidth;
+    row.classList.add('flash-line');
+    setTimeout(() => row.classList.remove('flash-line'), 1600);
   }
 
   /** A call-site chip outside a flow view: show the called code at its place (flow or group). */

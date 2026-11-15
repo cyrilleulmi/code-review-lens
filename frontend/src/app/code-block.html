@@ -24,6 +24,11 @@
       <app-icon [name]="cv.status === 'none' ? 'info' : 'test'" [size]="11" /> {{ cv.label }}
     </button>
   }
+  @if (expectation(); as ex) {
+    <span class="expect" [class.warn]="ex.warn" [title]="ex.title" (click)="$event.stopPropagation()">
+      <app-icon [name]="ex.warn ? 'warning' : 'info'" [size]="11" /> {{ ex.label }}
+    </span>
+  }
   @if (calledBy(); as by) {
     <button class="called-by" type="button" [style.--c]="calledByColor()" (click)="$event.stopPropagation(); calledByClick.emit()">
       <app-icon name="arrowLeft" [size]="12" /> {{ by }}
@@ -79,7 +84,7 @@
       } @else {
         @let byOtherCommit = otherCommit(line);
         <div class="row" [class]="'row t-' + line.type" [class.ok]="line.own && !byOtherCommit && isOk(line)" [class.foreign]="!line.own && line.type !== 'ctx'"
-             [class.other-commit]="byOtherCommit" [class.has-refs]="!!line.refs?.length" [attr.data-new]="line.newLine">
+             [class.other-commit]="byOtherCommit" [class.has-refs]="!!line.refs?.length" [attr.data-new]="line.newLine" [attr.data-old]="line.oldLine">
           @if (annotations(); as an) {
             @let a = an[i];
             @if (a) {
