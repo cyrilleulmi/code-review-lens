@@ -50,15 +50,22 @@ Alle Dateien sind UTF-8, eingerückt und werden **atomar** geschrieben (temporä
     }
   },
   "log": [
-    { "at": "2026-11-13T09:33:06Z", "by": "agent:test", "action": "ok", "scope": "group:quick-wins/dtos-&-typen", "count": 3 }
-  ]
+    { "at": "2026-11-13T09:33:06Z", "by": "agent:test", "action": "ok", "scope": "group:quick-wins/dtos-&-typen", "count": 3 },
+    { "at": "2026-11-15T18:28:44Z", "by": "system", "action": "carry", "scope": "reload:406522a..1cc0359", "count": 97 }
+  ],
+  "reload": {
+    "fromHeadSha": "406522a…", "toHeadSha": "1cc0359…", "at": "2026-11-15T18:28:44Z", "kept": 97, "dropped": 1,
+    "newLines": { "backend/src/main/java/…/PlayerResource.java": ["N47", "N226"] }
+  }
 }
 ```
 
 * **Zeilenschlüssel:** `N<zeile>` = Zeile in der **neuen** Datei (hinzugefügt), `O<zeile>` = Zeile in der **alten** Datei (gelöscht). Nur geänderte Zeilen zählen.
 * `ok` ist pro Datei eine sortierte Liste der Zeilen, die **überall** ok sind. Was weder hier noch in `okAt` steht, ist nicht ok.
 * `okAt` (Ort → Datei → Zeilen) hält Zeilen, die erst an **einem Teil** ihrer Orte ok sind. Die Orte einer Zeile stehen in `analysis.json` → `segments[].places`. Sobald eine Zeile an allen Orten ok ist, wandert sie nach `ok`. Zeilen mit nur einem Ort stehen immer direkt in `ok`. Eine Zeile, die in `okAt` steht, zeigt das UI an ihren übrigen Orten als «halb akzeptiert» (abgeleitet, nicht gespeichert).
-* `log` ist ein Protokoll (max. 500 Einträge), damit nachvollziehbar ist, wer was markiert hat. `by` ist `ui` oder `agent:<name>`.
+* `log` ist ein Protokoll (max. 500 Einträge), damit nachvollziehbar ist, wer was markiert hat. `by` ist `ui`, `agent:<name>` oder `system` (`action: carry` beim Übertragen der Markierungen).
+* **Neue Commits:** Die Zeilenschlüssel gelten nur für den Snapshot in `headSha`. Bringt «Neu laden» einen neuen Head (oder eine neue Basis nach einem Rebase), überträgt das Backend die Markierungen: Pro Datei werden die geänderten Zeilen des alten und des neuen Snapshots nach Inhalt und Reihenfolge gepaart (hinzugefügte und gelöschte getrennt, wie ein Diff). Eine Markierung wandert nur mit einer **unveränderten** Zeile mit; Markierungen auf geänderten oder verschwundenen Zeilen fallen weg, neue Zeilen sind offen. Zeilen ohne eigenen Inhalt (`}`, Leerzeilen) wandern nur zusammen mit einer echten Nachbarzeile. Orte in `okAt` bleiben bei Gruppen dieselben (ihre ID kommt vom Namen); Flows sind nach Reihenfolge nummeriert und werden über ihren Einstiegspunkt wiedererkannt. Umbenannte Dateien werden über `previousPath` gefunden.
+* `reload` (fehlt vor dem ersten solchen Neuladen) hält fest, was dabei geschah: `kept` / `dropped` = Zeilen, deren Markierung übernommen bzw. verworfen wurde, `newLines` (Datei → Zeilen) = neu oder geändert seit `fromHeadSha`, dazu noch offene aus früheren Neuladungen. Das UI filtert damit «Neu seit letztem Review». Agenten lassen `reload` beim Schreiben stehen.
 
 ## `commits.json`
 

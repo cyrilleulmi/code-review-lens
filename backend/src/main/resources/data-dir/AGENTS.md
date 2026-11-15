@@ -184,6 +184,11 @@ only use keys from `lineKeys`, always append a `log` entry with `"by": "agent:<n
 `ok` = ok at all places of the line; `okAt[place]` = ok at that place only. When a line is ok at all its places,
 move it to `ok` and remove it from `okAt`.
 
+Line keys are only valid for the snapshot in `headSha`. `POST …/reload` with new commits carries the marks to the
+new keys (unchanged lines keep them, changed lines are open again) and writes `reload` into review.json:
+`fromHeadSha`, `toHeadSha`, `kept`, `dropped`, and `newLines` (path -> keys new or changed since the last review).
+Leave `reload` as it is when you edit the file; to review only what is new, mark the keys in `newLines`.
+
 ## Other endpoints
 
 * `GET  /api/prs` – open PRs/MRs (authored by the user or review requested) of all configured hosts

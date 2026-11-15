@@ -280,7 +280,7 @@ Die Reihenfolge ist die von `Analyzer.analyze`; die Nummern entsprechen den Absc
 
 **Versionen:** `Model.SCHEMA_VERSION` = 1 (Dateiformat), `Analyzer.VERSION` = 14 (Analyse-Ergebnis), `Attribution.VERSION` = 1 (Commit-Zuordnung). Eine Änderung am Ergebnis erhöht die jeweilige Version; Caches werden dann automatisch neu berechnet. Das Dateiformat wird nur ergänzt; ein umbenanntes oder entferntes Feld wäre ein Major-Release.
 
-**Zeilenschlüssel:** `N<n>` = Zeile n der neuen Datei, `O<n>` = Zeile n der alten Datei. Sie sind nur innerhalb eines Snapshots stabil. Neue Commits verschieben sie (Annahme A4, grösste fachliche Lücke, siehe Roadmap).
+**Zeilenschlüssel:** `N<n>` = Zeile n der neuen Datei, `O<n>` = Zeile n der alten Datei. Sie sind nur innerhalb eines Snapshots stabil. Neue Commits verschieben sie; «Neu laden» überträgt die Markierungen darum auf die neuen Schlüssel (`review/MarkCarry`, Annahme A4).
 
 ## 9. Querschnittliche Konzepte
 
@@ -334,7 +334,7 @@ Kurzform; die Begründung steht jeweils in der verlinkten Stelle.
 |---|---|---|---|---|
 | AD-01 | **Keine KI in der Analyse** | LLM-Klassifikation | Nachvollziehbar, reproduzierbar, offline, kostenlos (Q1) | Heuristiken haben Grenzen (B1–B5). KI-Unterstützung geht über Agenten von aussen. |
 | AD-02 | **Dateien statt Datenbank** | SQLite, H2 | Agenten lesen/schreiben direkt, kein Schema-Migrationswerkzeug, Backup = Ordner kopieren (C1) | Kein Mehrbenutzerbetrieb, keine Transaktionen über Dateien. |
-| AD-03 | **Eingefrorener Snapshot** | Live-Diff bei jedem Aufruf | Markierungen bleiben gültig, schnell, offline lesbar | Neue Commits verschieben Zeilenschlüssel (A4). |
+| AD-03 | **Eingefrorener Snapshot** | Live-Diff bei jedem Aufruf | Markierungen bleiben gültig, schnell, offline lesbar | Neue Commits verschieben Zeilenschlüssel; beim Neuladen werden die Markierungen übertragen (A4). |
 | AD-04 | **Provider-Abstraktion, intern alles «Pull Request»** | Pro Host eigene Pfade | Analyse, Speicher und UI kennen keinen Host | Host-Besonderheiten (GitLab-Positionen, GraphQL-Blame) leben in den Providern. |
 | AD-05 | **Records = Dateiformat = API** | DTO-Schicht + Mapping | Ein Ort für das Format, Native-tauglich | Interne Umbauten berühren den Vertrag; darum «ergänzen, nicht umbenennen». |
 | AD-06 | **Ortsbezogenes Ok** (`ok` + `okAt`) | ein Ok pro Zeile | Derselbe Code ist in einem anderen Zusammenhang eine andere Frage (B7) | Mehr Klicks; gemildert durch «halb akzeptiert» und abschaltbare Kategorien. |
@@ -351,7 +351,7 @@ Kurzform; die Begründung steht jeweils in der verlinkten Stelle.
 | Risiko | Auswirkung | Massnahme |
 |---|---|---|
 | Keine CI | Fehler fallen erst beim Release-Build auf | V-01 |
-| Zeilenschlüssel nach neuen Commits | Markierungen zeigen auf falsche Zeilen | Roadmap: Markierungen übertragen |
+| Zeilenschlüssel nach neuen Commits | Verschobene oder bloss umformatierte Zeilen werden wieder offen | Bewusst vorsichtig: lieber nochmals prüfen als neuen Code als geprüft zeigen |
 | `ReviewService` und `Analyzer` sind gross | Änderungen werden riskanter | V-10, V-11 |
 | Java/TS-Spiegel der Akzeptanzregeln | Abweichendes Verhalten UI ↔ Server | V-13 |
 | Lokale API ohne Origin-Prüfung | Missbrauch über DNS-Rebinding möglich | V-20 |

@@ -634,12 +634,25 @@ public final class Model {
     /**
      * ok: path -> sorted line keys that are "ok" everywhere (at all places of the line). okAt: place ->
      * path -> line keys that are ok at that place only (lines shown at several places need one ok per
-     * place; once all places are ok the line moves to ok). Lives only locally.
+     * place; once all places are ok the line moves to ok). headSha: the snapshot the line keys refer to.
+     * reload: what the last reload with new commits did to the marks (null before the first one). Lives only locally.
      */
     @RegisterForReflection
     public record ReviewState(int schemaVersion, String pr, String headSha,
                               Map<String, List<String>> ok, List<LogEntry> log,
-                              Map<String, Map<String, List<String>>> okAt) {
+                              Map<String, Map<String, List<String>>> okAt, ReloadInfo reload) {
+    }
+
+    /**
+     * A reload that brought new commits (or a rebase): the marks were carried from the line keys of fromHeadSha to
+     * those of toHeadSha. A mark moves only with an unchanged line (same text, same order among the changed lines of
+     * its file); marks on changed or vanished lines are dropped. kept / dropped: lines whose marks were carried /
+     * lost. newLines: path -> line keys that are new or changed since fromHeadSha, plus those still open from earlier
+     * reloads (the "new since my review" filter).
+     */
+    @RegisterForReflection
+    public record ReloadInfo(String fromHeadSha, String toHeadSha, String at, int kept, int dropped,
+                             Map<String, List<String>> newLines) {
     }
 
     /** place: the group id the mark applies to; null = at all places of the line. */
