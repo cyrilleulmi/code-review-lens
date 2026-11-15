@@ -38,3 +38,19 @@ docker compose up --build             # native image (culmi/smart-code-review)
 ```
 
 Add user-visible changes to `CHANGELOG.md` under `## [Unreleased]` (German, like the docs).
+
+## Delivering changes
+
+Deliver every finished piece of work as a reviewable pull request, without asking first:
+
+1. **Branch:** work on `feature/<topic>` off `main`. Before creating or reusing one, check for an existing feature
+   branch (`git branch -a`, `gh pr list`): the current branch, a local or remote branch for the same topic, or any
+   other unmerged `feature/*`. If one exists, warn the user up front: name it, its commits ahead of `main`, whether
+   it is pushed and whether a PR is open, and say whether you continue on it or start a new branch.
+2. **Commits:** split the work into focused commits, one per logical change (e.g. a feature with its tests and docs;
+   an unrelated fix; test data in `docs/06-test-prs.md` with the feature it shows). Every commit builds and passes
+   `./mvnw test`. When one file holds several changes, stage them separately (`git apply --cached` with a partial patch).
+3. **Push:** `git push -u origin <branch>`; never force-push.
+4. **PR:** if the branch has no open PR, open one against `main` with `gh pr create` (title and description in
+   German, like PR #1: what changed, how to check it, e.g. on which test PR, and the test results). If a PR is open,
+   the push updates it. End your turn with the PR link.
