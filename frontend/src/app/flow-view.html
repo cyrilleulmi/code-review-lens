@@ -22,16 +22,12 @@
     </button>
     <button type="button" class="ftool" (click)="store.setCollapsedAll(true)"><app-icon name="collapse" [size]="13" /> Alle einklappen</button>
     <button type="button" class="ftool" (click)="store.setCollapsedAll(false)"><app-icon name="expand" [size]="13" /> Alle ausklappen</button>
-    @if (focusName(); as f) {
-      <span class="focus-info"><app-icon name="focus" [size]="12" /> Fokus: <b>{{ f }}</b> und was davon abhängt · {{ nodes().length }} von {{ flow().steps.length }} Schritten</span>
-      <button type="button" class="ftool" (click)="focusRoot.set(null)"><app-icon name="close" [size]="13" /> Fokus aufheben</button>
-    }
     @if (hiddenCount() > 0) {
       <span class="info">{{ hiddenCount() }} ausgeblendet</span>
       <button type="button" class="ftool" (click)="showAll()"><app-icon name="eye" [size]="13" /> Alle zeigen</button>
     }
     <span class="spacer"></span>
-    <span class="hint">Im Knoten: <app-icon name="focus" [size]="11" /> nur dieser Knoten und alles dahinter · <app-icon name="eye" [size]="11" /> ein-/ausblenden</span>
+    <span class="hint">Im Knoten: <app-icon name="focus" [size]="11" /> alles ausser diesem Knoten und was dahinter liegt ausblenden · <app-icon name="eye" [size]="11" /> ein-/ausblenden</span>
   } @else {
     @let i = stepIndex()!;
     <span class="step-info">Schritt <b>{{ i + 1 }}</b> von {{ nodes().length }}</span>
@@ -69,7 +65,7 @@
     <div class="node" role="listitem" tabindex="0"
             [style.left.px]="n.x" [style.top.px]="n.y" [style.width.px]="d.nodeW" [style.height.px]="d.nodeH"
             [class.done]="p.total > 0 && p.ok === p.total" [class.quick]="n.segment.category === 'quick-wins'"
-            [class.off]="!visible().has(n.step.segmentId)" [class.other-commit]="!store.inCommitSegment(n.step.segmentId)" [class.current]="stepIndex() === i" [class.root]="focusRoot() === n.step.segmentId"
+            [class.off]="!visible().has(n.step.segmentId)" [class.other-commit]="!store.inCommitSegment(n.step.segmentId)" [class.current]="stepIndex() === i" [class.root]="focused() === n.step.segmentId"
             [style.--area]="areaColor(areaOf(n.segment))"
             (mouseenter)="hovered.set(n.step.segmentId)" (mouseleave)="hovered.set(null)"
             (click)="scrollTo(n.step.segmentId)" (keydown.enter)="scrollTo(n.step.segmentId)">
@@ -91,8 +87,8 @@
         <button type="button" class="eye" (click)="toggleHidden(n.step.segmentId, $event)" [title]="hidden().has(n.step.segmentId) ? 'Einblenden' : 'Ausblenden'">
           <app-icon [name]="hidden().has(n.step.segmentId) ? 'eyeOff' : 'eye'" [size]="12" />
         </button>
-        <button type="button" class="focus" [class.on]="focusRoot() === n.step.segmentId" (click)="focusOn(n.step.segmentId, $event)"
-                [title]="focusRoot() === n.step.segmentId ? 'Fokus aufheben' : 'Nur diesen Knoten und alle dahinter abhängigen zeigen'">
+        <button type="button" class="focus" [class.on]="focused() === n.step.segmentId" (click)="focusOn(n.step.segmentId, $event)"
+                [title]="focused() === n.step.segmentId ? 'Alle wieder einblenden' : 'Alle anderen Knoten ausblenden (dieser Knoten und alle dahinter bleiben sichtbar)'">
           <app-icon name="focus" [size]="12" />
         </button>
       </span>
