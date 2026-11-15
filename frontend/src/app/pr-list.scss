@@ -122,7 +122,7 @@
   align-items: flex-start;
 
   .open {
-    color: #5fb865;
+    color: var(--ok);
     margin-top: 1px;
   }
 
@@ -162,8 +162,8 @@
   background: var(--bg-hover);
 
   &.r-review-requested {
-    background: rgba(214, 166, 91, 0.18);
-    color: #e0b46d;
+    background: color-mix(in srgb, var(--cat-amber) 18%, transparent);
+    color: var(--cat-amber);
   }
 }
 

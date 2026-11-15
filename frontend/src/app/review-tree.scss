@@ -99,20 +99,20 @@
 }
 
 .cat-quick-wins .ico {
-  color: #e0b46d;
+  color: var(--cat-amber);
 }
 
 .cat-flows .ico {
-  color: #7da5f8;
+  color: var(--cat-blue);
 }
 
 .cat-logic .ico,
 .cat-tests .ico {
-  color: #c793e0;
+  color: var(--cat-violet);
 }
 
 .cat-styles .ico {
-  color: #79c27e;
+  color: var(--cat-green);
 }
 
 .st-added .label {
@@ -176,7 +176,7 @@
 
   &:hover {
     background: var(--ok);
-    color: #10210f;
+    color: var(--on-ok);
   }
 }
 
@@ -185,7 +185,7 @@
   align-items: center;
   gap: 2px;
   margin-left: 4px;
-  color: #e0b46d;
+  color: var(--cat-amber);
   font-size: 10.5px;
   flex: none;
 }

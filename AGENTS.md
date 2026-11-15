@@ -22,8 +22,10 @@ design decisions are in `docs/` (German): architecture overview `docs/09`, requi
   and `backend/src/main/resources/data-dir/AGENTS.md`); extend, don't rename.
 - **Native-friendly backend:** records with `@RegisterForReflection`, Jackson trees for external JSON, new classpath
   resources must be added to `quarkus.native.resources.includes`.
-- **UI look:** IntelliJ New UI dark. Colours only as tokens in `frontend/src/styles.scss` (incl. the palettes `--edge-n` for
-  connections, `--area-*` for layers, `--lang-*` for languages; helpers in `frontend/src/app/look.ts`), never inline hex values.
+- **UI look:** IntelliJ New UI, dark (default) and light (`theme.ts`). Colours only as tokens in `frontend/src/styles.scss`
+  (incl. the palettes `--edge-n` for connections, `--area-*` for layers, `--lang-*` for languages, `--syn-*` for syntax;
+  helpers in `frontend/src/app/look.ts`), never inline hex values; every new token needs a value in both the `:root`
+  (dark) and the `:root[data-theme='light']` block.
 - **No cache resets:** every file the UI loads has a content hash in its name (Angular `outputHashing: all`), except
   `index.html`. Don't add unhashed files referenced by the page (no `public/` assets; inline small ones like the
   favicon). Cache headers live in `application.properties` (`quarkus.http.filter.*`): hashed = immutable,

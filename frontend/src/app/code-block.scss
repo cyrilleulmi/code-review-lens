@@ -95,23 +95,23 @@
 }
 
 .chip.cat-quick-wins {
-  background: rgba(214, 166, 91, 0.16);
-  color: #e0b46d;
+  background: color-mix(in srgb, var(--cat-amber) 16%, transparent);
+  color: var(--cat-amber);
 }
 
 .chip.cat-logic {
-  background: rgba(84, 138, 247, 0.16);
-  color: #7da5f8;
+  background: color-mix(in srgb, var(--cat-blue) 16%, transparent);
+  color: var(--cat-blue);
 }
 
 .chip.cat-tests {
-  background: rgba(199, 147, 224, 0.15);
-  color: #c793e0;
+  background: color-mix(in srgb, var(--cat-violet) 15%, transparent);
+  color: var(--cat-violet);
 }
 
 .chip.cat-styles {
-  background: rgba(95, 184, 101, 0.13);
-  color: #79c27e;
+  background: color-mix(in srgb, var(--cat-green) 13%, transparent);
+  color: var(--cat-green);
 }
 
 /* test case whose expectations changed or that is switched off (Spec-Diff) */
@@ -234,7 +234,7 @@
   &.on {
     background: var(--ok);
     border-color: var(--ok);
-    color: #10210f;
+    color: var(--on-ok);
   }
 }
 
@@ -256,7 +256,7 @@
   position: relative;
 
   &:hover {
-    background-color: rgba(255, 255, 255, 0.03);
+    background-color: var(--tint-hover);
   }
 
   &:hover .add-comment {
@@ -461,7 +461,7 @@
   right: -3px;
   top: 1px;
   font: 600 8.5px/1 var(--font-ui);
-  color: #e0b46d;
+  color: var(--cat-amber);
   cursor: help;
 
   &.done {
@@ -549,7 +549,7 @@
   }
 
   &.test {
-    color: #c793e0;
+    color: var(--cat-violet);
   }
 }
 
@@ -564,10 +564,10 @@
   padding: 0;
   display: grid;
   place-items: center;
-  border: 1px solid #5a5d63;
+  border: 1px solid var(--check-border);
   border-radius: 3px;
   background: transparent;
-  color: #10210f;
+  color: var(--on-ok);
   cursor: pointer;
 
   &:hover {
@@ -635,7 +635,7 @@
   border: 1px solid color-mix(in srgb, var(--c, var(--accent)) 60%, transparent);
   border-radius: 9px;
   background: color-mix(in srgb, var(--c, var(--accent)) 15%, transparent);
-  color: var(--c, #9cbcfb);
+  color: var(--c, var(--cat-blue));
   font: 500 11px/1 var(--font-ui);
   cursor: pointer;
 
@@ -646,7 +646,7 @@
     height: 13px;
     border-radius: 7px;
     background: var(--c, var(--accent));
-    color: #15171a;
+    color: var(--on-fill);
     font-size: 9.5px;
   }
 
@@ -660,7 +660,7 @@
   color: var(--fg-dim);
   font-family: var(--font-ui);
   font-size: 11.5px;
-  background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(255, 255, 255, 0.02) 6px 12px);
+  background: repeating-linear-gradient(135deg, transparent 0 6px, var(--tint-stripe) 6px 12px);
   border-block: 1px dashed var(--border);
   margin: 2px 0;
 }

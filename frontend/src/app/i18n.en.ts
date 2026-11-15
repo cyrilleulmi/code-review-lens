@@ -632,6 +632,10 @@ export const EN: Record<string, string> = {
   // ------------------------------------------------------------------ coverage view
   "kein Test prüft das": "no test checks this",
 
+  // ------------------------------------------------------------------ theme
+  "Helles Design": "Light theme",
+  "Dunkles Design": "Dark theme",
+
   // ------------------------------------------------------------------ overview
   "{n} Testfall · erreicht {covered} geänderte Codestellen": "{n} test case · reaches {covered} changed code locations",
   "{n} Flow": "{n} flow",

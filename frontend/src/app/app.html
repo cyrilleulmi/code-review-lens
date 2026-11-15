@@ -68,7 +68,12 @@
   } @else {
     <button type="button" class="tb-btn" (click)="store.loadPrs()" [title]="t('Pull Requests neu laden')"><app-icon name="refresh" /></button>
   }
-  <div class="seg-switch" role="group" [attr.aria-label]="t('Sprache')" [title]="t('Sprache')">
+  <button type="button" class="tb-btn" (click)="toggleTheme()"
+          [title]="theme() === 'dark' ? t('Helles Design') : t('Dunkles Design')" [attr.aria-label]="theme() === 'dark' ? t('Helles Design') : t('Dunkles Design')">
+    <app-icon name="contrast" />
+  </button>
+  <div class="seg-switch" role="group"
+ [attr.aria-label]="t('Sprache')" [title]="t('Sprache')">
     <button type="button" [class.on]="lang() === 'de'" [attr.aria-pressed]="lang() === 'de'" (click)="setLang('de')">DE</button>
     <button type="button" [class.on]="lang() === 'en'" [attr.aria-pressed]="lang() === 'en'" (click)="setLang('en')">EN</button>
   </div>

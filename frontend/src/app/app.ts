@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { isTestsView, prLabel } from './api';
 import { applyLang, lang, serverText, setLang, t } from './i18n';
+import { applyTheme, theme, toggleTheme } from './theme';
 import { CoverageOverview } from './coverage-overview';
 import { RuleCheckOverview } from './rule-check-overview';
 import { ScrollMemory, viewKey } from './scroll-memory';
@@ -94,6 +95,8 @@ export class App {
   protected readonly serverText = serverText;
   protected readonly lang = lang;
   protected readonly setLang = setLang;
+  protected readonly theme = theme;
+  protected readonly toggleTheme = toggleTheme;
   private dragStart: { x: number; width: number } | null = null;
 
   private readonly injector = inject(Injector);
@@ -107,6 +110,7 @@ export class App {
 
   constructor() {
     applyLang();
+    applyTheme();
     this.store.init();
 
     // Remember where each view is scrolled to (a plain listener: scrolling needs no change detection).

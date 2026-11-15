@@ -175,23 +175,23 @@ h2 {
 }
 
 .c-quick-wins {
-  --cat-color: #e0b46d;
+  --cat-color: var(--cat-amber);
 }
 
 .c-flows {
-  --cat-color: #7da5f8;
+  --cat-color: var(--cat-blue);
 }
 
 .c-logic {
-  --cat-color: #c793e0;
+  --cat-color: var(--cat-violet);
 }
 
 .c-tests {
-  --cat-color: #c793e0;
+  --cat-color: var(--cat-violet);
 }
 
 .c-styles {
-  --cat-color: #79c27e;
+  --cat-color: var(--cat-green);
 }
 
 .ring {
@@ -322,7 +322,7 @@ h2 {
   align-items: center;
   gap: 4px;
   margin-left: 12px;
-  color: #e0b46d;
+  color: var(--cat-amber);
   font-size: 12px;
 }
 
@@ -472,8 +472,8 @@ h2 {
   gap: 5px;
   padding: 2px 8px;
   border-radius: 10px;
-  background: rgba(84, 138, 247, 0.16);
-  color: #7da5f8;
+  background: color-mix(in srgb, var(--cat-blue) 16%, transparent);
+  color: var(--cat-blue);
 }
 
 .h2-count {

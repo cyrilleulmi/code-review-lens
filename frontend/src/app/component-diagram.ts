@@ -111,21 +111,21 @@ const HEAD = 28;
     .focus-info { display: inline-flex; align-items: center; gap: 5px; color: var(--accent-fg); }
     .focus-info b { color: var(--fg); }
     .legend { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-dim); font-size: 11px; margin-left: 6px; }
-    .legend i { display: inline-block; width: 18px; border-top: 2px solid #6f737a; }
-    .legend i.l-http { border-top: 2px dashed #6f737a; }
+    .legend i { display: inline-block; width: 18px; border-top: 2px solid var(--fg-dim); }
+    .legend i.l-http { border-top: 2px dashed var(--fg-dim); }
     .empty { color: var(--fg-muted); padding: 12px; margin: 0; }
     .scroll { overflow: auto; max-height: 560px; }
     .canvas { position: relative; margin: 10px 14px 14px; }
     .col-head { position: absolute; top: 0; height: 20px; color: var(--area); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; border-bottom: 2px solid color-mix(in srgb, var(--area) 50%, transparent); }
-    .edges { position: absolute; inset: 0; overflow: visible; color: #6f737a; }
-    .edge { fill: none; stroke: #5b6170; stroke-width: 1.5; transition: stroke 0.15s, opacity 0.15s; }
+    .edges { position: absolute; inset: 0; overflow: visible; color: var(--fg-dim); }
+    .edge { fill: none; stroke: var(--diagram-line); stroke-width: 1.5; transition: stroke 0.15s, opacity 0.15s; }
     .edge { opacity: 0.75; }
     .edge.http { stroke-dasharray: 5 3; }
     .edge.hot { opacity: 1; stroke-width: 2.6; }
     .edge.dim { opacity: 0.25; }
     .node { position: absolute; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 10px; box-sizing: border-box;
       background: color-mix(in srgb, var(--area) 7%, var(--bg-editor));
-      border: 1px solid #43454a; border-left: 4px solid var(--area); border-radius: 8px; cursor: pointer; transition: border-color 0.15s, opacity 0.15s; }
+      border: 1px solid var(--node-border); border-left: 4px solid var(--area); border-radius: 8px; cursor: pointer; transition: border-color 0.15s, opacity 0.15s; }
     .node:hover { border-color: var(--accent); }
     .node.done { border-color: var(--ok-border); background: var(--ok-head); }
     .node.root { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(53, 116, 240, 0.3); }
