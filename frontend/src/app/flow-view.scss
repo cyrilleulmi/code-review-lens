@@ -284,18 +284,6 @@
   letter-spacing: 0.04em;
 }
 
-.focus-info {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 6px;
-  color: var(--accent-fg);
-
-  b {
-    color: var(--fg);
-  }
-}
-
 /* layer of a step: coloured stripe and tag (frontend vs. backend layers) */
 .node {
   border-left: 4px solid var(--area, #43454a);
