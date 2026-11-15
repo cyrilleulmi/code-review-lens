@@ -37,6 +37,8 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 - **Ganzes Repository ohne Spezifikation:** Beim Analysieren des ganzen Repositorys gibt es keinen Spec-Diff – ohne Basis wäre jeder Test «neu» (`Analyzer.VERSION` 17).
 - **Nie mehr Cache leeren nach einem Update:** `index.html` wird bei jedem Laden neu geprüft (`no-cache`), die gehashten JS-, CSS- und Schriftdateien sind unveränderlich und werden ein Jahr gecacht, API-Antworten nie. Das Favicon steckt direkt im `index.html`, es gibt keine ungehashte Datei mehr, die die Seite braucht.
 - **Analyse viel schneller bei vielen Segmenten:** Die Import-Prüfung zwischen zwei Dateien wird pro Datei zwischengespeichert statt für jedes Paar von Segmenten neu gerechnet (eigenes Repo als Ganzes: 29 s → 2,5 s, Ergebnis identisch).
+- **Scroll-Position pro Ansicht:** Jeder Flow, jede Kategorie, Gruppe und Datei merkt sich, wie weit sie gescrollt war; eine Ansicht, die zum ersten Mal geöffnet wird, beginnt oben statt an der Position der vorherigen. Springt ein Link zu einem Block, gilt der Block.
+- **«Nur dieser Zweig» im Flow** blendet die übrigen Schritte aus, genau wie einzeln mit dem Auge: Sie bleiben im Diagramm (abgeblendet) und lassen sich einzeln wieder einblenden. Ein zweiter Klick auf denselben Knoten blendet alle wieder ein.
 
 ## [0.5.0] – 2026-11-13
 

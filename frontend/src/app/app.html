@@ -109,7 +109,7 @@
           <span>{{ crumb }}</span>
         }
       </div>
-      <div class="editor-scroll">
+      <div class="editor-scroll" #scroller>
         @switch (c.kind) {
           @case ('overview') {
             <app-overview />

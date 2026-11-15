@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from './api';
 import { CodeBlock, flashLine } from './code-block';
+import { outsideBranch, sameSet } from './flow-focus';
 import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
@@ -21,9 +22,9 @@ import { ReviewStore } from './review.store';
 interface Node {
   step: FlowStep;
   segment: Segment;
-  /** step number in the whole flow (stays the same while focusing) */
+  /** step number in the whole flow */
   no: number;
-  /** depth relative to the focused step */
+  /** call depth in the flow */
   depth: number;
   x: number;
   y: number;
@@ -50,8 +51,8 @@ const MIN_GUTTER = 32;
 
 /**
  * A data flow: a call-tree diagram on top, below the code of each step in call order. Call sites inside
- * the code are connected to the step they call with lines in the left margin. Steps can be hidden, the view
- * can focus on one branch, hide finished steps, or walk through the steps one by one.
+ * the code are connected to the step they call with lines in the left margin. Steps can be hidden (one by one,
+ * or all outside one branch), finished steps hidden, or the steps walked through one by one.
  */
 @Component({
   selector: 'app-flow-view',
@@ -99,46 +100,22 @@ export class FlowView {
   /** Step-by-step mode: index of the only step shown, null = off. */
   protected readonly stepIndex = linkedSignal<string, number | null>({ source: () => this.flow().id, computation: () => null });
   protected readonly hideDone = signal(false);
-  /** Focused step: only it and everything it calls (directly or further down) are shown, in diagram and code. */
-  protected readonly focusRoot = linkedSignal<string, string | null>({ source: () => this.flow().id, computation: () => null });
-
-  /** The steps in this flow that the focused step reaches (all steps without focus). */
-  private readonly branch = computed<ReadonlySet<string> | null>(() => {
-    const root = this.focusRoot();
-    if (!root) return null;
-    const result = new Set([root]);
-    const edges = this.flow().edges;
-    let grew = true;
-    while (grew) {
-      grew = false;
-      for (const e of edges) {
-        if (result.has(e.from) && !result.has(e.to)) {
-          result.add(e.to);
-          grew = true;
-        }
-      }
-    }
-    return result;
+  /** Step whose focus button was used last; it shows as focused while the hidden steps are still exactly the rest. */
+  private readonly lastFocus = linkedSignal<string, string | null>({ source: () => this.flow().id, computation: () => null });
+  protected readonly focused = computed(() => {
+    const id = this.lastFocus();
+    return id && sameSet(this.hidden(), outsideBranch(this.flow().steps, this.flow().edges, id)) ? id : null;
   });
 
   protected readonly nodes = computed<Node[]>(() => {
     const segs = this.store.segments();
-    const branch = this.branch();
-    const steps = this.flow().steps;
-    const rootDepth = branch ? steps.find((s) => s.segmentId === this.focusRoot())?.depth ?? 0 : 0;
-    return steps
+    return this.flow().steps
       .map((step, i) => ({ step, no: i + 1 }))
-      .filter(({ step }) => segs.has(step.segmentId) && (!branch || branch.has(step.segmentId)))
+      .filter(({ step }) => segs.has(step.segmentId))
       .map(({ step, no }, row) => {
-        const depth = Math.max(0, step.depth - rootDepth);
+        const depth = step.depth;
         return { step, no, depth, segment: segs.get(step.segmentId)!, x: depth * (NODE_W + COL_GAP), y: row * (NODE_H + ROW_GAP) };
       });
-  });
-
-  protected readonly focusName = computed(() => {
-    const root = this.focusRoot();
-    const seg = root ? this.store.segments().get(root) : null;
-    return seg ? this.nodeName(seg) : null;
   });
 
   protected readonly diagram = computed(() => {
@@ -235,15 +212,22 @@ export class FlowView {
     this.stepIndex.set(null);
   }
 
-  /** Shows only this step and everything it depends on (what it calls, and what those call), hides the rest. */
+  /**
+   * Hides every step outside this one's branch (what it calls, and what those call), exactly as if each had been
+   * hidden with its eye: they stay in the diagram and can be shown again one by one. Again on the focused step: all back.
+   */
   protected focusOn(id: string, event: Event): void {
     event.stopPropagation();
-    this.focusRoot.set(this.focusRoot() === id ? null : id);
+    if (this.focused() === id) {
+      this.hidden.set(new Set());
+    } else {
+      this.hidden.set(outsideBranch(this.flow().steps, this.flow().edges, id));
+      this.lastFocus.set(id);
+    }
     this.stepIndex.set(null);
   }
 
   protected showAll(): void {
-    this.focusRoot.set(null);
     this.hidden.set(new Set());
     this.hideDone.set(false);
     this.stepIndex.set(null);
@@ -345,11 +329,7 @@ export class FlowView {
 
   /** Jumps to a step (making it visible first); segments outside this flow are shown at their own place. */
   protected scrollTo(segmentId: string): void {
-    let index = this.nodes().findIndex((n) => n.step.segmentId === segmentId);
-    if (index < 0 && this.focusRoot() && this.flow().steps.some((s) => s.segmentId === segmentId)) {
-      this.focusRoot.set(null); // outside the focused branch: show the whole flow again
-      index = this.nodes().findIndex((n) => n.step.segmentId === segmentId);
-    }
+    const index = this.nodes().findIndex((n) => n.step.segmentId === segmentId);
     if (index < 0) {
       this.store.reveal(segmentId);
       return;
