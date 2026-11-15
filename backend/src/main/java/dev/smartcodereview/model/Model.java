@@ -248,15 +248,41 @@ public final class Model {
     }
 
     /**
+     * One suite or test case in the specification outline of a changed test file (Spec-Diff). name: the test/suite
+     * name (describe/it text, JUnit method or class name); suites: the enclosing suites, outermost first (JUnit: the
+     * test class and its @Nested classes); kind: "suite" | "test". status: "added" | "removed" | "changed" (same path,
+     * changed lines inside) | "renamed" (same body under another name) | "unchanged". previousName: for renamed
+     * entries the old name (the old suite path joined with " › " when the suites differ too), else null.
+     * segmentId: the segment of this suite/test when it has changed lines (null for removed and untouched entries).
+     * line: start line in the new file, oldLine: in the base version (null where that side does not exist).
+     * depth: indentation in the outline (number of enclosing suites as shown).
+     */
+    @RegisterForReflection
+    public record SpecEntry(String name, List<String> suites, String kind, String status, String previousName,
+                            String segmentId, Integer line, Integer oldLine, int depth) {
+    }
+
+    /**
+     * The test names of one changed test file, old against new version, as an outline. status: of the file (as in
+     * DiffFile). baseAvailable: false when the base version was needed but could not be loaded - then only the new
+     * side is shown (no removed entries; added/changed/unchanged derived from the diff alone). entries: in new file
+     * order, removed entries at their old place (after their previous sibling, else first in their suite).
+     */
+    @RegisterForReflection
+    public record SpecFile(String path, String previousPath, String status, boolean baseAvailable, List<SpecEntry> entries) {
+    }
+
+    /**
      * coverage: testable changed functions, "none" first, then "indirect", then "direct", each by risk (highest
-     * first); null in analyses of older versions.
+     * first); null in analyses of older versions. specs: the test names of every changed test file as old/new outline
+     * (Spec-Diff), in path order; null in analyses of older versions.
      */
     @RegisterForReflection
     public record Analysis(int schemaVersion, String generatedAt, String headSha, String rulesHash,
                            List<Segment> segments, List<Category> categories, List<Flow> flows,
                            List<TestInfo> tests, ArchitectureInfo architecture,
                            List<Component> components, List<ComponentEdge> componentEdges,
-                           List<CodeCoverage> coverage) {
+                           List<CodeCoverage> coverage, List<SpecFile> specs) {
     }
 
     /**

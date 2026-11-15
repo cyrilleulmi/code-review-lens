@@ -25,6 +25,7 @@ import dev.smartcodereview.model.Model.LineRef;
 import dev.smartcodereview.model.Model.RepoStructure;
 import dev.smartcodereview.model.Model.Segment;
 import dev.smartcodereview.model.Model.Snapshot;
+import dev.smartcodereview.model.Model.SpecFile;
 import dev.smartcodereview.model.Model.TestCoverage;
 import dev.smartcodereview.model.Model.TestInfo;
 import dev.smartcodereview.model.Model.TestSubject;
@@ -63,6 +64,7 @@ import java.util.stream.Collectors;
  *       segments get an aspect (routing, state, API, forms, components, templates). Both are extra categories.</li>
  *   <li>Every segment lists its <em>places</em> (all groups that show it); each place needs its own "ok".</li>
  *   <li>Changed files are combined into <em>components</em> with the calls between them (overview diagram).</li>
+ *   <li>The test names of changed test files are compared with their base version (<em>Spec-Diff</em>, {@link Specs}).</li>
  * </ol>
  */
 public final class Analyzer {
@@ -86,7 +88,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 15;
+    public static final int VERSION = 16;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -190,6 +192,15 @@ public final class Analyzer {
      * through generated clients); null = only what the diff shows.
      */
     public Analysis analyze(Snapshot snapshot, Map<String, String> sources, RepoStructure structure) {
+        return analyze(snapshot, sources, structure, Map.of());
+    }
+
+    /**
+     * baseSources: the base version of changed test files (Spec-Diff), by their path in the base version
+     * ({@link Specs#basePath}); missing entries mean "base not available".
+     */
+    public Analysis analyze(Snapshot snapshot, Map<String, String> sources, RepoStructure structure,
+                            Map<String, String> baseSources) {
         Collection<String> directories = structure == null ? null : structure.directories();
         List<ApiOperation> operations = structure == null || structure.operations() == null ? List.of() : structure.operations();
         List<Work> works = new ArrayList<>();
@@ -281,7 +292,31 @@ public final class Analyzer {
         List<Component> components = components(works, !evidence.isEmpty(), componentOf);
         return new Analysis(Model.SCHEMA_VERSION, Instant.now().toString(), snapshot.pr().headSha(), fingerprint(rules),
                 segments, categories, flows, tests, architecture, components, componentEdges(edges, componentOf),
-                coverage(works, tests));
+                coverage(works, tests), specs(snapshot.files(), sources, baseSources == null ? Map.of() : baseSources, works));
+    }
+
+    /** Spec-Diff: the test names of every changed test file, old against new version (see {@link Specs}). */
+    private List<SpecFile> specs(List<DiffFile> files, Map<String, String> sources, Map<String, String> baseSources,
+                                 List<Work> works) {
+        Map<String, Map<Symbol, String>> segmentOf = new HashMap<>();
+        for (Work w : works) {
+            if (w.symbol != null) {
+                segmentOf.computeIfAbsent(w.file.path(), k -> new HashMap<>()).put(w.symbol, w.id);
+            }
+        }
+        Specs.SegmentLookup lookup = (path, symbol) -> segmentOf.getOrDefault(path, Map.of()).get(symbol);
+        List<SpecFile> result = new ArrayList<>();
+        for (DiffFile f : files) {
+            if (Specs.isTestFile(rules, f)) {
+                SpecFile spec = Specs.of(f, sources.get(f.path()),
+                        Specs.ADDED.equals(f.status()) ? null : baseSources.get(Specs.basePath(f)), lookup);
+                if (spec != null) {
+                    result.add(spec);
+                }
+            }
+        }
+        result.sort(Comparator.comparing(SpecFile::path));
+        return result;
     }
 
     /** The code of a segment as text: the whole symbol, or the changed lines of a hunk/module segment. */
@@ -1093,7 +1128,11 @@ public final class Analyzer {
             List<String> i = indirect.getOrDefault(w.id, List.of());
             String status = !d.isEmpty() ? Coverage.DIRECT : !i.isEmpty() ? Coverage.INDIRECT : Coverage.NONE;
             List<String> code = w.ctx.text.code;
-            int branches = Coverage.branches(code.subList(Math.min(w.symbol.startLine() - 1, code.size()), Math.min(w.symbol.endLine(), code.size())));
+            List<String> body = code.subList(Math.min(w.symbol.startLine() - 1, code.size()), Math.min(w.symbol.endLine(), code.size()));
+            if (Coverage.isTrivialAccessor(body)) {
+                continue; // getters and setters: nothing a test would have to prove
+            }
+            int branches = Coverage.branches(body);
             result.add(new CodeCoverage(w.id, status, List.copyOf(d), List.copyOf(i), branches, changed, Coverage.risk(changed, branches)));
         }
         result.sort(Coverage.ORDER);
@@ -1104,6 +1143,7 @@ public final class Analyzer {
      * Testable changed logic: a changed function/method/component (no test case, no test helper) whose main
      * category needs tests (rules: needsTests). Framework hooks (NOT_CALLED: constructor, ngOnInit, render, ...)
      * are left out - no test calls them by name, so the static view could only ever report them as untested.
+     * Trivial accessors (getters/setters, {@link Coverage#isTrivialAccessor}) are dropped in coverage().
      */
     private boolean needsTests(Work w) {
         return "symbol".equals(w.kind) && w.ctx != null && w.symbol.isCallable() && !w.symbol.isTestBlock() && !isTest(w)

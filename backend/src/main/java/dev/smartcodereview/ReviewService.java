@@ -6,6 +6,7 @@ import dev.smartcodereview.analysis.Analyzer;
 import dev.smartcodereview.analysis.Languages;
 import dev.smartcodereview.analysis.OpenApi;
 import dev.smartcodereview.analysis.Rules;
+import dev.smartcodereview.analysis.Specs;
 import dev.smartcodereview.commits.Attribution;
 import dev.smartcodereview.model.Model;
 import dev.smartcodereview.model.Model.Account;
@@ -200,12 +201,46 @@ public class ReviewService {
         for (DiffFile f : snapshot.files()) {
             store.readText(DataStore.resolveInside(sourcesDir, f.path())).ifPresent(s -> sources.put(f.path(), s));
         }
+        Map<String, String> baseSources = baseSources(ref, snapshot);
         long t0 = System.currentTimeMillis();
-        Analysis analysis = new Analyzer(rules()).analyze(snapshot, sources, structure(ref, snapshot));
+        Analysis analysis = new Analyzer(rules()).analyze(snapshot, sources, structure(ref, snapshot), baseSources);
         Log.infof("Analysed %s in %d ms: %d segments, %d flows", ref.key(), System.currentTimeMillis() - t0,
                 analysis.segments().size(), analysis.flows().size());
         store.write(analysisFile(ref), analysis);
         return analysis;
+    }
+
+    /**
+     * Old versions of the changed test files (Spec-Diff), by their path in the base version. Missing ones (older
+     * snapshots, an earlier failure) are fetched once here; a file that still cannot be loaded is left out and the
+     * outline shows only its new side.
+     */
+    private Map<String, String> baseSources(PrRef ref, Snapshot snapshot) {
+        Map<String, String> result = new HashMap<>();
+        Path dir = store.baseSourcesDir(ref);
+        List<DiffFile> wanted = wantedBaseSources(ref, snapshot, rules());
+        List<DiffFile> missing = wanted.stream()
+                .filter(f -> !Files.exists(DataStore.resolveInside(dir, Specs.basePath(f)))).toList();
+        if (!missing.isEmpty()) {
+            try {
+                fetchBaseSources(ref, snapshot, missing);
+            } catch (ProviderException e) {
+                Log.warnf("Could not fetch base versions of test files of %s: %s", ref.key(), e.getMessage());
+            }
+        }
+        for (DiffFile f : wanted) {
+            String path = Specs.basePath(f);
+            store.readText(DataStore.resolveInside(dir, path)).ifPresent(s -> result.put(path, s));
+        }
+        return result;
+    }
+
+    /** Changed test files whose base version the Spec-Diff needs; none for a whole repository (it has no base). */
+    private static List<DiffFile> wantedBaseSources(PrRef ref, Snapshot snapshot, Rules rules) {
+        if (ref.number() == 0 || snapshot.pr().baseSha() == null || snapshot.pr().baseSha().isBlank()) {
+            return List.of();
+        }
+        return snapshot.files().stream().filter(f -> Specs.needsBase(rules, f)).toList();
     }
 
     /** At most this many API contracts are read per repository. */
@@ -253,6 +288,8 @@ public class ReviewService {
         }
         List<DiffFile> wanted = wantedSources(snapshot, rules());
         fetchSources(ref, snapshot, wanted);
+        store.deleteTree(store.baseSourcesDir(ref)); // the base may have moved (rebase, new target branch)
+        fetchBaseSources(ref, snapshot, wantedBaseSources(ref, snapshot, rules()));
         store.write(snapshotFile(ref), snapshot);
         Log.infof("Fetched %s: %d files, %d sources", ref.key(), snapshot.files().size(), wanted.size());
         return snapshot;
@@ -292,17 +329,29 @@ public class ReviewService {
     }
 
     private void fetchSources(PrRef ref, Snapshot snapshot, List<DiffFile> wanted) {
+        fetchFiles(ref, wanted.stream().map(DiffFile::path).toList(), snapshot.pr().headSha(), store.sourcesDir(ref));
+    }
+
+    /** Old versions of changed test files at the PR's base commit, stored under sources-base/ (old path). */
+    private void fetchBaseSources(PrRef ref, Snapshot snapshot, List<DiffFile> wanted) {
+        if (wanted.isEmpty()) {
+            return;
+        }
+        fetchFiles(ref, wanted.stream().map(Specs::basePath).toList(), snapshot.pr().baseSha(), store.baseSourcesDir(ref));
+    }
+
+    /** Fetches files at a commit into dir (same relative paths); a file that fails is logged and skipped. */
+    private void fetchFiles(PrRef ref, List<String> paths, String sha, Path dir) {
         ReviewProvider provider = provider(ref.provider());
-        Path sourcesDir = store.sourcesDir(ref);
         Semaphore limit = new Semaphore(8);
         try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
             List<Future<?>> tasks = new ArrayList<>();
-            for (DiffFile f : wanted) {
+            for (String path : paths) {
                 tasks.add(pool.submit(() -> {
                     limit.acquireUninterruptibly();
                     try {
-                        provider.fileContent(ref, f.path(), snapshot.pr().headSha())
-                                .ifPresent(text -> store.writeText(DataStore.resolveInside(sourcesDir, f.path()), text));
+                        provider.fileContent(ref, path, sha)
+                                .ifPresent(text -> store.writeText(DataStore.resolveInside(dir, path), text));
                     } finally {
                         limit.release();
                     }

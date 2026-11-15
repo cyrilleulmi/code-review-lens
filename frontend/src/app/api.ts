@@ -274,6 +274,37 @@ export interface CodeCoverage {
   risk: number;
 }
 
+export type SpecStatus = 'added' | 'removed' | 'changed' | 'renamed' | 'unchanged';
+
+/** One suite or test of a changed test file in the Spec-Diff outline (Model.SpecEntry). */
+export interface SpecEntry {
+  name: string;
+  /** enclosing suites, outermost first (JUnit: test class and @Nested classes) */
+  suites: string[];
+  kind: 'suite' | 'test';
+  status: SpecStatus;
+  /** renamed: the old name (old suite path joined with " › " when the suites differ too) */
+  previousName: string | null;
+  /** segment with this suite/test when it has changed lines; null for removed and untouched entries */
+  segmentId: string | null;
+  /** start line in the new file / in the base version */
+  line: number | null;
+  oldLine: number | null;
+  /** indentation in the outline */
+  depth: number;
+}
+
+/** The test names of a changed test file, old against new version (Model.SpecFile). */
+export interface SpecFile {
+  path: string;
+  previousPath: string | null;
+  status: string;
+  /** false: the base version could not be loaded, only the new side is shown */
+  baseAvailable: boolean;
+  /** new file order, removed entries at their old place */
+  entries: SpecEntry[];
+}
+
 export interface ArchitectureInfo {
   /** hexagonal: ports & adapters; layered: domain / application / adapter packages without ports */
   style: 'hexagonal' | 'layered' | null;
@@ -314,6 +345,8 @@ export interface Analysis {
   componentEdges: ComponentEdge[];
   /** testable changed functions: none first, then indirect, then direct, each by risk (absent in older analyses) */
   coverage?: CodeCoverage[] | null;
+  /** Spec-Diff: test names of every changed test file, in path order (absent in older analyses) */
+  specs?: SpecFile[] | null;
 }
 
 export interface LogEntry {

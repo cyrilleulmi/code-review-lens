@@ -154,6 +154,61 @@ class CoverageTest {
         assertTrue(analysis.coverage().isEmpty(), "all changed functions are plain logic, now marked as not needing tests");
     }
 
+    @Test
+    void recognisesTrivialAccessors() {
+        assertTrue(Coverage.isTrivialAccessor(code("public String getName() {\n    return name;\n}")));
+        assertTrue(Coverage.isTrivialAccessor(code("public int getNumber() { return this.number; }")));
+        assertTrue(Coverage.isTrivialAccessor(code("public void setName(String name) {\n    // keep it\n    this.name = name;\n}")));
+        assertTrue(Coverage.isTrivialAccessor(code("get label(): string {\n  return this._label;\n}")));
+        assertTrue(Coverage.isTrivialAccessor(code("set label(value: string) {\n  this._label = value;\n}")));
+        assertTrue(Coverage.isTrivialAccessor(code("func (p *Player) Name() string {\n\treturn p.name\n}")));
+
+        assertTrue(!Coverage.isTrivialAccessor(code("int total() {\n  return a + b;\n}")), "computation");
+        assertTrue(!Coverage.isTrivialAccessor(code("String name() {\n  return repo.find(id);\n}")), "call");
+        assertTrue(!Coverage.isTrivialAccessor(code("void setName(String n) {\n  this.name = n;\n  changed();\n}")), "two statements");
+        assertTrue(!Coverage.isTrivialAccessor(code("void setName(String n) {\n  this.name = n.trim();\n}")), "transforms the value");
+        assertTrue(!Coverage.isTrivialAccessor(code("String label() {\n  return \"fixed\";\n}")), "string literal");
+        assertTrue(!Coverage.isTrivialAccessor(code("label = () => this.name;")), "no braces: stays in the coverage");
+    }
+
+    @Test
+    void entityLogicNeedsTestsButAccessorsDoNot() throws Exception {
+        String entity = """
+                package app;
+
+                @Entity
+                public class Player {
+                    private String name;
+                    private int jerseyNumber;
+
+                    public String getName() {
+                        return name;
+                    }
+
+                    public void setName(String name) {
+                        this.name = name;
+                    }
+
+                    public int getJerseyNumber() { return this.jerseyNumber; }
+
+                    public boolean isJerseyNumberTaken(List<Player> others) {
+                        return others.stream().anyMatch(p -> p != this && p.jerseyNumber == jerseyNumber);
+                    }
+                }
+                """;
+        String path = "src/main/java/app/Player.java";
+        Snapshot snapshot = new Snapshot(1, "now", info(), List.of(added(path, entity)));
+        Analysis analysis = new Analyzer(defaultRules()).analyze(snapshot, Map.of(path, entity));
+        Segment taken = segment(analysis, "Player.isJerseyNumberTaken");
+        assertEquals("persistence", taken.category());
+        assertEquals(List.of(taken.id()), analysis.coverage().stream().map(CodeCoverage::segmentId).toList(),
+                "the entity's real logic is testable, its getters and setters are not");
+    }
+
+    private static List<String> code(String source) {
+        return CodeText.of(source).code;
+    }
+
     private static Analysis analyse(Rules rules) {
         Snapshot snapshot = new Snapshot(1, "now", info(), List.of(
                 added("src/app/player.service.ts", SERVICE),

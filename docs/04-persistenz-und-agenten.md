@@ -20,6 +20,7 @@ Alles, was SmartCodeReview lokal weiss, liegt als **lesbare Dateien** in einem V
     └── <github|gitlab>/<owner>/<repo>/<number>/      (GitLab-Gruppen: gruppe~untergruppe; Nummer 0 = ganzes Repository)
         ├── snapshot.json     PR-Metadaten + Diff (eingefroren)
         ├── sources/<pfad>    Quelltext der neuen Version (nur analysierte Dateien)
+        ├── sources-base/<pfad>  Alte Version (Basis-Commit) geänderter Testdateien, unter dem alten Pfad (Spec-Diff)
         ├── structure.json    Ordner des Repos am PR-Stand (für die Architektur-Erkennung, Cache)
         ├── analysis.json     Segmente, Kategorien, Flüsse, Komponenten (abgeleitet, jederzeit neu berechenbar)
         ├── review.json       ◀ DEINE MARKIERUNGEN (die einzige Datei mit «echtem» Zustand)

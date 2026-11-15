@@ -3,13 +3,14 @@ import { CodeBlock } from './code-block';
 import { CoverageOverview } from './coverage-overview';
 import { Icon } from './icon';
 import { ReviewStore, Slot } from './review.store';
+import { SpecOverview } from './spec-overview';
 import { TestOverview } from './test-overview';
 
 /** A list of code blocks: a category, a group (e.g. "Übersetzungen") or a file. */
 @Component({
   selector: 'app-group-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CodeBlock, CoverageOverview, Icon, TestOverview],
+  imports: [CodeBlock, CoverageOverview, Icon, SpecOverview, TestOverview],
   template: `
     <div class="view-head">
       <app-icon [name]="icon()" [size]="18" />
@@ -40,6 +41,9 @@ import { TestOverview } from './test-overview';
     }
     @if (slots().length === 0) {
       <p class="empty">Keine Änderungen in dieser Auswahl.</p>
+    }
+    @if (coverage() && store.bundle()?.analysis?.specs?.length && stepIndex() === null) {
+      <app-spec-overview (segmentClick)="openRef($event)" />
     }
     @if (coverage() && store.bundle()?.analysis?.coverage && stepIndex() === null) {
       <app-coverage-overview (testClick)="openRef($event)" />
@@ -104,7 +108,7 @@ export class GroupView {
   readonly scope = input.required<string>();
   /** File view: marks apply to all places of a line. */
   readonly fileView = input(false);
-  /** Show the coverage of the changed code above the blocks (test category). */
+  /** Show the Spec-Diff and the coverage of the changed code above the blocks (test category). */
   readonly coverage = input(false);
 
   protected readonly progress = computed(() => this.store.progressOf(this.slots()));

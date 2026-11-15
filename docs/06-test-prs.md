@@ -4,7 +4,7 @@ Für den PoC wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **
 
 | PR | Repo / Basis | Inhalt | Was es testet |
 |---|---|---|---|
-| [spongecoach#13](https://github.com/cyrilleulmi/spongecoach/pull/13) | `master` | Trikotnummer für Spieler: Migration, Entity, DTOs, Resource, Angular-Service, Komponente, Template, SCSS; zweiter Commit: `PlayerResourceTest.java` (JUnit) und Tests in `player-view.spec.ts` (Jasmine/Vitest); dritter Commit: Trikotnummer entfernen (`clearJerseyNumber` in Backend und Frontend, Hilfsfunktion `isInRange`), bewusst ohne eigene Tests | Fullstack Quarkus + Angular; Java- und TS-Symbole; DTO-/REST-Quick-wins; zwei Flüsse; Tests ↔ Code; Block an zwei Orten |
+| [spongecoach#13](https://github.com/cyrilleulmi/spongecoach/pull/13) | `master` | Trikotnummer für Spieler: Migration, Entity, DTOs, Resource, Angular-Service, Komponente, Template, SCSS; zweiter Commit: `PlayerResourceTest.java` (JUnit) und Tests in `player-view.spec.ts` (Jasmine/Vitest); dritter Commit: Trikotnummer entfernen (`clearJerseyNumber` in Backend und Frontend, Hilfsfunktion `isInRange`), bewusst ohne eigene Tests; vierter Commit «Rework player tests»: Tests umgebaut (Spezifikations-Diff) und `clearJerseyNumber` im Backend getestet | Fullstack Quarkus + Angular; Java- und TS-Symbole; DTO-/REST-Quick-wins; zwei Flüsse; Tests ↔ Code; Block an zwei Orten |
 | [camperquiz#1](https://github.com/cyrilleulmi/camperquiz/pull/1) | `master` | Joker pro Team | Vanilla-JS **ohne Module** (globale Funktionen über Dateien hinweg) |
 | [stv-bero-website#2](https://github.com/cyrilleulmi/stv-bero-website/pull/2) | `wave-1/new-site` | Anmeldeschluss für Anlässe | Payload-Collection, generierte Typen, Next.js-Komponente, Helfer, Konstante im Flow |
 | [stv-bero-website#1](https://github.com/cyrilleulmi/stv-bero-website/pull/1) | `main` | (bestehender, echter PR «Wave 1») | Stresstest: 294 Dateien, ca. 900 Segmente |
@@ -25,9 +25,19 @@ Für den PoC wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **
   * `PlayerView › jersey number › …` (2 Fälle) → Komponente `player-view.ts`; `saveJerseyNumber` direkt, `PlayerApiService.setJerseyNumber` indirekt
 
 * Dritter Commit «Clear jersey number; validation of the number range» (Abdeckungsansicht, drei Zustände):
-  * **Ohne Test:** `PlayerResource.clearJerseyNumber` (DELETE `/{playerId}/jersey-number`, mehrere Verzweigungen: nicht gefunden, keine Nummer gesetzt, löschen) und im Frontend `PlayerApiService.clearJerseyNumber` sowie `PlayerView.clearJerseyNumber` (Verzweigungen: nichts zu entfernen, Bestätigung abgelehnt); kein Test erreicht sie
+  * **Ohne Test:** im Frontend `PlayerApiService.clearJerseyNumber` sowie `PlayerView.clearJerseyNumber` (Verzweigungen: nichts zu entfernen, Bestätigung abgelehnt); kein Test erreicht sie. Das Backend-Gegenstück `PlayerResource.clearJerseyNumber` war hier ebenfalls ohne Test, wird seit dem vierten Commit aber direkt getestet (siehe unten)
   * **Nur indirekt getestet:** `PlayerResource.validateJerseyNumber` und das neue `isInRange` (zwei Verzweigungen), nur über `update` erreicht (`rejectsJerseyNumberAboveMax`, `savesJerseyNumber`); ebenso `Player.isJerseyNumberTaken` und im Frontend `PlayerApiService.setJerseyNumber` (über `saveJerseyNumber`)
   * **Direkt getestet:** `PlayerResource.update`, `Player.isJerseyNumberTaken` (`detectsNumberWornByTeammate`, direkt und zusätzlich indirekt) und `PlayerView.saveJerseyNumber`
+
+* Vierter Commit «Rework player tests (SmartCodeReview test data: spec diff)»:
+  * **Abdeckung:** `PlayerResource.clearJerseyNumber` wechselt von «ohne Test» zu «direkt getestet» (`ClearJerseyNumber.removesTheNumber`, `isANoOpWithoutNumber`); `PlayerView.clearJerseyNumber` und `PlayerApiService.clearJerseyNumber` bleiben «ohne Test»
+  * **Spezifikations-Diff** (Zustände neu / geändert / umbenannt / entfernt / unverändert), `player-view.spec.ts` (existiert auf `master`):
+    * **umbenannt:** «shows a not-found page for an unknown Player» → «shows the not-found page for an unknown Player» (Rumpf identisch)
+    * **geändert:** «applies a rating click immediately and rolls it back if the save fails» (zusätzliche Assertion am Ende)
+    * **entfernt:** «creates a Player skill from the player screen and rates it on the Player straight away»
+    * **unverändert:** «shows the Player’s name, avatar, …», «saves the Player’s whole Development goal set …», «shows a Player someone else read-only, and themselves editable» sowie die ganze Gruppe `Avatar painter` mit ihren vier Tests
+    * **neu:** Gruppe `jersey number` mit «saves a new jersey number», «explains a number that a teammate already wears» und der verschachtelten Gruppe `invalid input` mit «ignores text that is not a number» und «does not save the number the player already wears»
+  * `PlayerResourceTest.java` (im PR neu angelegt, daher alles **neu**): `PlayerResourceTest › savesJerseyNumber`, `rejectsJerseyNumberAboveMax`, `detectsNumberWornByTeammate` sowie die verschachtelte Klasse `PlayerResourceTest › ClearJerseyNumber › removesTheNumber` und `isANoOpWithoutNumber`; geändert/umbenannt/entfernt/unverändert gibt es in der Java-Datei nicht, weil es sie auf `master` nicht gibt
 
 * Seit 0.4: **ein Flow über REST** `saveJerseyNumber → setJerseyNumber ⇢ PUT /api/players/{} ⇢ update → validateJerseyNumber → isJerseyNumberTaken`; Frontend-Kategorien *API-Anbindung* (`setJerseyNumber`), *Komponenten-Logik*, *Templates*; keine Architektur-Kategorien (geschichtet: `api` + `domain`, kein Ports & Adapters); Komponentendiagramm Frontend → API → Domäne mit gestrichelter REST-Kante.
 

@@ -27,6 +27,13 @@ final class Coverage {
     private static final Pattern BRANCH = Pattern.compile(
             "\\b(?:if|elif|case|catch|except|for|while)\\b|&&|\\|\\||(?<!\\S)\\?(?!\\S)");
 
+    /**
+     * The whole body of a trivial accessor: `return this.x;`, `return x;` (also one qualifier like a Go receiver,
+     * `return p.x`) or an assignment of a plain name, `this.x = x;` / `x = value;`.
+     */
+    private static final Pattern ACCESSOR_BODY = Pattern.compile(
+            "(?:return\\s+(?:[\\w$]+\\.)?[\\w$]+|(?:[\\w$]+\\.)?[\\w$]+\\s*=\\s*[\\w$]+)\\s*;?");
+
     private static final Map<String, Integer> STATUS_ORDER = Map.of(NONE, 0, INDIRECT, 1, DIRECT, 2);
 
     /** Untested first, then only indirectly tested, then tested; within each the highest risk first (stable). */
@@ -47,6 +54,23 @@ final class Coverage {
             }
         }
         return n;
+    }
+
+    /**
+     * A getter or setter that does nothing but return or assign a field (Java getX/setX, TS get/set): the code
+     * between the first "{" and the last "}" of the function (strings and comments blanked out, see
+     * {@link CodeText#code}) is a single statement {@code return this.x;}, {@code return x;}, {@code this.x = x;} or
+     * {@code x = value;}. Bodies without braces (arrow functions, Kotlin {@code = field}) never count, so a doubtful
+     * case stays in the coverage.
+     */
+    static boolean isTrivialAccessor(List<String> code) {
+        String text = String.join("\n", code);
+        int open = text.indexOf('{');
+        int close = text.lastIndexOf('}');
+        if (open < 0 || close <= open) {
+            return false;
+        }
+        return ACCESSOR_BODY.matcher(text.substring(open + 1, close).strip()).matches();
     }
 
     /** Sort key: more changed lines and more branches = more that can go wrong untested. */

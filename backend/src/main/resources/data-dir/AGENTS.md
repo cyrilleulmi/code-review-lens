@@ -14,6 +14,8 @@ reviews/<provider>/<owner>/<repo>/<number>/      provider: github | gitlab; nest
                                                    number 0 = the whole repository (every file counts as new)
   snapshot.json        PR metadata + parsed diff (frozen when the PR was first opened)
   sources/<path>       new version of each analysed file
+  sources-base/<path>  old version (at the PR's base commit) of each changed test file, under its OLD path
+                       (renamed files); only for the Spec-Diff (`specs[]`); none for number 0
   analysis.json        derived: segments, categories, flows (safe to delete; recomputed)
   review.json          THE ONLY REAL STATE: which changed lines are marked "ok" (per place)
   comments.json        cache of the last comment fetch (GitHub or GitLab)
@@ -40,12 +42,20 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    `direct` or `via` another segment, `line` = call site in the test). `segments[].testedBy` is the reverse.
    `coverage[]` is the view from the code (static; only changed tests and changed code): one entry per testable
    changed function (function/method/component outside tests whose category has `needsTests`, default true;
-   false for quick wins, tests, styles, config, API contracts, persistence). `status`: `direct` (a changed test
+   false for quick wins, tests, styles, config, API contracts; trivial getters/setters whose body is only
+   `return x;` / `this.x = x;` are always left out). `status`: `direct` (a changed test
    calls it), `indirect` (only reached via other changed code), `none` (no changed test reaches it);
    `directTests` / `indirectTests` = test segment ids; `branches` = decision points in the whole function
    (if, case, catch, for, while, &&, ||, ternary ?); `changedLines` = non-blank, non-brace changed lines;
    `risk` = changedLines × (1 + branches). Sorted: `none`, `indirect`, `direct`, each by risk descending.
    Missing (null) in analyses of older versions.
+   `specs[]` (Spec-Diff) = per changed test file (`path`, `previousPath`, file `status`) the test names as an
+   outline, old against new version: `entries[]` with `name`, `suites` (enclosing suites, outermost first; JUnit:
+   test class and @Nested classes), `kind` (suite | test), `status` (added | removed | changed | renamed |
+   unchanged), `previousName` (renamed), `segmentId` (null for removed and untouched entries), `line` (new file),
+   `oldLine` (base version), `depth` (indentation). Matched by full path, renames = same text apart from
+   whitespace and the name. `baseAvailable: false` = the old version could not be loaded, only the new side is
+   listed. Entries in new file order, removed ones after their previous old sibling. Null in older analyses.
 6. `architecture.style` = "hexagonal" when the repo uses ports & adapters, "layered" for domain / application /
    adapter packages without ports; then `segments[].layer` is domain | application | usecase | adapter.
    `segments[].frontend` marks web frontend code. `flows[].edges[].kind` = "http" for REST calls from the
