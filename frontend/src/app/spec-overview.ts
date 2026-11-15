@@ -1,6 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
-import { ExpectationChange, SpecEntry, SpecFile, SpecStatus } from './api';
+import { AffectedTest, ExpectationChange, SetupImpact, SpecEntry, SpecFile, SpecStatus } from './api';
 import { ExpectationMark, KIND_LABELS, expectationMarks, expectationTotals, expectationWarning } from './expectations';
+import {
+  affectedStatus, countUnchangedAffected, impactNotice, impactWarns, markerTitle, sortImpacts, unchangedAffected,
+  unchangedAffectedText,
+} from './setup-impact';
 import { Icon } from './icon';
 import { ReviewStore } from './review.store';
 
@@ -24,13 +28,17 @@ interface SpecRow {
   warn: boolean;
   /** expectation changes to show when the markers are expanded */
   changes: ExpectationChange[];
+  /** unchanged test whose setup, test data or helper changed (Wirkung von Setup und Testdaten), else null */
+  affectedBy: SetupImpact[] | null;
 }
 
 interface SpecFileView {
   file: SpecFile;
   rows: SpecRow[];
-  /** unchanged test cases (hidden by default) */
+  /** unchanged test cases (hidden by default) - without those affected by a setup change, which stay visible */
   unchanged: number;
+  /** «3 unveränderte, aber betroffen»: unchanged tests whose setup changed; null when none */
+  affected: string | null;
   /** «⚠ 2 Erwartungen geändert · 1 deaktiviert» for the file header, null when nothing to warn about */
   warning: string | null;
 }
@@ -55,6 +63,8 @@ function noteworthy(e: SpecEntry): boolean {
  * version - what behaviour the tests specify and what changed, before reading test code. Entries with a code block
  * jump to it; removed entries open the file view at the deleted lines. Tests whose expectations changed (assertion
  * changed, removed, weakened, test switched off) carry a warning marker that expands to the old/new assertions.
+ * Changed setup blocks, fixtures and test helpers are listed with the tests they affect (Wirkung von Setup und
+ * Testdaten); unchanged tests among them stay visible with the marker «Setup geändert».
  */
 @Component({
   selector: 'app-spec-overview',
@@ -80,7 +90,47 @@ function noteworthy(e: SpecEntry): boolean {
           <span class="sep">·</span>
           <span class="warnsum" title="Bestehende Tests erwarten jetzt etwas anderes oder weniger, oder sind ausgeschaltet – musterbasiert erkannt (Assertions, Matcher, xit/skip/@Disabled)">{{ w }}</span>
         }
+        @if (affectedSummary(); as a) {
+          <span class="sep">·</span>
+          <span class="warnsum" title="Unveränderte Tests, deren Setup, Testdaten oder Testhilfen der PR ändert – sie prüfen jetzt vielleicht etwas anderes">{{ a }}</span>
+        }
       </p>
+      @if (impacts().length) {
+        <div class="impacts">
+          <p class="ihead">Wirkung von Setup und Testdaten</p>
+          @for (i of visibleImpacts(); track i.segmentId + '#' + i.name + '#' + i.line) {
+            @let ikey = 'impact#' + i.segmentId + '#' + i.name + '#' + i.line;
+            <div class="impact" [class.warn]="warns(i)">
+              <button type="button" class="itoggle" (click)="toggleDetails(ikey, $event)" [attr.aria-expanded]="isExpanded(ikey)"
+                      [title]="isExpanded(ikey) ? 'Betroffene Tests ausblenden' : 'Betroffene Tests zeigen'">
+                <app-icon [name]="isExpanded(ikey) ? 'chevronDown' : 'chevronRight'" [size]="11" />
+              </button>
+              <app-icon [name]="warns(i) ? 'warning' : 'info'" [size]="12" class="iicon" />
+              <button type="button" class="itext" [class.link]="hasSegment(i.segmentId)" (click)="openImpact(i)"
+                      [title]="hasSegment(i.segmentId) ? 'Zum geänderten Setup bzw. zu den Testdaten springen' : ''">{{ notice(i) }}</button>
+            </div>
+            @if (isExpanded(ikey)) {
+              <div class="iaffected">
+                @for (t of i.affected; track t.path + '#' + t.line) {
+                  <div class="atest" [class.link]="hasSegment(t.segmentId)"
+                       [attr.role]="hasSegment(t.segmentId) ? 'button' : null" [attr.tabindex]="hasSegment(t.segmentId) ? 0 : null"
+                       (click)="openAffected(t)" (keydown.enter)="openAffected(t)" [title]="t.path + ':' + t.line">
+                    <span class="astatus" [class]="'astatus s-' + t.status">{{ statusOf(t) }}</span>
+                    <span class="name">{{ t.name }}</span>
+                    <span class="where">{{ fileOf(t.path) }}:{{ t.line }}</span>
+                  </div>
+                }
+              </div>
+            }
+          }
+          @if (quietImpacts() > 0) {
+            <button type="button" class="more" (click)="quietImpactsShown.set(!quietImpactsShown())">
+              {{ quietImpactsShown() ? 'nur Wirkung auf unveränderte Tests zeigen'
+                : quietImpacts() + (quietImpacts() === 1 ? ' weitere Änderung wirkt' : ' weitere Änderungen wirken') + ' nur auf neue oder geänderte Tests' }}
+            </button>
+          }
+        </div>
+      }
       @for (f of files(); track f.file.path) {
         <button type="button" class="file-head" (click)="toggleFile(f.file.path)" [attr.aria-expanded]="isOpen(f.file.path)"
                 [title]="f.file.path">
@@ -90,6 +140,9 @@ function noteworthy(e: SpecEntry): boolean {
           <span class="dir">{{ dirOf(f.file.path) }}</span>
           @if (f.warning) {
             <span class="fwarn">{{ f.warning }}</span>
+          }
+          @if (f.affected) {
+            <span class="fwarn" title="Unveränderte Tests dieser Datei, deren Setup, Testdaten oder Testhilfen der PR ändert">{{ f.affected }}</span>
           }
           @if (f.file.status === 'added') {
             <span class="ftag s-added">neue Datei</span>
@@ -129,6 +182,12 @@ function noteworthy(e: SpecEntry): boolean {
                   @if (r.changes.length) {
                     <app-icon [name]="isExpanded(key) ? 'chevronDown' : 'chevronRight'" [size]="10" />
                   }
+                </button>
+              }
+              @if (r.affectedBy; as by) {
+                <button type="button" class="xmarks warn setup-mark" [title]="markTitle(by)"
+                        (click)="openImpact(by[0], $event)" (keydown.enter)="$event.stopPropagation()">
+                  <app-icon name="warning" [size]="11" /> Setup geändert
                 </button>
               }
               <span class="where">{{ e.line ?? e.oldLine }}</span>
@@ -238,6 +297,26 @@ function noteworthy(e: SpecEntry): boolean {
     .more { display: block; width: 100%; padding-top: 4px; padding-bottom: 4px; border: 0; border-bottom: 1px solid var(--border);
       background: none; color: var(--fg-dim); font: 11.5px var(--font-ui); cursor: pointer; text-align: left; }
     .more:hover { color: var(--accent-fg); }
+    .impacts { border-bottom: 1px solid var(--border); padding: 4px 0; }
+    .ihead { margin: 0; padding: 2px 12px 4px; color: var(--fg-dim); font-size: 11px; }
+    .impact { display: flex; align-items: center; gap: 6px; padding: 2px 12px; color: var(--fg-muted); font-size: 12px; min-width: 0; }
+    .impact.warn { color: var(--warn); }
+    .iicon { flex: none; }
+    .itoggle { flex: none; display: inline-flex; padding: 0; border: 0; background: none; color: var(--fg-dim); cursor: pointer; }
+    .itoggle:hover { color: var(--accent-fg); }
+    .itext { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: default;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .impact.warn .itext { font-weight: 600; }
+    .itext.link { cursor: pointer; }
+    .itext.link:hover { color: var(--accent-fg); text-decoration: underline; }
+    .iaffected { padding: 2px 12px 6px 44px; }
+    .atest { display: flex; align-items: baseline; gap: 8px; padding: 1px 0; font: 11.5px var(--font-code); color: var(--fg); min-width: 0; }
+    .atest.link { cursor: pointer; }
+    .atest.link:hover .name { color: var(--accent-fg); }
+    .astatus { flex: none; min-width: 9ch; color: var(--fg-dim); font: 10.5px var(--font-ui); }
+    .astatus.s-unchanged { color: var(--warn); font-weight: 600; }
+    .impacts .more { border-bottom: 0; padding-left: 12px; }
+    .setup-mark { cursor: pointer; }
     .box > :last-child { border-bottom: 0; }
   `,
 })
@@ -256,6 +335,22 @@ export class SpecOverview {
   private readonly unchangedShown = signal<ReadonlySet<string>>(new Set());
   /** Entries whose expectation details are expanded. */
   private readonly expanded = signal<ReadonlySet<string>>(new Set());
+  /** Setup impacts that reach only new or changed tests are shown too. */
+  protected readonly quietImpactsShown = signal(false);
+
+  /** Wirkung von Setup und Testdaten: those reaching unchanged tests first. */
+  protected readonly impacts = computed(() => sortImpacts(this.store.setupImpacts()));
+  protected readonly visibleImpacts = computed(() =>
+    this.quietImpactsShown() ? this.impacts() : this.impacts().filter((i) => impactWarns(i)));
+  /** Impacts that reach only new or changed tests (behind «n weitere …»). */
+  protected readonly quietImpacts = computed(() => this.impacts().filter((i) => !impactWarns(i)).length);
+  /** «3 unveränderte, aber betroffen» over all files (also existing test files); null when none. */
+  protected readonly affectedSummary = computed(() => unchangedAffectedText(countUnchangedAffected(this.store.setupImpacts())));
+
+  /** Tooltip of the marker «Setup geändert» on an unchanged test. */
+  protected markTitle(by: SetupImpact[]): string {
+    return markerTitle(by) + (this.hasSegment(by[0].segmentId) ? '\nKlick: zum geänderten Setup springen' : '');
+  }
 
   /** path -> line key -> segment id, to find the deleted lines of a removed entry. */
   private readonly keysByPath = computed(() => {
@@ -275,14 +370,20 @@ export class SpecOverview {
 
   protected readonly files = computed((): SpecFileView[] => {
     const segs = this.store.segments();
+    const affected = unchangedAffected(this.store.setupImpacts());
     return (this.store.bundle()?.analysis.specs ?? []).map((file) => {
       const entries = file.entries;
+      const byLine = affected.get(file.path);
+      // unchanged tests whose setup changed stay visible among the unchanged ones
+      const affectedBy = (e: SpecEntry) =>
+        e.kind === 'test' && e.status === 'unchanged' && e.line != null ? byLine?.get(e.line) ?? null : null;
+      const shown = (e: SpecEntry) => noteworthy(e) || !!affectedBy(e);
       const rows = entries.map((entry, i): SpecRow => {
-        let quiet = !noteworthy(entry);
+        let quiet = !shown(entry);
         if (quiet && entry.kind === 'suite') {
           // a suite stays visible as long as something below it changed
           for (let j = i + 1; j < entries.length && entries[j].depth > entry.depth; j++) {
-            if (noteworthy(entries[j])) {
+            if (shown(entries[j])) {
               quiet = false;
               break;
             }
@@ -299,10 +400,12 @@ export class SpecOverview {
           marks,
           warn: marks.some((m) => m.warn),
           changes: entry.expectations ?? [],
+          affectedBy: affectedBy(entry),
         };
       });
-      const unchanged = entries.filter((e) => e.kind === 'test' && !noteworthy(e)).length;
-      return { file, rows, unchanged, warning: expectationWarning(expectationTotals([file])) };
+      const unchanged = entries.filter((e) => e.kind === 'test' && !shown(e)).length;
+      const affectedText = unchangedAffectedText(entries.filter((e) => !!affectedBy(e)).length);
+      return { file, rows, unchanged, affected: affectedText, warning: expectationWarning(expectationTotals([file])) };
     });
   });
 
@@ -346,6 +449,37 @@ export class SpecOverview {
     }
   }
 
+
+  protected warns(i: SetupImpact): boolean {
+    return impactWarns(i);
+  }
+
+  protected notice(i: SetupImpact): string {
+    return impactNotice(i);
+  }
+
+  protected statusOf(t: AffectedTest): string {
+    return affectedStatus(t);
+  }
+
+  protected hasSegment(id: string | null): boolean {
+    return !!id && this.store.segments().has(id);
+  }
+
+  /** The changed setup block / fixture / helper: jump to its code. */
+  protected openImpact(i: SetupImpact, event?: Event): void {
+    event?.stopPropagation();
+    if (this.hasSegment(i.segmentId)) {
+      this.segmentClick.emit(i.segmentId);
+    }
+  }
+
+  /** An affected test with changed lines: jump to it (unchanged tests have no block). */
+  protected openAffected(t: AffectedTest): void {
+    if (t.segmentId && this.hasSegment(t.segmentId)) {
+      this.segmentClick.emit(t.segmentId);
+    }
+  }
 
   /** An old/new assertion line: show it in the test's code block (or at least the block). */
   protected openLine(file: SpecFile, r: SpecRow, line: number | null, old: boolean): void {

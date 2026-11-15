@@ -102,7 +102,9 @@ public final class Analyzer {
             "init", "load", "save", "update", "create", "remove", "handle", "handler", "process", "build", "parse",
             "format", "map", "filter", "reduce", "find", "fetch", "send", "close", "open", "start", "stop", "reset",
             "submit", "validate", "transform", "convert", "item", "items", "list", "result", "options", "props", "state");
-    private static final Pattern IMPORT_START = Pattern.compile("^\\s*import\\b");
+    /** The generic names, for other analyses that link by name (see {@link SetupImpact}). */
+    static final Set<String> GENERIC_NAMES = GENERIC;
+    private static final Pattern IMPORT_START =Pattern.compile("^\\s*import\\b");
     private static final Pattern MODULE_SYNTAX = Pattern.compile("^\\s*export\\b|\\brequire\\s*\\(|\\bmodule\\.exports\\b");
     private static final Pattern ENTRY_LAYER = Pattern.compile(
             "(?i)(component|page|route|controller|resource|endpoint|handler|view|screen|listener|consumer|messaging/|app/|pages/|api/)");
@@ -110,7 +112,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 25;
+    public static final int VERSION = 26;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -360,7 +362,74 @@ public final class Analyzer {
                 specList,
                 withBoundaries(matrices, tests, boundaries),
                 existingTests, related, List.copyOf(mockWarnings), MockBoundaries.flowCoverage(flows, tests, existingTests),
-                ruleChecks);
+                ruleChecks,
+                // the whole repository: every setup piece would be "new" and affect only new tests - nothing to warn about
+                repository ? List.of() : setupImpacts(works, specList, related, relatedSources));
+    }
+
+    /**
+     * Wirkung von Setup und Testdaten (see {@link SetupImpact}): the changed setup blocks, fixtures and helpers of test
+     * and test-support files with the tests they affect - in all test files of the PR (with the status of each test from
+     * the Spec-Diff) and in the existing test files loaded for the change (all unchanged).
+     */
+    private List<Model.SetupImpact> setupImpacts(List<Work> works, List<SpecFile> specs, Model.RelatedTests related,
+                                                 Map<String, String> relatedSources) {
+        Map<String, Map<Integer, Model.SpecEntry>> specByLine = new HashMap<>();
+        for (SpecFile f : specs) {
+            Map<Integer, Model.SpecEntry> byLine = specByLine.computeIfAbsent(f.path(), k -> new HashMap<>());
+            f.entries().stream().filter(e -> "test".equals(e.kind()) && e.line() != null).forEach(e -> byLine.putIfAbsent(e.line(), e));
+        }
+        Map<FileCtx, List<Work>> byFile = new LinkedHashMap<>();
+        for (Work w : works) {
+            if (w.ctx != null && !"removed".equals(w.file.status()) && SetupImpact.isTestOrSupport(rules, w.file.path())) {
+                byFile.computeIfAbsent(w.ctx, k -> new ArrayList<>()).add(w);
+            }
+        }
+        if (byFile.isEmpty()) {
+            return List.of();
+        }
+        List<SetupImpact.TestFile> files = new ArrayList<>();
+        List<SetupImpact.Changed> changed = new ArrayList<>();
+        for (Map.Entry<FileCtx, List<Work>> e : byFile.entrySet()) {
+            FileCtx ctx = e.getKey();
+            String path = ctx.diff.path();
+            Map<Symbol, String> segmentOf = new HashMap<>();
+            for (Work w : e.getValue()) {
+                if (w.symbol != null) {
+                    segmentOf.put(w.symbol, w.id);
+                    Set<Integer> added = new TreeSet<>();
+                    Map<Integer, String> deleted = new LinkedHashMap<>();
+                    for (DiffLine l : w.changed) {
+                        if ("del".equals(l.type())) {
+                            deleted.putIfAbsent(w.anchors.getOrDefault(l, 0), l.text());
+                        } else if (l.newLine() != null) {
+                            added.add(l.newLine());
+                        }
+                    }
+                    changed.add(new SetupImpact.Changed(w.id, path, w.symbol, added, deleted));
+                }
+            }
+            Map<Integer, Model.SpecEntry> entries = specByLine.getOrDefault(path, Map.of());
+            boolean addedFile = Specs.ADDED.equals(ctx.diff.status());
+            files.add(new SetupImpact.TestFile(path, ctx.text, ctx.symbols, false, test -> {
+                Model.SpecEntry entry = entries.get(test.startLine());
+                String segment = segmentOf.get(test);
+                if (entry != null) {
+                    return new SetupImpact.TestState(entry.status(), entry.segmentId() != null ? entry.segmentId() : segment);
+                }
+                return new SetupImpact.TestState(segment == null ? Specs.UNCHANGED : addedFile ? Specs.ADDED : Specs.CHANGED, segment);
+            }));
+        }
+        if (related != null && related.files() != null && relatedSources != null) {
+            for (RelatedTestFile f : related.files()) {
+                String source = relatedSources.get(f.path());
+                if (source != null && Languages.hasSymbols(Languages.of(f.path()))) {
+                    CodeText text = CodeText.of(source);
+                    files.add(new SetupImpact.TestFile(f.path(), text, SymbolExtractor.extract(text, f.path()), true, null));
+                }
+            }
+        }
+        return SetupImpact.find(changed, files);
     }
 
     /** The input values of the Fallmatrix rows of changed tests count as inputs of those tests (Fall- und Effekt-Abgleich). */

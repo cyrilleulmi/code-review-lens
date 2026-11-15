@@ -556,6 +556,44 @@ export interface Analysis {
   flowCoverage?: FlowCoverage[] | null;
   /** Erwartungs-Regeln: rules that apply to changed code and whether a test of the expected form exists (empty for a whole repository, absent in older analyses) */
   ruleChecks?: RuleCheck[] | null;
+  /** Wirkung von Setup und Testdaten: changed setup blocks, fixtures and test helpers with the tests they affect (empty for a whole repository, absent in older analyses) */
+  setupImpacts?: SetupImpact[] | null;
+}
+
+/** setup: beforeEach & co., JUnit @BeforeEach/@AfterAll … · fixture: constant, field or suite variable with a value · helper: function, method, class of test code */
+export type SetupImpactKind = 'setup' | 'fixture' | 'helper';
+
+/**
+ * Wirkung von Setup und Testdaten (Model.SetupImpact): a changed piece of test setup and the tests whose meaning it
+ * changes - also those the diff does not show.
+ */
+export interface SetupImpact {
+  /** the changed setup block, fixture or helper */
+  segmentId: string;
+  kind: SetupImpactKind;
+  /** its name («CARMELA», «PlayerView › beforeEach», «TestData.player») */
+  name: string;
+  /** declaration line (new file) */
+  line: number | null;
+  /** the tests it reaches, its own file first, then by path and line */
+  affected: AffectedTest[];
+  /** how many of them this PR leaves unchanged - they change their meaning silently */
+  unchangedCount: number;
+}
+
+/** A test reached by a SetupImpact (Model.AffectedTest). */
+export interface AffectedTest {
+  path: string;
+  /** display name with its suites («PlayerView › jersey number › saves it») */
+  name: string;
+  /** start line at the PR head */
+  line: number;
+  /** the test's segment when it has changed lines in this PR, else null */
+  segmentId: string | null;
+  /** from the Spec-Diff; tests of existing test files are «unchanged» */
+  status: 'added' | 'changed' | 'renamed' | 'unchanged';
+  /** in an existing test file loaded for the change (not part of the PR) */
+  existing: boolean;
 }
 
 /**

@@ -105,6 +105,17 @@ public final class Rules {
     public record RelatedTestRules(int limit, List<Mirror> mirrors) {
     }
 
+    /**
+     * Wirkung von Setup und Testdaten (see {@link SetupImpact}), rules section "setupImpact". supportPaths: globs of
+     * test-support files (builders, fixtures, fakes) whose functions, classes and constants count as test helpers even
+     * outside the test path rule.
+     */
+    public record SetupImpactRules(List<Pattern> supportPaths) {
+        public boolean isSupport(String path) {
+            return supportPaths.stream().anyMatch(p -> p.matcher(path).matches());
+        }
+    }
+
     /** A source directory prefix and the test directory prefix that mirrors it (rules "relatedTests.mirrors"). */
     public record Mirror(String from, String to) {
     }
@@ -222,13 +233,15 @@ public final class Rules {
     public final List<Pattern> testHttpCalls;
     /** Test-Smells by kind (see {@link SmellRule}), in the order of the built-in rules. */
     public final Map<String, SmellRule> testSmells;
+    /** Wirkung von Setup und Testdaten: test-support paths (see {@link SetupImpactRules}). */
+    public final SetupImpactRules setupImpact;
     public final String hash;
 
     private Rules(List<CategoryDef> categories, List<Rule> rules, List<Rule> aspects, List<Rule> concerns,
                   List<Pattern> assertions, List<Pattern> weakAssertions, List<Pattern> disabledTests,
                   TestProfileRules testProfile, CaseMatrixRules caseMatrix, RelatedTestRules relatedTests,
                   CaseCheckRules caseCheck, List<TestRule> testRules, List<Pattern> testHttpCalls,
-                  Map<String, SmellRule> testSmells, String hash) {
+                  Map<String, SmellRule> testSmells, SetupImpactRules setupImpact, String hash) {
         this.categories = categories;
         this.rules = rules;
         this.aspects = aspects;
@@ -243,6 +256,7 @@ public final class Rules {
         this.testRules = testRules;
         this.testHttpCalls = testHttpCalls;
         this.testSmells = testSmells;
+        this.setupImpact = setupImpact;
         this.hash = hash;
     }
 
@@ -257,7 +271,15 @@ public final class Rules {
                 section(root, "assertions"), section(root, "weakAssertions"), section(root, "disabledTests"),
                 testProfile(root.path("testProfile")), caseMatrix(root.path("caseMatrix")),
                 relatedTests(root.path("relatedTests")), caseCheck(root.path("caseCheck")), testRules(root.path("testRules")),
-                section(root, "testHttpCalls"), testSmells(root.path("testSmells")), hash);
+                section(root, "testHttpCalls"), testSmells(root.path("testSmells")),
+                setupImpact(root.path("setupImpact")), hash);
+    }
+
+    /** The "setupImpact" section; every missing key is taken from the built-in rules. */
+    private static SetupImpactRules setupImpact(JsonNode node) {
+        JsonNode builtIn = defaults().path("setupImpact");
+        java.util.function.Function<String, JsonNode> key = k -> node.has(k) ? node.get(k) : builtIn.path(k);
+        return new SetupImpactRules(patterns(key.apply("supportPaths"), true));
     }
 
     /** The "testSmells" section; every missing smell or key is taken from the built-in rules. */

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { Blame, Comment, Commit, DisplayLine, LineMark, Segment } from './api';
 import { smellBadgeText, smellBadgeTitle, smellDetail, smellText, smellsByLine } from './test-smells';
+import { impactBadge } from './setup-impact';
 import { findingDetail, findingsByLine, lineChipText } from './case-checks';
 import { ruleChipText, ruleDetail, unmetByLine } from './rule-checks';
 import { assertionDrop, bendsExpectations, describeChange, newlyDisabled } from './expectations';
@@ -206,6 +207,12 @@ export class CodeBlock {
     const smells = this.store.tests().get(this.segment().id)?.smells ?? [];
     return smells.length ? { text: smellBadgeText(smells), title: smellBadgeTitle(smells) } : null;
   });
+
+  /**
+   * Changed setup block, fixture or test helper (Wirkung von Setup und Testdaten): header badge «wirkt auf 12 Tests
+   * (10 unverändert)», a warning only when unchanged tests are affected; null without impact.
+   */
+  protected readonly setupBadge = computed(() => impactBadge(this.store.setupImpactsBySegment().get(this.segment().id)));
 
   /** Test-Smells with a line: line index -> chips at that line. */
   protected readonly smellNotes = computed(() => {

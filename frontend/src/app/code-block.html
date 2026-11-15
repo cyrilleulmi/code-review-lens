@@ -29,6 +29,11 @@
       <app-icon [name]="ex.warn ? 'warning' : 'info'" [size]="11" /> {{ ex.label }}
     </span>
   }
+  @if (setupBadge(); as sb) {
+    <span class="expect" [class.warn]="sb.warn" [title]="sb.title" (click)="$event.stopPropagation()">
+      <app-icon [name]="sb.warn ? 'warning' : 'info'" [size]="11" /> {{ sb.text }}
+    </span>
+  }
   @if (smellBadge(); as sm) {
     <span class="expect warn" [title]="sm.title" (click)="$event.stopPropagation()">
       <app-icon name="warning" [size]="11" /> {{ sm.text }}

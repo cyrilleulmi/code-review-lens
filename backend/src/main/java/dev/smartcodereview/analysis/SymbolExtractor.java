@@ -16,7 +16,7 @@ public final class SymbolExtractor {
 
     /**
      * Lines are 1-based and inclusive. kind: class | interface | type | enum | function | method | component | const
-     * | test (a test case) | suite (describe block) | setup (beforeEach & co.)
+     * | test (a test case) | suite (describe block) | setup (beforeEach &amp; co., JUnit @BeforeEach/@AfterAll/… methods)
      */
     public record Symbol(String name, String kind, int startLine, int endLine, String container) {
         public int span() {
@@ -90,6 +90,9 @@ public final class SymbolExtractor {
     private static final Pattern JVM = Pattern.compile("\\.(java|kt|kts|groovy|scala)$");
     /** JUnit annotations of a test method. */
     private static final Pattern TEST_ANNOTATION = Pattern.compile("@(Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)\\b");
+    /** JUnit 4/5 and TestNG lifecycle annotations: the method is a setup block like beforeEach. */
+    private static final Pattern SETUP_ANNOTATION = Pattern.compile(
+            "@(BeforeEach|BeforeAll|AfterEach|AfterAll|Before|After|BeforeClass|AfterClass|BeforeMethod|AfterMethod)\\b(?!\\s*\\.)");
     /** Go: TestXxx, BenchmarkXxx, FuzzXxx in _test.go files. */
     private static final Pattern GO_TEST_NAME = Pattern.compile("^(Test|Benchmark|Fuzz)([A-Z_]\\w*)?$");
     private static final Pattern PROPERTY_FUNCTION = Pattern.compile(
@@ -178,7 +181,9 @@ public final class SymbolExtractor {
             }
             if ((m = TYPED_METHOD_DECL.matcher(line)).find() && (m.group(1).equals("void") || !KEYWORDS.contains(m.group(1)))
                     && !KEYWORDS.contains(m.group(2))) {
-                Symbol s = bodyAfterParams(text, li, m.end() - 1, m.group(2), annotatedAsTest(text, li) ? "test" : "method");
+                String kind = annotatedWith(text, li, TEST_ANNOTATION) ? "test"
+                        : annotatedWith(text, li, SETUP_ANNOTATION) ? "setup" : "method";
+                Symbol s = bodyAfterParams(text, li, m.end() - 1, m.group(2), kind);
                 if (s != null) {
                     symbols.add(s);
                     continue;
@@ -195,18 +200,18 @@ public final class SymbolExtractor {
     }
 
     /**
-     * A JUnit test method: a test annotation on the declaration line or on the annotation lines right above it
-     * (annotations whose arguments span lines, like a multi-line @CsvSource, included).
+     * A JUnit test (or setup) method: an annotation of the pattern on the declaration line or on the annotation lines
+     * right above it (annotations whose arguments span lines, like a multi-line @CsvSource, included).
      */
-    private static boolean annotatedAsTest(CodeText text, int line) {
-        if (TEST_ANNOTATION.matcher(text.code.get(line)).find()) {
+    private static boolean annotatedWith(CodeText text, int line, Pattern annotation) {
+        if (annotation.matcher(text.code.get(line)).find()) {
             return true;
         }
         int i = line - 1;
         for (int steps = 0; i >= 0 && steps < 12; steps++) {
             String c = text.code.get(i).strip();
             if (c.startsWith("@") || (c.isEmpty() && !text.lines.get(i).isBlank())) {
-                if (TEST_ANNOTATION.matcher(c).find()) {
+                if (annotation.matcher(c).find()) {
                     return true;
                 }
                 i--;
@@ -216,7 +221,7 @@ public final class SymbolExtractor {
             if (start < 0) {
                 return false;
             }
-            if (TEST_ANNOTATION.matcher(text.code.get(start)).find()) {
+            if (annotation.matcher(text.code.get(start)).find()) {
                 return true;
             }
             i = start - 1;

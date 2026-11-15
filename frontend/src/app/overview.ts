@@ -6,6 +6,7 @@ import { ComponentDiagram } from './component-diagram';
 import { Icon } from './icon';
 import { unmetWarning } from './rule-checks';
 import { countWithSmells, smellsSummary } from './test-smells';
+import { countUnchangedAffected, setupTileText } from './setup-impact';
 import { ReviewStore } from './review.store';
 
 /** Start page of an opened PR: description, the suggested review order, general comments. */
@@ -42,6 +43,8 @@ export class Overview {
         rules: isTestsView(c) ? unmetWarning(this.store.ruleChecks()) : null,
         // Test-Smells: «3 Tests mit Smells»
         smells: isTestsView(c) ? smellsSummary(countWithSmells(tests)) : null,
+        // Wirkung von Setup und Testdaten: unchanged tests whose setup or test data changed
+        setup: isTestsView(c) ? setupTileText(countUnchangedAffected(this.store.setupImpacts())) : null,
       };
     }),
   );

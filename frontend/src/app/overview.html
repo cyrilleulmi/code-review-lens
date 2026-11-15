@@ -57,6 +57,9 @@
         @if (c.smells) {
           <span class="warning" title="Geänderte Tests mit Hinweisen, dass sie weniger wert sind, als sie aussehen (keine oder nur schwache Assertions, fokussiert, sleep, mockt die getestete Einheit, neu deaktiviert; musterbasiert erkannt) – Details in der Testübersicht, Spalte «Smells»">{{ c.smells }}</span>
         }
+        @if (c.setup) {
+          <span class="warning" title="Geänderte Setup-Blöcke, Testdaten oder Testhilfen wirken auf Tests, die der PR nicht ändert – sie prüfen jetzt vielleicht etwas anderes (statisch erkannt) – Details in der Spezifikation der Tests">{{ c.setup }}</span>
+        }
         @if (c.rules) {
           <span class="warning" title="Für diese Änderungen erwarten die Regeln einen Test einer bestimmten Form (z. B. verweigerter Zugriff, Test über HTTP), der fehlt – Details unter «Erwartete Tests (Regeln)»">{{ c.rules }}</span>
         }

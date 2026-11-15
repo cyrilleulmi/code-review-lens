@@ -502,6 +502,33 @@ public final class Model {
     }
 
     /**
+     * Wirkung von Setup und Testdaten (see analysis/SetupImpact): a changed piece of test setup and the tests whose
+     * meaning it changes, also those that do not appear in the diff. segmentId: the changed segment; kind: "setup" (a
+     * beforeEach/afterAll block or a JUnit @BeforeEach/@AfterAll/… method) | "fixture" (a top-level constant of a test
+     * file, a field or suite-level variable with a value) | "helper" (a function, method or class of a test file or of a
+     * test-support path that is no test: builders, factories, render helpers); name: its name (container.name for
+     * methods); line: its declaration line (new file). affected: the tests it reaches, by path and line - a setup block
+     * every test in its suite or class (incl. nested ones; a top-level block the whole file, a base class its
+     * subclasses), a fixture or helper every test that references its name, directly or through other helpers, setup
+     * blocks or fields that do (same file, or other test files with import evidence). unchangedCount: how many of them
+     * are unchanged in this PR - the tests whose meaning changes silently.
+     */
+    @RegisterForReflection
+    public record SetupImpact(String segmentId, String kind, String name, Integer line, List<AffectedTest> affected,
+                              int unchangedCount) {
+    }
+
+    /**
+     * A test reached by a SetupImpact. path / name (display name with suites) / line: of the test (new file at the PR
+     * head). segmentId: the test's segment when it has changed lines in this PR, else null. status: "added" | "changed"
+     * | "renamed" | "unchanged" (from the Spec-Diff where there is one; tests of existing, unchanged test files - see
+     * RelatedTests - are "unchanged"). existing: the test is in an existing test file loaded for the change.
+     */
+    @RegisterForReflection
+    public record AffectedTest(String path, String name, int line, String segmentId, String status, boolean existing) {
+    }
+
+    /**
      * coverage: testable changed functions, "none" first, then "indirect", then "direct", each by risk (highest
      * first); null in analyses of older versions. specs: the test names of every changed test file as old/new outline
      * (Spec-Diff), in path order; null in analyses of older versions. caseMatrices: similar and parameterised tests of
@@ -512,6 +539,8 @@ public final class Model {
      * line; flowCoverage: per flow (same order as flows) which steps and edges the tests really execute (Mock-Grenzen);
      * both null in analyses of older versions. ruleChecks: the Erwartungs-Regeln that apply to changed code and whether a
      * test of the expected form exists (see RuleCheck), by segment and line; empty for a whole repository, null in
+     * analyses of older versions. setupImpacts: changed setup blocks, fixtures and test helpers with the tests they
+     * affect (Wirkung von Setup und Testdaten, see SetupImpact), by path and line; empty for a whole repository, null in
      * analyses of older versions.
      */
     @RegisterForReflection
@@ -522,7 +551,7 @@ public final class Model {
                            List<CodeCoverage> coverage, List<SpecFile> specs, List<CaseMatrix> caseMatrices,
                            List<ExistingTest> existingTests, RelatedTests relatedTests,
                            List<MockWarning> mockWarnings, List<FlowCoverage> flowCoverage,
-                           List<RuleCheck> ruleChecks) {
+                           List<RuleCheck> ruleChecks, List<SetupImpact> setupImpacts) {
     }
 
     /**

@@ -15,6 +15,7 @@ import {
   ReviewBundle,
   ReviewState,
   Segment,
+  SetupImpact,
   SpecEntry,
   TestInfo,
   errorMessage,
@@ -259,6 +260,16 @@ export class ReviewStore {
   /** Mock-Grenzen: tests that mock changed code, by test id (code block badge) and by mocked segment (flow marker). */
   readonly mockWarningsByTest = computed(() => groupWarnings(this.bundle()?.analysis.mockWarnings, 'test'));
   readonly mockWarningsBySegment = computed(() => groupWarnings(this.bundle()?.analysis.mockWarnings, 'segmentId'));
+  /** Wirkung von Setup und Testdaten: changed setup blocks, fixtures and helpers with the tests they affect. */
+  readonly setupImpacts = computed(() => this.bundle()?.analysis.setupImpacts ?? []);
+  /** The same by the changed segment (code block badge). */
+  readonly setupImpactsBySegment = computed(() => {
+    const map = new Map<string, SetupImpact[]>();
+    for (const i of this.setupImpacts()) {
+      map.set(i.segmentId, [...(map.get(i.segmentId) ?? []), i]);
+    }
+    return map;
+  });
   /** Mock-Grenzen of each flow (what the tests really execute), by flow id. */
   readonly flowCoverage = computed(() => new Map((this.bundle()?.analysis.flowCoverage ?? []).map((c) => [c.flowId, c])));
   /** Test name by id: changed tests by segment id, existing tests by "e1" …. */

@@ -108,6 +108,16 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    transaction-integration (changed @Transactional needs an integration test), listener-test (changed message
    listener needs a test that calls it). An unmet check is a missing test: worth a review comment. An existing test
    that only calls a changed endpoint over HTTP is in `existingTests` with empty `covers`.
+   `setupImpacts[]` (Wirkung von Setup und Testdaten; null in older analyses, empty for number 0) = changed setup
+   blocks, fixtures and test helpers with the tests they affect, also tests NOT in the diff: `segmentId`, `kind`
+   (setup = beforeEach & co. or a JUnit @BeforeEach/@AfterAll/... method, affects every test of its suite/class incl.
+   nested ones and subclasses | fixture = top-level constant, or field/suite variable with a value | helper =
+   function, method or class of test code that is no test), `name`, `line`, `affected[]` (`path`, `name`, `line`,
+   `segmentId` = null when the test has no changed lines, `status` added | changed | renamed | unchanged, `existing`
+   = in a loaded existing test file), `unchangedCount`. Found statically by name (directly, in the setup that runs
+   for the test, or through other helpers/constants/fields; other files need import evidence), rules section
+   `setupImpact.supportPaths` for test-support files. An unchanged affected test silently changed its meaning: check
+   that it still asserts what its name says.
    `specs[]` (Spec-Diff) = per changed test file (`path`, `previousPath`, file `status`) the test names as an
    outline, old against new version: `entries[]` with `name`, `suites` (enclosing suites, outermost first; JUnit:
    test class and @Nested classes), `kind` (suite | test), `status` (added | removed | changed | renamed |

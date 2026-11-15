@@ -717,5 +717,28 @@
       "label": "deaktiviert (neu)",
       "hint": "Ein neuer Test, der gar nicht läuft (xit, @Disabled, skip): er prüft nichts, solange er ausgeschaltet ist."
     }
+  },
+  "setupImpact": {
+    "$comment": "Wirkung von Setup und Testdaten (docs/05-analyse.md, 5k): changed setup blocks (beforeEach & co., JUnit @BeforeEach/@AfterAll/... methods), fixtures (top-level constants of test files, fields and suite-level variables with a value) and test helpers (functions, methods and classes of test files that are no tests) with the tests they affect, also unchanged ones. Test files are those of the path rule of category 'tests'. supportPaths: globs of further test-support files (builders, fixtures, fakes, mocks) whose functions, classes and constants count as helpers and fixtures. A rules file without this section, or without one of its keys, uses the built-in value for that key.",
+    "supportPaths": [
+      "**/testing/**",
+      "**/test-utils/**",
+      "**/test-helpers/**",
+      "**/testutils/**",
+      "**/testsupport/**",
+      "**/fixtures/**",
+      "**/__fixtures__/**",
+      "**/__mocks__/**",
+      "**/*.fixture.*",
+      "**/*.fixtures.*",
+      "**/*.mock.*",
+      "**/*.mocks.*",
+      "**/*.stub.*",
+      "**/*.fake.*",
+      "**/TestData*.*",
+      "**/*TestData.*",
+      "**/*Fixtures.*",
+      "**/*Mother.*"
+    ]
   }
 }
