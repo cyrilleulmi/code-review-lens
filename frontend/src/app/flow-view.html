@@ -6,6 +6,12 @@
     <p>{{ t('{n} Schritte · Aufrufreihenfolge vom Einstiegspunkt aus. Klick auf einen Knoten springt zum Code.', { n: flow().steps.length }) }}</p>
   </div>
   <span class="spacer"></span>
+  <button type="button" class="btn test-switch" [class.on]="store.testInfo()" role="switch" [attr.aria-checked]="store.testInfo()"
+          (click)="store.toggleTestInfo()"
+          [title]="store.testInfo() ? t('Testinfos ausblenden: Abdeckung, Test-Verknüpfungen und Hinweise im Code, Testfarben im Flow') : t('Testinfos einblenden: Abdeckung, Test-Verknüpfungen und Hinweise im Code, Testfarben im Flow')">
+    <app-icon name="test" [size]="14" /> {{ t('Tests im Flow') }}
+    <span class="knob" aria-hidden="true"><span></span></span>
+  </button>
   <span class="progress-text">{{ t('{ok}/{total} Zeilen ok', { ok: progress().ok, total: progress().total }) }}</span>
   <button type="button" class="btn" [class.success]="progress().total > 0 && progress().ok === progress().total" (click)="markFlow()">
     <app-icon name="check" [size]="14" /> {{ t('Ganzen Flow als ok markieren') }}

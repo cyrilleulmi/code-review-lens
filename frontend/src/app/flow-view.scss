@@ -456,3 +456,42 @@
   font-size: 10px;
   font-weight: 600;
 }
+
+/* ------------------------------------------------------------- switch for the test enrichments (head of the flow) */
+
+.test-switch {
+  gap: 8px;
+  font-weight: 600;
+
+  .knob {
+    position: relative;
+    width: 26px;
+    height: 14px;
+    border-radius: 7px;
+    background: var(--border-strong);
+    transition: background 0.15s;
+
+    span {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--fg);
+      transition: left 0.15s;
+    }
+  }
+
+  &.on {
+    border-color: var(--accent);
+
+    .knob {
+      background: var(--accent);
+
+      span {
+        left: 14px;
+      }
+    }
+  }
+}

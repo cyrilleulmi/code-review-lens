@@ -106,10 +106,10 @@ export class ReviewStore {
   readonly annotate = signal(readFlag('scr.annotate'));
   /**
    * Test enrichments in the code and flow views: coverage and test badges, "Testet / Getestet von" links, line chips
-   * of the test analysis, test colouring of flow steps and connections. On by default; the Tests category and the
-   * test overview stay as they are.
+   * of the test analysis, test colouring of flow steps and connections. Off by default (switched on in the toolbar or
+   * at the top of a flow); the Tests category and the test overview stay as they are.
    */
-  readonly testInfo = signal(!readFlag('scr.hideTestInfo'));
+  readonly testInfo = signal(readFlag('scr.testInfo'));
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
   readonly blames = signal<ReadonlyMap<string, Blame | 'loading' | null>>(new Map());
   /** commit from the URL, applied once the commits are loaded */
@@ -630,7 +630,7 @@ export class ReviewStore {
   toggleTestInfo(): void {
     const on = !this.testInfo();
     this.testInfo.set(on);
-    writeFlag('scr.hideTestInfo', !on);
+    writeFlag('scr.testInfo', on);
   }
 
   /** Fetches the blame of a file once (cached by the backend per head commit). */
