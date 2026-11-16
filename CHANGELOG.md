@@ -7,6 +7,7 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 ## [Unreleased]
 
 ### Neu
+- **Testinfos ausblendbar:** Ein neuer Knopf in der Toolbar blendet alle Test-Anreicherungen in Code und Flows aus und wieder ein: Abdeckungs- und Test-Abzeichen, die Verknüpfungen «Testet / Getestet von», die Hinweis-Chips auf den Zeilen sowie die Einfärbung von Schritten und Verbindungen im Flow-Diagramm samt Legende. Standard bleibt an; die Wahl gilt pro Browser. Die Kategorie Tests mit Testübersicht bleibt unverändert.
 - **Ausgeblendete Zeilen aufklappen:** Ein Klick auf «⋯ n unveränderte Zeilen» in einem Code-Block zeigt die ausgeblendeten Zeilen, ein Klick auf «n Zeilen einklappen» blendet sie wieder aus. Das gilt auch für den abgeschnittenen Rest sehr grosser Blöcke. Aufgeklappte Zeilen sind links fein markiert.
 
 ### Behoben

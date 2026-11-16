@@ -85,7 +85,8 @@ export class FlowView {
   protected readonly indent = INDENT;
 
   /** Mock-Grenzen: what the tests really execute, per step (segment id) and per edge ("from>to"). */
-  protected readonly runs = computed(() => flowRuns(this.store.flowCoverage().get(this.flow().id)));
+  /** What the tests run in this flow; nothing while the test enrichments are switched off. */
+  protected readonly runs = computed(() => flowRuns(this.store.testInfo() ? this.store.flowCoverage().get(this.flow().id) : undefined));
   protected readonly hasRuns = computed(() => this.runs().steps.size > 0);
   /** A REST edge of this flow is checked from both sides (HTTP-Tests): the legend explains the label. */
   protected readonly hasBothSides = computed(() => [...this.runs().edges.values()].some(bothSides));
@@ -273,7 +274,7 @@ export class FlowView {
 
   /** A changed test stubs this step's function (mock warning). */
   protected mockWarned(id: string): boolean {
-    return this.store.mockWarningsBySegment().has(id);
+    return this.store.testInfo() && this.store.mockWarningsBySegment().has(id);
   }
 
   protected calledBy(node: Node): string | null {

@@ -174,6 +174,7 @@ export class CodeBlock {
 
   /** For test cases: the changed code they reach (HTTP-Tests: a reach over a real request is tagged). */
   protected readonly covers = computed(() => {
+    if (!this.store.testInfo()) return [];
     const info = this.store.tests().get(this.segment().id);
     const segs = this.store.segments();
     return (info?.covers ?? [])
@@ -186,7 +187,7 @@ export class CodeBlock {
 
   /** Testable changed function: is it reached by a changed test (static)? null for anything else. */
   protected readonly coverage = computed(() => {
-    const c = this.store.coverage().get(this.segment().id);
+    const c = this.store.testInfo() ? this.store.coverage().get(this.segment().id) : undefined;
     if (!c) return null;
     const existing = c.existingTests?.length ?? 0;
     const label = c.status === 'none' ? t('ohne Test') : c.status === 'indirect' ? t('nur indirekt getestet')
@@ -212,7 +213,7 @@ export class CodeBlock {
    */
   protected readonly caseNotes = computed(() => {
     const result = new Map<number, { text: string; title: string }[]>();
-    const byLine = findingsByLine(this.store.coverage().get(this.segment().id));
+    const byLine = findingsByLine(this.store.testInfo() ? this.store.coverage().get(this.segment().id) : undefined);
     if (!byLine.size) {
       return result;
     }
@@ -232,7 +233,7 @@ export class CodeBlock {
    */
   protected readonly ruleNotes = computed(() => {
     const result = new Map<number, { text: string; title: string }[]>();
-    const byLine = unmetByLine(this.store.ruleChecks(), this.segment().id);
+    const byLine = unmetByLine(this.store.testInfo() ? this.store.ruleChecks() : [], this.segment().id);
     if (!byLine.size) {
       return result;
     }
@@ -252,7 +253,7 @@ export class CodeBlock {
    */
   protected readonly laterNotes = computed(() => {
     const result = new Map<number, { text: string; title: string; sha: string; warn: boolean }[]>();
-    const byLine = laterExpectationsByLine(this.store.commitFindings(), this.segment().id);
+    const byLine = laterExpectationsByLine(this.store.testInfo() ? this.store.commitFindings() : [], this.segment().id);
     if (!byLine.size) {
       return result;
     }
@@ -278,7 +279,7 @@ export class CodeBlock {
 
   /** Test case with Test-Smells: header badge («Smell: keine Assertion»); null when it has none. */
   protected readonly smellBadge = computed(() => {
-    const smells = this.store.tests().get(this.segment().id)?.smells ?? [];
+    const smells = (this.store.testInfo() && this.store.tests().get(this.segment().id)?.smells) || [];
     return smells.length ? { text: smellBadgeText(smells), title: smellBadgeTitle(smells) } : null;
   });
 
@@ -286,12 +287,12 @@ export class CodeBlock {
    * Changed setup block, fixture or test helper (Wirkung von Setup und Testdaten): header badge «wirkt auf 12 Tests
    * (10 unverändert)», a warning only when unchanged tests are affected; null without impact.
    */
-  protected readonly setupBadge = computed(() => impactBadge(this.store.setupImpactsBySegment().get(this.segment().id)));
+  protected readonly setupBadge = computed(() => this.store.testInfo() ? impactBadge(this.store.setupImpactsBySegment().get(this.segment().id)) : null);
 
   /** Test-Smells with a line: line index -> chips at that line. */
   protected readonly smellNotes = computed(() => {
     const result = new Map<number, { text: string; title: string }[]>();
-    const byLine = smellsByLine(this.store.tests().get(this.segment().id)?.smells);
+    const byLine = smellsByLine(this.store.testInfo() ? this.store.tests().get(this.segment().id)?.smells : undefined);
     if (!byLine.size) {
       return result;
     }
@@ -306,13 +307,13 @@ export class CodeBlock {
 
   /** Test case that mocks changed code (Mock-Grenzen): header badge with the stubbed members; null otherwise. */
   protected readonly mockWarning = computed(() => {
-    const warnings = this.store.mockWarningsByTest().get(this.segment().id);
+    const warnings = this.store.testInfo() ? this.store.mockWarningsByTest().get(this.segment().id) : undefined;
     return warnings?.length ? { title: mockBadgeTitle(warnings) } : null;
   });
 
   /** Test case whose expectations changed or that is switched off (Spec-Diff): header badge; null otherwise. */
   protected readonly expectation = computed(() => {
-    const e = this.store.expectationsBySegment().get(this.segment().id);
+    const e = this.store.testInfo() ? this.store.expectationsBySegment().get(this.segment().id) : undefined;
     if (!e) return null;
     const disabled = newlyDisabled(e) || !!e.disabled;
     const bends = bendsExpectations(e) || !!assertionDrop(e);
@@ -335,6 +336,7 @@ export class CodeBlock {
 
   /** Tests that reach this code. */
   protected readonly testedBy = computed(() => {
+    if (!this.store.testInfo()) return [];
     const segs = this.store.segments();
     return (this.segment().testedBy ?? []).filter((id) => segs.has(id)).map((id) => ({ id, name: segs.get(id)!.symbol ?? id }));
   });

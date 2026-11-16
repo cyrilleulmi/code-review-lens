@@ -21,6 +21,10 @@ export const EN: Record<string, string> = {
   'Ganzes Repository analysieren: alle Dateien des Default-Branches wie einen Pull Request reviewen':
     'Analyse the whole repository: review all files of the default branch like a pull request',
   'Annotieren mit Git Blame: Commit, Autor und Datum jeder Zeile': 'Annotate with Git Blame: commit, author and date of every line',
+  'Testinfos ausblenden: Abdeckung, Test-Verknüpfungen und Hinweise im Code, Testfarben im Flow':
+    'Hide test info: coverage, test links and hints in the code, test colours in the flow',
+  'Testinfos einblenden: Abdeckung, Test-Verknüpfungen und Hinweise im Code, Testfarben im Flow':
+    'Show test info: coverage, test links and hints in the code, test colours in the flow',
   'Vollständig markierte Blöcke einklappen': 'Collapse fully marked blocks',
   'Neu analysieren (Regeln aus rules.json)': 'Analyse again (rules from rules.json)',
   'Von {host} neu laden': 'Reload from {host}',

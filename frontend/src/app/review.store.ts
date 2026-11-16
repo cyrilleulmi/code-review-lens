@@ -104,6 +104,12 @@ export class ReviewStore {
   readonly reloadInfo = signal<ReloadInfo | null>(null);
   /** git blame annotations in the code blocks ("Annotate with Git Blame" in IntelliJ). */
   readonly annotate = signal(readFlag('scr.annotate'));
+  /**
+   * Test enrichments in the code and flow views: coverage and test badges, "Testet / Getestet von" links, line chips
+   * of the test analysis, test colouring of flow steps and connections. On by default; the Tests category and the
+   * test overview stay as they are.
+   */
+  readonly testInfo = signal(!readFlag('scr.hideTestInfo'));
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
   readonly blames = signal<ReadonlyMap<string, Blame | 'loading' | null>>(new Map());
   /** commit from the URL, applied once the commits are loaded */
@@ -619,6 +625,12 @@ export class ReviewStore {
     const on = !this.annotate();
     this.annotate.set(on);
     writeFlag('scr.annotate', on);
+  }
+
+  toggleTestInfo(): void {
+    const on = !this.testInfo();
+    this.testInfo.set(on);
+    writeFlag('scr.hideTestInfo', !on);
   }
 
   /** Fetches the blame of a file once (cached by the backend per head commit). */
