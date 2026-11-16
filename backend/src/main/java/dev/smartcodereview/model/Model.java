@@ -160,10 +160,16 @@ public final class Model {
      * own=false means the line is changed but belongs to another segment (shown dimmed).
      * inDiff=true means GitHub accepts an inline comment on that line.
      * refs: on call sites, the segments that are called from here.
+     * hidden: on gaps, the lines the gap stands for (the UI can expand them; highlighting reads across them).
      */
     @RegisterForReflection
     public record DisplayLine(String type, Integer oldLine, Integer newLine, String key, String text,
-                              boolean own, boolean inDiff, Integer gapSize, List<LineRef> refs) {
+                              boolean own, boolean inDiff, Integer gapSize, List<LineRef> refs, List<DisplayLine> hidden) {
+
+        public DisplayLine(String type, Integer oldLine, Integer newLine, String key, String text,
+                           boolean own, boolean inDiff, Integer gapSize, List<LineRef> refs) {
+            this(type, oldLine, newLine, key, text, own, inDiff, gapSize, refs, null);
+        }
     }
 
     @RegisterForReflection

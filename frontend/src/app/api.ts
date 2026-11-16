@@ -179,6 +179,8 @@ export interface DisplayLine {
   inDiff: boolean;
   gapSize: number | null;
   refs: LineRef[] | null;
+  /** on gaps: the lines the gap stands for (expandable; read by the highlighting) */
+  hidden?: DisplayLine[] | null;
 }
 
 export interface Segment {

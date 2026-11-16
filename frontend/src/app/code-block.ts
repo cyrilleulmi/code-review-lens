@@ -6,7 +6,7 @@ import { findingDetail, findingsByLine, lineChipText } from './case-checks';
 import { laterExpectationChip, laterExpectationText, laterExpectationsByLine } from './commit-findings';
 import { ruleChipText, ruleDetail, unmetByLine } from './rule-checks';
 import { assertionDrop, bendsExpectations, describeChange, newlyDisabled } from './expectations';
-import { highlightLines } from './highlight';
+import { flattenLines, highlightLines } from './highlight';
 import { mockBadgeTitle } from './mock-boundaries';
 import { HTTP_TAG, httpTitle } from './http-tests';
 import { Icon, SymbolBadge } from './icon';
@@ -98,7 +98,15 @@ export class CodeBlock {
   protected readonly sending = signal(false);
   private lastClicked: number | null = null;
 
-  protected readonly html = computed(() => highlightLines(this.segment().lines, this.segment().language));
+  /**
+   * Highlighted over all lines incl. the hidden lines of gaps (a comment may close there), then reduced to the
+   * lines shown.
+   */
+  protected readonly html = computed(() => {
+    const flat = flattenLines(this.segment().lines);
+    const html = highlightLines(flat.map((f) => f.line), this.segment().language);
+    return html.filter((_, i) => flat[i].gap == null);
+  });
 
   protected readonly areaColor = areaColor;
   /** Layer of the block: frontend, api, domain, ... (null when unknown) */

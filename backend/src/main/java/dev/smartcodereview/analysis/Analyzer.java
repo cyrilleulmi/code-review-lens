@@ -114,7 +114,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 27;
+    public static final int VERSION = 28;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -1905,9 +1905,10 @@ public final class Analyzer {
             lines = render(w, Math.max(1, min - 3), max + 3, own);
         }
         if (lines.size() > MAX_DISPLAY_LINES) {
-            int hidden = lines.size() - MAX_DISPLAY_LINES;
+            List<DisplayLine> rest = List.copyOf(lines.subList(MAX_DISPLAY_LINES, lines.size()));
+            int hidden = rest.size();
             lines = new ArrayList<>(lines.subList(0, MAX_DISPLAY_LINES));
-            lines.add(new DisplayLine("gap", null, null, null, hidden + " weitere Zeilen (zu gross für die Anzeige)", false, false, hidden, null));
+            lines.add(new DisplayLine("gap", null, null, null, hidden + " weitere Zeilen (zu gross für die Anzeige)", false, false, hidden, null, rest));
         }
         Symbol s = w.symbol;
         return new Segment(w.id, w.file.path(), w.file.language(), w.kind,
@@ -1949,14 +1950,17 @@ public final class Analyzer {
             while (j < es.size() && !keep[j]) {
                 j++;
             }
+            List<DisplayLine> skipped = new ArrayList<>();
+            for (int k = i; k < j; k++) {
+                FileView.Entry e = es.get(k);
+                skipped.add(new DisplayLine(e.type(), e.oldLine(), e.newLine(), e.key(), e.text(),
+                        e.changed() && own.contains(e.key()), e.inDiff(), null, null));
+            }
             if (j - i < 3) {
-                for (int k = i; k < j; k++) {
-                    FileView.Entry e = es.get(k);
-                    out.add(new DisplayLine(e.type(), e.oldLine(), e.newLine(), e.key(), e.text(),
-                            e.changed() && own.contains(e.key()), e.inDiff(), null, null));
-                }
+                out.addAll(skipped);
             } else {
-                out.add(new DisplayLine("gap", null, null, null, null, false, false, j - i, null));
+                // the skipped lines travel along: the UI expands them and highlights across them (comments)
+                out.add(new DisplayLine("gap", null, null, null, null, false, false, j - i, null, skipped));
             }
             i = j;
         }

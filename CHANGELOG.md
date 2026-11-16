@@ -6,6 +6,9 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+### Behoben
+- **Syntaxfarben nach ausgeblendeten Zeilen:** Begann vor einer Lücke «⋯ n unveränderte Zeilen» ein mehrzeiliger Kommentar, der erst in den ausgeblendeten Zeilen endet, erschien der ganze restliche Block als Kommentar. Die Lücken bringen ihre Zeilen jetzt mit (`analysis.json` → `lines[].hidden`), das Highlighting liest über sie hinweg; eine Lücke ohne Zeilen beginnt einen neuen Text (`Analyzer.VERSION` 28).
+
 ## [0.6.0] – 2026-11-15
 
 ### Neu
