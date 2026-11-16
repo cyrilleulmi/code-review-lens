@@ -98,15 +98,39 @@ export class CodeBlock {
   protected readonly sending = signal(false);
   private lastClicked: number | null = null;
 
-  /**
-   * Highlighted over all lines incl. the hidden lines of gaps (a comment may close there), then reduced to the
-   * lines shown.
-   */
-  protected readonly html = computed(() => {
-    const flat = flattenLines(this.segment().lines);
-    const html = highlightLines(flat.map((f) => f.line), this.segment().language);
-    return html.filter((_, i) => flat[i].gap == null);
+  /** Gaps (by index in flat()) the user expanded. */
+  protected readonly expanded = signal<ReadonlySet<number>>(new Set());
+  /** All lines incl. the hidden lines of gaps, in file order. */
+  protected readonly flat = computed(() => flattenLines(this.segment().lines));
+  /** Highlighted over all lines (hidden ones too), indexed like flat(). */
+  protected readonly html = computed(() => highlightLines(this.flat().map((f) => f.line), this.segment().language));
+  /** The rows shown: f = index in flat(), unfolded = a line of an expanded gap. */
+  protected readonly rows = computed(() => {
+    const flat = this.flat();
+    const expanded = this.expanded();
+    const shown: boolean[] = [];
+    const rows: { line: DisplayLine; f: number; unfolded: boolean; open: boolean }[] = [];
+    flat.forEach((x, f) => {
+      shown[f] = x.gap == null || (shown[x.gap] && expanded.has(x.gap));
+      if (shown[f]) {
+        rows.push({ line: x.line, f, unfolded: x.gap != null, open: expanded.has(f) });
+      }
+    });
+    return rows;
   });
+  /** The display lines shown (the index of a row everywhere below). */
+  protected readonly lines = computed(() => this.rows().map((r) => r.line));
+
+  protected toggleGap(f: number, event: Event): void {
+    event.stopPropagation();
+    const next = new Set(this.expanded());
+    if (next.has(f)) {
+      next.delete(f);
+    } else {
+      next.add(f);
+    }
+    this.expanded.set(next);
+  }
 
   protected readonly areaColor = areaColor;
   /** Layer of the block: frontend, api, domain, ... (null when unknown) */
@@ -193,7 +217,7 @@ export class CodeBlock {
       return result;
     }
     const testName = this.store.testName();
-    this.segment().lines.forEach((line, i) => {
+    this.lines().forEach((line, i) => {
       const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
       if (found) {
         result.set(i, found.map((f) => ({ text: lineChipText(f), title: findingDetail(f, testName) + ' – ' + t('statisch ermittelt, Klick: Abdeckung zeigen') })));
@@ -213,7 +237,7 @@ export class CodeBlock {
       return result;
     }
     const testName = this.store.testName();
-    this.segment().lines.forEach((line, i) => {
+    this.lines().forEach((line, i) => {
       const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
       if (found) {
         result.set(i, found.map((c) => ({ text: ruleChipText(c), title: ruleDetail(c, testName) + ' – ' + t('statisch ermittelt, Klick: Tests zeigen') })));
@@ -232,7 +256,7 @@ export class CodeBlock {
     if (!byLine.size) {
       return result;
     }
-    this.segment().lines.forEach((line, i) => {
+    this.lines().forEach((line, i) => {
       const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
       if (found) {
         result.set(i, found.map((f) => ({
@@ -271,7 +295,7 @@ export class CodeBlock {
     if (!byLine.size) {
       return result;
     }
-    this.segment().lines.forEach((line, i) => {
+    this.lines().forEach((line, i) => {
       const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
       if (found) {
         result.set(i, found.map((s) => ({ text: `Smell: ${smellText(s)}`, title: smellDetail(s) + ' – ' + t('Klick: Testübersicht zeigen') })));
@@ -346,7 +370,8 @@ export class CodeBlock {
     const known = new Map<string, Commit>(blame?.commits.map((c) => [c.sha, c]) ?? []);
     const pr = this.store.commitBySha();
     const no = this.store.commitNo();
-    const shas = seg.lines.map((line) => {
+    const lines = this.lines();
+    const shas = lines.map((line) => {
       if (line.type === 'gap') return null;
       const own = line.key ? this.store.commitOfLine(seg.path, line.key) : undefined;
       if (line.type !== 'ctx' || own) return own ?? null;
@@ -359,7 +384,7 @@ export class CodeBlock {
     const oneDay = times.length > 0 && day(min) === day(max);
     let previous: string | null = null;
     return shas.map((sha, i) => {
-      const line = seg.lines[i];
+      const line = lines[i];
       if (!sha) {
         previous = null;
         return null;
@@ -452,7 +477,7 @@ export class CodeBlock {
     const seg = this.segment();
     const places = this.store.places();
     let previous = '';
-    seg.lines.forEach((line, i) => {
+    this.lines().forEach((line, i) => {
       if (line.type === 'gap') {
         previous = '';
         return;
@@ -512,7 +537,7 @@ export class CodeBlock {
   }
 
   protected toggleLine(index: number, event: MouseEvent): void {
-    const lines = this.segment().lines;
+    const lines = this.lines();
     const line = lines[index];
     if (!line.own || !line.key || this.otherCommit(line)) {
       return;

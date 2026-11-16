@@ -6,6 +6,9 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+### Neu
+- **Ausgeblendete Zeilen aufklappen:** Ein Klick auf «⋯ n unveränderte Zeilen» in einem Code-Block zeigt die ausgeblendeten Zeilen, ein Klick auf «n Zeilen einklappen» blendet sie wieder aus. Das gilt auch für den abgeschnittenen Rest sehr grosser Blöcke. Aufgeklappte Zeilen sind links fein markiert.
+
 ### Behoben
 - **Syntaxfarben nach ausgeblendeten Zeilen:** Begann vor einer Lücke «⋯ n unveränderte Zeilen» ein mehrzeiliger Kommentar, der erst in den ausgeblendeten Zeilen endet, erschien der ganze restliche Block als Kommentar. Die Lücken bringen ihre Zeilen jetzt mit (`analysis.json` → `lines[].hidden`), das Highlighting liest über sie hinweg; eine Lücke ohne Zeilen beginnt einen neuen Text (`Analyzer.VERSION` 28).
 

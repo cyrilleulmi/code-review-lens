@@ -82,7 +82,7 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 |---|---|---|---|
 | FR-UI-01 | Das System muss eine Übersicht mit Fortschritt und vorgeschlagener Reihenfolge der Kategorien zeigen. | Karten pro Kategorie mit Beschreibung, Anzahl Gruppen/Blöcke, Fortschritt; Beschreibung, allgemeine Kommentare, letzte Markierungen. | M |
 | FR-UI-02 | Das System muss ein Review-Fenster mit den Tabs Kategorien, Flows, Dateien und Commits bieten. | Baum mit Fortschritt pro Knoten, ✓-Aktion beim Überfahren. | M |
-| FR-UI-03 | Das System muss Symbol-Segmente als ganze Funktion mit eingewobenen gelöschten Zeilen zeigen. | Unveränderte Strecken > 2 Zeilen ausserhalb ±2 Zeilen werden zu «⋯ n unveränderte Zeilen»; Zeilen anderer Segmente gedimmt. | M |
+| FR-UI-03 | Das System muss Symbol-Segmente als ganze Funktion mit eingewobenen gelöschten Zeilen zeigen. | Unveränderte Strecken > 2 Zeilen ausserhalb ±2 Zeilen werden zu «⋯ n unveränderte Zeilen»; Zeilen anderer Segmente gedimmt. Jede Lücke lässt sich per Klick aufklappen und wieder einklappen (auch «n weitere Zeilen (zu gross für die Anzeige)»), die Zeilen kommen mit der Analyse (`lines[].hidden`); aufgeklappte Zeilen sind links markiert, Zustand nicht gespeichert. Das Syntax-Highlighting liest über ausgeblendete Zeilen hinweg (ein Kommentar, der in einer Lücke endet, färbt den Rest nicht ein). | T: highlight.spec.ts (Highlighting über Lücken); Rest M |
 | FR-UI-04 | Das System muss Datenflüsse als Diagramm und als Code in Aufrufreihenfolge zeigen, mit Verbindungen zwischen Aufrufstelle und Ziel. | Eigene Farbe pro Verbindung (Diagramm, Linie, Chip); REST gestrichelt; Einrückung nach Tiefe. | M |
 | FR-UI-05 | Das System muss Fokus-Werkzeuge bieten. | Blöcke ein-/ausklappen, alle ein/aus, «Einzeln durchgehen» mit «Ok & weiter»; im Flow Schritte ausblenden, Erledigte ausblenden, «nur dieser Zweig». Zustand nicht gespeichert (B13). | M |
 | FR-UI-06 | Das System muss Aufrufstellen anklickbar machen und «aufgerufen von» zeigen. | Chip `→ ② name` springt zum Block. | M |
@@ -235,6 +235,7 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | `commits/AttributionTest` | 7 | FR-COM-02, -03 |
 | `commits/CommitChecksTest` | 9 | FR-COM-08 |
 | `frontend/src/app/commit-findings.spec.ts` | 3 | FR-COM-08 (Chips pro Commit, Zählung für die Übersicht, Markierung und Zeilen-Chips) |
+| `frontend/src/app/highlight.spec.ts` | 3 | FR-UI-03 (Highlighting über ausgeblendete Zeilen, Lücke ohne Zeilen, verschachtelte Lücken) |
 | `frontend/src/app/i18n.spec.ts` | 8 | FR-UI-16, NFR-15 (Übersetzungen vollständig, Platzhalter, Texte der mitgelieferten Regeln, zusammengesetzte Backend-Texte, Umschalten) |
 | `gitlab/ProviderUrlTest` | 3 | FR-ZUG-03, FR-REP-01 |
 | `repo/RepositorySnapshotTest` | 1 | FR-REP-02, -03 |
@@ -244,5 +245,5 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 * Alle Provider-Abbildungen (FR-ZUG-01, -02, -04, -06, FR-SNP-01, FR-KOM-01 bis -04, FR-COM-01, FR-BLA-05, FR-REP-04): kein Test gegen aufgezeichnete Antworten von GitHub/GitLab. GitHub-Blame (GraphQL) und alle GitLab-Teile von Commits, Blame und Repository-Modus sind auch manuell noch nicht live geprüft.
 * `ReviewService` (Caching, Invalidierung, `mark` mit Schreiben/Lesen von `review.json`, Fortschritt, Laden der bestehenden Tests für FR-ANA-20, Neuberechnen der Commit-Befunde für FR-COM-08): kein Test, nur über `LineAcceptance` indirekt.
 * REST-API (FR-AGT-01): kein `@QuarkusTest`.
-* UI (FR-UI-*, FR-COM-04 bis -06, FR-BLA-01 bis -04): ausser `acceptance.spec.ts`, `expectations.spec.ts`, `test-profile.spec.ts`, `case-matrices.spec.ts`, `existing-tests.spec.ts`, `mock-boundaries.spec.ts`, `case-checks.spec.ts`, `rule-checks.spec.ts`, `test-smells.spec.ts`, `setup-impact.spec.ts`, `commit-findings.spec.ts`, `http-tests.spec.ts` (reine Hilfsfunktionen) und `i18n.spec.ts` (Übersetzungen) keine Frontend-Tests.
+* UI (FR-UI-*, FR-COM-04 bis -06, FR-BLA-01 bis -04): ausser `acceptance.spec.ts`, `expectations.spec.ts`, `test-profile.spec.ts`, `case-matrices.spec.ts`, `existing-tests.spec.ts`, `mock-boundaries.spec.ts`, `case-checks.spec.ts`, `rule-checks.spec.ts`, `test-smells.spec.ts`, `setup-impact.spec.ts`, `commit-findings.spec.ts`, `http-tests.spec.ts`, `highlight.spec.ts` (reine Hilfsfunktionen) und `i18n.spec.ts` (Übersetzungen) keine Frontend-Tests.
 * NFR-10 (Pfad-Sicherheit), FR-BET-06 (Health).
