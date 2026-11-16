@@ -7,6 +7,7 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 ## [Unreleased]
 
 ### Neu
+- **Repositories und PRs/MRs finden, die einem nicht zugewiesen sind:** Das Suchfeld der PR-Liste sucht ab 2 Zeichen auch beim Code-Host – unter «Repositories» die eigenen und weitere passende Repositories, unter «Weitere Pull Requests» offene PRs/MRs per Volltext (auf GitHub mit Qualifiern wie `org:` oder `repo:`). Ein Klick auf ein Repository zeigt seine offenen PRs/MRs und «Ganzes Repository analysieren»; bei leerem Suchfeld stehen die zuletzt geöffneten Repositories da. Neuer Filter «Beteiligt» für PRs/MRs, denen man zugewiesen ist oder an denen man sich beteiligt hat (GitHub `involves:@me`/`assignee:@me`, GitLab «assigned to me»). API: `GET /api/repos?q=`, `GET /api/repos/{provider}/{owner}/{repo}/prs`, `GET /api/search?q=`.
 - **Testinfos ausblendbar:** Ein neuer Knopf in der Toolbar blendet alle Test-Anreicherungen in Code und Flows aus und wieder ein: Abdeckungs- und Test-Abzeichen, die Verknüpfungen «Testet / Getestet von», die Hinweis-Chips auf den Zeilen sowie die Einfärbung von Schritten und Verbindungen im Flow-Diagramm samt Legende. Standard bleibt an; die Wahl gilt pro Browser. Die Kategorie Tests mit Testübersicht bleibt unverändert.
 - **Ausgeblendete Zeilen aufklappen:** Ein Klick auf «⋯ n unveränderte Zeilen» in einem Code-Block zeigt die ausgeblendeten Zeilen, ein Klick auf «n Zeilen einklappen» blendet sie wieder aus. Das gilt auch für den abgeschnittenen Rest sehr grosser Blöcke. Aufgeklappte Zeilen sind links fein markiert.
 

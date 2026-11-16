@@ -32,7 +32,8 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | FR-ZUG-04 | Das System muss öffentliche GitLab-MRs ohne Token lesend öffnen können. | Öffnen per URL funktioniert; Liste und Kommentieren melden fehlenden Token (A9c). | M |
 | FR-ZUG-05 | Das System muss Tokens aus Konfiguration, Umgebung oder CLI beziehen und nie speichern. | Reihenfolge Config → Env (`GITHUB_TOKEN`/`GH_TOKEN`, `GITLAB_TOKEN`/`GL_TOKEN`) → `gh auth token` / `glab config get token`; kein Token in Dateien oder Logs. | M (Code: `provider/Tokens`) |
 | FR-ZUG-06 | Das System muss pro Provider anzeigen, welches Konto verbunden ist oder warum keines. | `GET /api/me` liefert pro Provider User oder Grund, dazu Datenverzeichnis und Version. | M |
-| FR-ZUG-07 | Das System muss die Liste nach «Alle / Von mir / Review» filtern und durchsuchen lassen. | Filter-Chips mit Anzahl; Suchfeld filtert, eine URL + Enter öffnet. | M |
+| FR-ZUG-07 | Das System muss die Liste nach «Alle / Von mir / Review / Beteiligt» filtern und durchsuchen lassen. | Filter-Chips mit Anzahl; Suchfeld filtert, eine URL + Enter öffnet. «Beteiligt» (`involved`) = offene PRs/MRs, an denen ich sonst beteiligt bin: GitHub `involves:@me` und `assignee:@me`, GitLab `assigned_to_me`; nur wenn der PR keine andere Rolle hat. | M |
+| FR-ZUG-08 | Das System muss Repositories und PRs/MRs finden lassen, die mir nicht zugewiesen sind. | Ab 2 Zeichen (nicht URL) sucht das Suchfeld nach 350 ms zusätzlich beim Code-Host: Abschnitt «Repositories» (eigene zuerst – GitHub `/user/repos`, GitLab `membership=true` –, dann weitere sichtbare nach Name; max. 50) und «Weitere Pull Requests» (offene PRs/MRs per Volltext, GitHub-Qualifier wie `org:`/`repo:` erlaubt; ohne die schon gelisteten). Ein Repository zeigt seine offenen PRs/MRs (Rolle «von mir»/«Review», falls zutreffend; GitHub-Team-Anfragen nicht, A9) und «Ganzes Repository analysieren». Leeres Suchfeld: «Zuletzt geöffnete Repositories» (max. 8, `localStorage` `scr.recentRepos`). API `GET /api/repos?q=`, `GET /api/repos/{provider}/{owner}/{repo}/prs`, `GET /api/search?q=`. | T: RepoListsTest (Filter, Zusammenführen); Rest M |
 
 ## 3. Snapshot (FR-SNP)
 
@@ -238,6 +239,7 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | `frontend/src/app/commit-findings.spec.ts` | 3 | FR-COM-08 (Chips pro Commit, Zählung für die Übersicht, Markierung und Zeilen-Chips) |
 | `frontend/src/app/highlight.spec.ts` | 3 | FR-UI-03 (Highlighting über ausgeblendete Zeilen, Lücke ohne Zeilen, verschachtelte Lücken) |
 | `frontend/src/app/i18n.spec.ts` | 8 | FR-UI-16, NFR-15 (Übersetzungen vollständig, Platzhalter, Texte der mitgelieferten Regeln, zusammengesetzte Backend-Texte, Umschalten) |
+| `provider/RepoListsTest` | 2 | FR-ZUG-08 (Filter, Reihenfolge und Doppelte beim Zusammenführen) |
 | `gitlab/ProviderUrlTest` | 3 | FR-ZUG-03, FR-REP-01 |
 | `repo/RepositorySnapshotTest` | 1 | FR-REP-02, -03 |
 

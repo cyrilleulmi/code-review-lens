@@ -53,7 +53,16 @@ export function prLabel(pr: { provider: string; owner: string; repo: string; num
   return pr.number === 0 ? `${repo} (Repository)` : `${repo}${providerInfo(pr.provider).sigil}${pr.number}`;
 }
 
-export type PrRole = 'authored' | 'review-requested';
+export type PrRole = 'authored' | 'review-requested' | 'involved';
+
+export interface RepositorySummary {
+  provider: string;
+  owner: string;
+  repo: string;
+  description: string;
+  url: string;
+  updatedAt: string;
+}
 
 export interface PullRequestSummary {
   provider: string;
@@ -821,6 +830,18 @@ export class Api {
 
   prs(): Observable<PullRequestSummary[]> {
     return this.http.get<PullRequestSummary[]>('/api/prs');
+  }
+
+  repos(q: string): Observable<RepositorySummary[]> {
+    return this.http.get<RepositorySummary[]>('/api/repos', { params: { q } });
+  }
+
+  repoPrs(repo: { provider: string; owner: string; repo: string }): Observable<PullRequestSummary[]> {
+    return this.http.get<PullRequestSummary[]>(`/api/repos/${repo.provider}/${repo.owner}/${repo.repo}/prs`);
+  }
+
+  searchPrs(q: string): Observable<PullRequestSummary[]> {
+    return this.http.get<PullRequestSummary[]>('/api/search', { params: { q } });
   }
 
   resolve(url: string): Observable<PrKey> {

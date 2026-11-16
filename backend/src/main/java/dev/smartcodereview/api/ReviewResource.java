@@ -82,6 +82,25 @@ public class ReviewResource {
         return all.stream().filter(p -> p.roles().contains(filter)).toList();
     }
 
+    @GET
+    @Path("/repos")
+    public List<dev.smartcodereview.model.Model.RepositorySummary> repos(@QueryParam("q") String q) {
+        return service.repositories(q == null ? "" : q);
+    }
+
+    @GET
+    @Path("/repos/{provider}/{owner}/{repo}/prs")
+    public List<PullRequestSummary> repoPrs(@PathParam("provider") String provider, @PathParam("owner") String owner,
+                                            @PathParam("repo") String repo) {
+        return service.repositoryPullRequests(provider, owner, repo);
+    }
+
+    @GET
+    @Path("/search")
+    public List<PullRequestSummary> search(@QueryParam("q") String q) {
+        return q == null || q.isBlank() ? List.of() : service.searchPullRequests(q);
+    }
+
     /** PRs with local data (snapshot) - works offline. */
     @GET
     @Path("/local")

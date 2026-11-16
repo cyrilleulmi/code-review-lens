@@ -41,6 +41,11 @@ public final class Model {
     }
 
     @RegisterForReflection
+    public record RepositorySummary(String provider, String owner, String repo, String description, String url,
+                                    String updatedAt) {
+    }
+
+    @RegisterForReflection
     public record Progress(int ok, int total) {
     }
 

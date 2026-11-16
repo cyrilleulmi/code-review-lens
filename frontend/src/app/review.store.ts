@@ -39,7 +39,7 @@ export type Selection =
   /** coverage of the changed code on its own page (when there is no switched-on test category to show it in) */
   | { kind: 'coverage' };
 
-export type PrFilter = 'all' | 'authored' | 'review-requested';
+export type PrFilter = 'all' | 'authored' | 'review-requested' | 'involved';
 
 export interface Progress {
   ok: number;

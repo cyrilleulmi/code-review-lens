@@ -122,6 +122,54 @@ public class ReviewService {
         return result;
     }
 
+    /** Repositories of all providers with credentials (per provider: own ones first, most recently active first). */
+    public List<Model.RepositorySummary> repositories(String query) {
+        List<Model.RepositorySummary> result = new ArrayList<>();
+        for (ReviewProvider p : providerBeans) {
+            if (!p.hasCredentials()) {
+                continue;
+            }
+            try {
+                result.addAll(p.repositories(query));
+            } catch (ProviderException e) {
+                Log.warnf("%s: %s", p.label(), e.getMessage());
+            }
+        }
+        return result;
+    }
+
+    /** Open PRs of one repository (errors propagate: the repository was chosen explicitly). */
+    public List<PullRequestSummary> repositoryPullRequests(String provider, String owner, String repo) {
+        return withProgress(provider(provider).repositoryPullRequests(owner, repo));
+    }
+
+    /** Free-text search of open PRs over all providers with credentials. */
+    public List<PullRequestSummary> searchPullRequests(String query) {
+        List<PullRequestSummary> result = new ArrayList<>();
+        for (ReviewProvider p : providerBeans) {
+            if (!p.hasCredentials()) {
+                continue;
+            }
+            try {
+                result.addAll(withProgress(p.searchPullRequests(query)));
+            } catch (ProviderException e) {
+                Log.warnf("%s: %s", p.label(), e.getMessage());
+            }
+        }
+        result.sort(Comparator.comparing(PullRequestSummary::updatedAt).reversed());
+        return result;
+    }
+
+    private List<PullRequestSummary> withProgress(List<PullRequestSummary> list) {
+        List<PullRequestSummary> result = new ArrayList<>();
+        for (PullRequestSummary s : list) {
+            PrRef ref = new PrRef(s.provider(), s.owner(), s.repo(), s.number());
+            result.add(new PullRequestSummary(s.provider(), s.owner(), s.repo(), s.number(), s.title(), s.author(),
+                    s.url(), s.draft(), s.createdAt(), s.updatedAt(), s.roles(), progress(ref).orElse(null)));
+        }
+        return result;
+    }
+
     /** One entry per provider: the signed-in user, or why there is none. */
     public List<Account> accounts() {
         List<Account> result = new ArrayList<>();
