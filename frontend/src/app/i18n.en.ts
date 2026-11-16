@@ -22,6 +22,14 @@ export const EN: Record<string, string> = {
     'Analyse the whole repository: review all files of the default branch like a pull request',
   'Annotieren mit Git Blame: Commit, Autor und Datum jeder Zeile': 'Annotate with Git Blame: commit, author and date of every line',
   'Tests im Flow': 'Tests in the flow',
+  'Bereiche': 'Areas',
+  'Bereiche:': 'Areas:',
+  'ohne Schicht': 'no layer',
+  'Bereich wieder in die Übersicht aufnehmen': 'Bring the area back into the overview',
+  'Bereich aus der Übersicht entfernen (Diagramm und Code)': 'Remove the area from the overview (diagram and code)',
+  'Alle Bereiche zeigen': 'Show all areas',
+  'Entfernte Bereiche sind im Diagramm gestrichelt überbrückt': 'Removed areas are bridged with dashed lines in the diagram',
+  'Über entfernte Bereiche: {areas}': 'Through removed areas: {areas}',
   'Testinfos ausblenden: Abdeckung, Test-Verknüpfungen und Hinweise im Code, Testfarben im Flow':
     'Hide test info: coverage, test links and hints in the code, test colours in the flow',
   'Testinfos einblenden: Abdeckung, Test-Verknüpfungen und Hinweise im Code, Testfarben im Flow':

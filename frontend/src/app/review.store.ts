@@ -89,6 +89,11 @@ export class ReviewStore {
   readonly log = signal<LogEntry[]>([]);
   readonly selection = signal<Selection>({ kind: 'overview' });
   readonly collapseDone = signal(true);
+  /**
+   * Areas (layers: frontend, api, logic, ...; '' = none) taken out of the flow views: their steps leave diagram and
+   * code, the flow is bridged around them. Applies to every flow, not stored (like the other focus tools).
+   */
+  readonly hiddenAreas = signal<ReadonlySet<string>>(new Set());
   /** "Collapse all" / "expand all" of the current view; code blocks follow it. Reset on navigation. */
   readonly collapseCommand = signal<{ collapsed: boolean; seq: number } | null>(null);
   /** Segment to scroll to after the next render (e.g. clicked in a flow diagram). */

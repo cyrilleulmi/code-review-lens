@@ -497,3 +497,83 @@
     }
   }
 }
+
+/* ------------------------------------------------------------- areas of the flow: take one out of the overview */
+
+.area-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  font-size: 12px;
+
+  .lbl,
+  .hint {
+    color: var(--fg-dim);
+    font-size: 11.5px;
+  }
+}
+
+.area-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px 0 7px;
+  border: 1px solid color-mix(in srgb, var(--a) 55%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--a) 14%, transparent);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--a);
+  }
+
+  .cnt {
+    color: var(--fg-muted);
+    font-size: 11px;
+  }
+
+  app-icon {
+    color: var(--fg-dim);
+  }
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--a) 26%, transparent);
+
+    app-icon {
+      color: var(--fg);
+    }
+  }
+
+  &:disabled {
+    cursor: default;
+
+    app-icon {
+      visibility: hidden;
+    }
+  }
+
+  &.removed {
+    border-style: dashed;
+    border-color: var(--border-strong);
+    background: transparent;
+    color: var(--fg-dim);
+    text-decoration: line-through;
+
+    .dot {
+      opacity: 0.4;
+    }
+  }
+}
+
+.edge.bridged {
+  stroke-dasharray: 6 4;
+  opacity: 0.75;
+}
