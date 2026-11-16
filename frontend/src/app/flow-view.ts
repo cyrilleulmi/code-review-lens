@@ -8,6 +8,7 @@ import {
   input,
   linkedSignal,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from './api';
@@ -193,6 +194,13 @@ export class FlowView {
       observer.observe(host);
       this.layoutConnectors();
       onCleanup(() => observer.disconnect());
+    });
+    // Another flow in the same view: the cards start at the left/top (only the editor scrolls vertically).
+    afterRenderEffect(() => {
+      this.flow().id;
+      const host = untracked(() => this.cards().nativeElement);
+      host.scrollTop = 0;
+      host.scrollLeft = 0;
     });
     afterRenderEffect(() => {
       const target = this.store.focusSegment();
@@ -431,10 +439,27 @@ export class FlowView {
       return { d, from: item.edge.from, to: item.edge.to, c: item.c, http: item.edge.kind === 'http' };
     });
     this.gutter.set(Math.max(MIN_GUTTER, 8 + lanes.length * LANE + 14));
-    this.railHeight.set(host.scrollHeight);
-    this.railWidth.set(host.scrollWidth);
+    // Size of the blocks, not host.scrollHeight/-Width: those include the rails themselves, so the rails could never
+    // shrink again (a shorter flow, collapsed blocks) and made the cards scroll inside, hiding the blocks.
+    const content = contentSize(host);
+    this.railHeight.set(content.height);
+    this.railWidth.set(content.width);
     this.connectors.set(result);
   }
+}
+
+/** Extent of the cards' children in layout px, leaving out the absolutely positioned rails. */
+export function contentSize(host: HTMLElement): { width: number; height: number } {
+  let width = 0;
+  let height = 0;
+  for (const child of Array.from(host.children)) {
+    if (!(child instanceof HTMLElement)) {
+      continue; // the rails are an SVG element
+    }
+    width = Math.max(width, child.offsetLeft + child.offsetWidth);
+    height = Math.max(height, child.offsetTop + child.offsetHeight);
+  }
+  return { width, height };
 }
 
 function shortName(name: string): string {

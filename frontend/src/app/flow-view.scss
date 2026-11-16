@@ -130,6 +130,8 @@
   gap: 14px;
   padding-bottom: 40px;
   overflow-x: auto;
+  /* only the editor scrolls vertically: a scrolled-away inside hid the blocks of the next flow */
+  overflow-y: hidden;
 
   > app-code-block,
   > .hidden-step {

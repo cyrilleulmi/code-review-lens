@@ -12,6 +12,7 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 - **Ausgeblendete Zeilen aufklappen:** Ein Klick auf «⋯ n unveränderte Zeilen» in einem Code-Block zeigt die ausgeblendeten Zeilen, ein Klick auf «n Zeilen einklappen» blendet sie wieder aus. Das gilt auch für den abgeschnittenen Rest sehr grosser Blöcke. Aufgeklappte Zeilen sind links fein markiert.
 
 ### Behoben
+- **Leere Datenflüsse nach weitem Scrollen:** Wer in einem langen Flow weit nach unten scrollte und dann einen anderen Flow öffnete, sah dessen Code-Blöcke nicht: Die Verbindungslinien links im Code wurden mit ihrer eigenen Höhe gemessen, wuchsen nur noch und machten die Code-Spalte innen scrollbar; der neue Flow übernahm diese innere Position. Die Linien messen jetzt die Blöcke, die Code-Spalte scrollt nicht mehr selbst, und ein neuer Flow beginnt oben.
 - **Syntaxfarben nach ausgeblendeten Zeilen:** Begann vor einer Lücke «⋯ n unveränderte Zeilen» ein mehrzeiliger Kommentar, der erst in den ausgeblendeten Zeilen endet, erschien der ganze restliche Block als Kommentar. Die Lücken bringen ihre Zeilen jetzt mit (`analysis.json` → `lines[].hidden`), das Highlighting liest über sie hinweg; eine Lücke ohne Zeilen beginnt einen neuen Text (`Analyzer.VERSION` 28).
 
 ## [0.6.0] – 2026-11-15
