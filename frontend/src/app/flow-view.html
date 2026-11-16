@@ -6,6 +6,12 @@
     <p>{{ t('{n} Schritte · Aufrufreihenfolge vom Einstiegspunkt aus. Klick auf einen Knoten springt zum Code.', { n: flow().steps.length }) }}</p>
   </div>
   <span class="spacer"></span>
+  <button type="button" class="btn test-switch" [class.on]="store.testInfo()" role="switch" [attr.aria-checked]="store.testInfo()"
+          (click)="store.toggleTestInfo()"
+          [title]="store.testInfo() ? t('Testinfos ausblenden: Abdeckung, Test-Verknüpfungen und Hinweise im Code, Testfarben im Flow') : t('Testinfos einblenden: Abdeckung, Test-Verknüpfungen und Hinweise im Code, Testfarben im Flow')">
+    <app-icon name="test" [size]="14" /> {{ t('Tests im Flow') }}
+    <span class="knob" aria-hidden="true"><span></span></span>
+  </button>
   <span class="progress-text">{{ t('{ok}/{total} Zeilen ok', { ok: progress().ok, total: progress().total }) }}</span>
   <button type="button" class="btn" [class.success]="progress().total > 0 && progress().ok === progress().total" (click)="markFlow()">
     <app-icon name="check" [size]="14" /> {{ t('Ganzen Flow als ok markieren') }}
@@ -39,6 +45,24 @@
   }
 </div>
 
+@if (areas().length > 1) {
+  <div class="area-bar" role="group" [attr.aria-label]="t('Bereiche')">
+    <span class="lbl">{{ t('Bereiche:') }}</span>
+    @for (a of areas(); track a.id) {
+      <button type="button" class="area-chip" [class.removed]="a.removed" [style.--a]="a.color" [attr.aria-pressed]="!a.removed"
+              [disabled]="!a.removed && lastArea(a.id)" (click)="toggleArea(a.id)"
+              [title]="a.removed ? t('Bereich wieder in die Übersicht aufnehmen') : t('Bereich aus der Übersicht entfernen (Diagramm und Code)')">
+        <span class="dot"></span>{{ a.label }} <span class="cnt">{{ a.count }}</span>
+        <app-icon [name]="a.removed ? 'plus' : 'close'" [size]="10" />
+      </button>
+    }
+    @if (areasRemoved()) {
+      <button type="button" class="ftool" (click)="showAllAreas()"><app-icon name="eye" [size]="13" /> {{ t('Alle Bereiche zeigen') }}</button>
+      <span class="hint">{{ t('Entfernte Bereiche sind im Diagramm gestrichelt überbrückt') }}</span>
+    }
+  </div>
+}
+
 @if (hasRuns()) {
   <div class="run-legend" [attr.aria-label]="t('Was die Tests ausführen')">
     <span class="lbl">{{ t('Tests:') }}</span>
@@ -71,7 +95,7 @@
       }
     </defs>
     @for (e of d.edges; track $index) {
-      <path [attr.d]="e.d" class="edge" [class.hot]="hovered() === e.from || hovered() === e.to" [class.back]="e.back" [class.http]="e.http"
+      <path [attr.d]="e.d" class="edge" [class.hot]="hovered() === e.from || hovered() === e.to" [class.back]="e.back" [class.http]="e.http" [class.bridged]="e.bridged"
             [class.dim]="!!hovered() && hovered() !== e.from && hovered() !== e.to"
             [class.run-separate]="e.run === 'separate'" [class.run-faint]="e.run === 'partial' || e.run === 'none'"
             [style.stroke]="'var(--edge-' + e.c + ')'" [attr.marker-end]="'url(#arrow-' + e.c + ')'"><title>{{ e.title }}</title></path>

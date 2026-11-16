@@ -6,7 +6,7 @@ import { findingDetail, findingsByLine, lineChipText } from './case-checks';
 import { laterExpectationChip, laterExpectationText, laterExpectationsByLine } from './commit-findings';
 import { ruleChipText, ruleDetail, unmetByLine } from './rule-checks';
 import { assertionDrop, bendsExpectations, describeChange, newlyDisabled } from './expectations';
-import { highlightLines } from './highlight';
+import { flattenLines, highlightLines } from './highlight';
 import { mockBadgeTitle } from './mock-boundaries';
 import { HTTP_TAG, httpTitle } from './http-tests';
 import { Icon, SymbolBadge } from './icon';
@@ -98,7 +98,39 @@ export class CodeBlock {
   protected readonly sending = signal(false);
   private lastClicked: number | null = null;
 
-  protected readonly html = computed(() => highlightLines(this.segment().lines, this.segment().language));
+  /** Gaps (by index in flat()) the user expanded. */
+  protected readonly expanded = signal<ReadonlySet<number>>(new Set());
+  /** All lines incl. the hidden lines of gaps, in file order. */
+  protected readonly flat = computed(() => flattenLines(this.segment().lines));
+  /** Highlighted over all lines (hidden ones too), indexed like flat(). */
+  protected readonly html = computed(() => highlightLines(this.flat().map((f) => f.line), this.segment().language));
+  /** The rows shown: f = index in flat(), unfolded = a line of an expanded gap. */
+  protected readonly rows = computed(() => {
+    const flat = this.flat();
+    const expanded = this.expanded();
+    const shown: boolean[] = [];
+    const rows: { line: DisplayLine; f: number; unfolded: boolean; open: boolean }[] = [];
+    flat.forEach((x, f) => {
+      shown[f] = x.gap == null || (shown[x.gap] && expanded.has(x.gap));
+      if (shown[f]) {
+        rows.push({ line: x.line, f, unfolded: x.gap != null, open: expanded.has(f) });
+      }
+    });
+    return rows;
+  });
+  /** The display lines shown (the index of a row everywhere below). */
+  protected readonly lines = computed(() => this.rows().map((r) => r.line));
+
+  protected toggleGap(f: number, event: Event): void {
+    event.stopPropagation();
+    const next = new Set(this.expanded());
+    if (next.has(f)) {
+      next.delete(f);
+    } else {
+      next.add(f);
+    }
+    this.expanded.set(next);
+  }
 
   protected readonly areaColor = areaColor;
   /** Layer of the block: frontend, api, domain, ... (null when unknown) */
@@ -142,6 +174,7 @@ export class CodeBlock {
 
   /** For test cases: the changed code they reach (HTTP-Tests: a reach over a real request is tagged). */
   protected readonly covers = computed(() => {
+    if (!this.store.testInfo()) return [];
     const info = this.store.tests().get(this.segment().id);
     const segs = this.store.segments();
     return (info?.covers ?? [])
@@ -154,7 +187,7 @@ export class CodeBlock {
 
   /** Testable changed function: is it reached by a changed test (static)? null for anything else. */
   protected readonly coverage = computed(() => {
-    const c = this.store.coverage().get(this.segment().id);
+    const c = this.store.testInfo() ? this.store.coverage().get(this.segment().id) : undefined;
     if (!c) return null;
     const existing = c.existingTests?.length ?? 0;
     const label = c.status === 'none' ? t('ohne Test') : c.status === 'indirect' ? t('nur indirekt getestet')
@@ -180,12 +213,12 @@ export class CodeBlock {
    */
   protected readonly caseNotes = computed(() => {
     const result = new Map<number, { text: string; title: string }[]>();
-    const byLine = findingsByLine(this.store.coverage().get(this.segment().id));
+    const byLine = findingsByLine(this.store.testInfo() ? this.store.coverage().get(this.segment().id) : undefined);
     if (!byLine.size) {
       return result;
     }
     const testName = this.store.testName();
-    this.segment().lines.forEach((line, i) => {
+    this.lines().forEach((line, i) => {
       const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
       if (found) {
         result.set(i, found.map((f) => ({ text: lineChipText(f), title: findingDetail(f, testName) + ' – ' + t('statisch ermittelt, Klick: Abdeckung zeigen') })));
@@ -200,12 +233,12 @@ export class CodeBlock {
    */
   protected readonly ruleNotes = computed(() => {
     const result = new Map<number, { text: string; title: string }[]>();
-    const byLine = unmetByLine(this.store.ruleChecks(), this.segment().id);
+    const byLine = unmetByLine(this.store.testInfo() ? this.store.ruleChecks() : [], this.segment().id);
     if (!byLine.size) {
       return result;
     }
     const testName = this.store.testName();
-    this.segment().lines.forEach((line, i) => {
+    this.lines().forEach((line, i) => {
       const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
       if (found) {
         result.set(i, found.map((c) => ({ text: ruleChipText(c), title: ruleDetail(c, testName) + ' – ' + t('statisch ermittelt, Klick: Tests zeigen') })));
@@ -220,11 +253,11 @@ export class CodeBlock {
    */
   protected readonly laterNotes = computed(() => {
     const result = new Map<number, { text: string; title: string; sha: string; warn: boolean }[]>();
-    const byLine = laterExpectationsByLine(this.store.commitFindings(), this.segment().id);
+    const byLine = laterExpectationsByLine(this.store.testInfo() ? this.store.commitFindings() : [], this.segment().id);
     if (!byLine.size) {
       return result;
     }
-    this.segment().lines.forEach((line, i) => {
+    this.lines().forEach((line, i) => {
       const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
       if (found) {
         result.set(i, found.map((f) => ({
@@ -246,7 +279,7 @@ export class CodeBlock {
 
   /** Test case with Test-Smells: header badge («Smell: keine Assertion»); null when it has none. */
   protected readonly smellBadge = computed(() => {
-    const smells = this.store.tests().get(this.segment().id)?.smells ?? [];
+    const smells = (this.store.testInfo() && this.store.tests().get(this.segment().id)?.smells) || [];
     return smells.length ? { text: smellBadgeText(smells), title: smellBadgeTitle(smells) } : null;
   });
 
@@ -254,16 +287,16 @@ export class CodeBlock {
    * Changed setup block, fixture or test helper (Wirkung von Setup und Testdaten): header badge «wirkt auf 12 Tests
    * (10 unverändert)», a warning only when unchanged tests are affected; null without impact.
    */
-  protected readonly setupBadge = computed(() => impactBadge(this.store.setupImpactsBySegment().get(this.segment().id)));
+  protected readonly setupBadge = computed(() => this.store.testInfo() ? impactBadge(this.store.setupImpactsBySegment().get(this.segment().id)) : null);
 
   /** Test-Smells with a line: line index -> chips at that line. */
   protected readonly smellNotes = computed(() => {
     const result = new Map<number, { text: string; title: string }[]>();
-    const byLine = smellsByLine(this.store.tests().get(this.segment().id)?.smells);
+    const byLine = smellsByLine(this.store.testInfo() ? this.store.tests().get(this.segment().id)?.smells : undefined);
     if (!byLine.size) {
       return result;
     }
-    this.segment().lines.forEach((line, i) => {
+    this.lines().forEach((line, i) => {
       const found = line.type !== 'del' && line.newLine != null ? byLine.get(line.newLine) : undefined;
       if (found) {
         result.set(i, found.map((s) => ({ text: `Smell: ${smellText(s)}`, title: smellDetail(s) + ' – ' + t('Klick: Testübersicht zeigen') })));
@@ -274,13 +307,13 @@ export class CodeBlock {
 
   /** Test case that mocks changed code (Mock-Grenzen): header badge with the stubbed members; null otherwise. */
   protected readonly mockWarning = computed(() => {
-    const warnings = this.store.mockWarningsByTest().get(this.segment().id);
+    const warnings = this.store.testInfo() ? this.store.mockWarningsByTest().get(this.segment().id) : undefined;
     return warnings?.length ? { title: mockBadgeTitle(warnings) } : null;
   });
 
   /** Test case whose expectations changed or that is switched off (Spec-Diff): header badge; null otherwise. */
   protected readonly expectation = computed(() => {
-    const e = this.store.expectationsBySegment().get(this.segment().id);
+    const e = this.store.testInfo() ? this.store.expectationsBySegment().get(this.segment().id) : undefined;
     if (!e) return null;
     const disabled = newlyDisabled(e) || !!e.disabled;
     const bends = bendsExpectations(e) || !!assertionDrop(e);
@@ -303,6 +336,7 @@ export class CodeBlock {
 
   /** Tests that reach this code. */
   protected readonly testedBy = computed(() => {
+    if (!this.store.testInfo()) return [];
     const segs = this.store.segments();
     return (this.segment().testedBy ?? []).filter((id) => segs.has(id)).map((id) => ({ id, name: segs.get(id)!.symbol ?? id }));
   });
@@ -338,7 +372,8 @@ export class CodeBlock {
     const known = new Map<string, Commit>(blame?.commits.map((c) => [c.sha, c]) ?? []);
     const pr = this.store.commitBySha();
     const no = this.store.commitNo();
-    const shas = seg.lines.map((line) => {
+    const lines = this.lines();
+    const shas = lines.map((line) => {
       if (line.type === 'gap') return null;
       const own = line.key ? this.store.commitOfLine(seg.path, line.key) : undefined;
       if (line.type !== 'ctx' || own) return own ?? null;
@@ -351,7 +386,7 @@ export class CodeBlock {
     const oneDay = times.length > 0 && day(min) === day(max);
     let previous: string | null = null;
     return shas.map((sha, i) => {
-      const line = seg.lines[i];
+      const line = lines[i];
       if (!sha) {
         previous = null;
         return null;
@@ -444,7 +479,7 @@ export class CodeBlock {
     const seg = this.segment();
     const places = this.store.places();
     let previous = '';
-    seg.lines.forEach((line, i) => {
+    this.lines().forEach((line, i) => {
       if (line.type === 'gap') {
         previous = '';
         return;
@@ -504,7 +539,7 @@ export class CodeBlock {
   }
 
   protected toggleLine(index: number, event: MouseEvent): void {
-    const lines = this.segment().lines;
+    const lines = this.lines();
     const line = lines[index];
     if (!line.own || !line.key || this.otherCommit(line)) {
       return;

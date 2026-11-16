@@ -8,11 +8,12 @@ import {
   input,
   linkedSignal,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from './api';
 import { CodeBlock, flashLine } from './code-block';
-import { outsideBranch, sameSet } from './flow-focus';
+import { outsideBranch, sameSet, withoutAreas } from './flow-focus';
 import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
@@ -25,8 +26,14 @@ interface Node {
   segment: Segment;
   /** step number in the whole flow */
   no: number;
-  /** call depth in the flow */
+  /** call depth in the flow, less the steps of removed areas above it */
   depth: number;
+  /** layer of the step ('' = none) */
+  area: string;
+  /** the caller shown: the parent, or the nearest ancestor left when areas in between are removed; null = a root */
+  caller: string | null;
+  /** labels of the removed areas between caller and step (empty = direct call) */
+  bridged: string[];
   x: number;
   y: number;
 }
@@ -85,7 +92,8 @@ export class FlowView {
   protected readonly indent = INDENT;
 
   /** Mock-Grenzen: what the tests really execute, per step (segment id) and per edge ("from>to"). */
-  protected readonly runs = computed(() => flowRuns(this.store.flowCoverage().get(this.flow().id)));
+  /** What the tests run in this flow; nothing while the test enrichments are switched off. */
+  protected readonly runs = computed(() => flowRuns(this.store.testInfo() ? this.store.flowCoverage().get(this.flow().id) : undefined));
   protected readonly hasRuns = computed(() => this.runs().steps.size > 0);
   /** A REST edge of this flow is checked from both sides (HTTP-Tests): the legend explains the label. */
   protected readonly hasBothSides = computed(() => [...this.runs().edges.values()].some(bothSides));
@@ -110,15 +118,41 @@ export class FlowView {
     return id && sameSet(this.hidden(), outsideBranch(this.flow().steps, this.flow().edges, id)) ? id : null;
   });
 
-  protected readonly nodes = computed<Node[]>(() => {
+  /** Every step of the flow with its segment and area, in flow order (also those of removed areas). */
+  private readonly allSteps = computed(() => {
     const segs = this.store.segments();
     return this.flow().steps
       .map((step, i) => ({ step, no: i + 1 }))
       .filter(({ step }) => segs.has(step.segmentId))
-      .map(({ step, no }, row) => {
-        const depth = step.depth;
-        return { step, no, depth, segment: segs.get(step.segmentId)!, x: depth * (NODE_W + COL_GAP), y: row * (NODE_H + ROW_GAP) };
+      .map(({ step, no }) => {
+        const segment = segs.get(step.segmentId)!;
+        return { step, no, segment, area: this.areaOf(segment) ?? '' };
       });
+  });
+
+  /** The areas of the flow in call order with their number of steps; the bar shows them from two on. */
+  protected readonly areas = computed(() => {
+    const removed = this.store.hiddenAreas();
+    const counts = new Map<string, number>();
+    for (const s of this.allSteps()) {
+      counts.set(s.area, (counts.get(s.area) ?? 0) + 1);
+    }
+    return [...counts].map(([id, count]) => ({
+      id, count, label: id ? areaLabel(id) : t('ohne Schicht'), color: areaColor(id || null), removed: removed.has(id),
+    }));
+  });
+
+  /** At least one area of this flow is removed. */
+  protected readonly areasRemoved = computed(() => this.areas().some((a) => a.removed));
+
+  /** The steps shown in diagram and code: all but those of removed areas, bridged and moved up to fill the gaps. */
+  protected readonly nodes = computed<Node[]>(() => {
+    return withoutAreas(this.allSteps(), this.store.hiddenAreas()).map((s, row) => ({
+      ...s,
+      bridged: s.skipped.map((area) => (area ? areaLabel(area) : t('ohne Schicht'))),
+      x: s.depth * (NODE_W + COL_GAP),
+      y: row * (NODE_H + ROW_GAP),
+    }));
   });
 
   protected readonly diagram = computed(() => {
@@ -144,9 +178,31 @@ export class FlowView {
         const title = [http ? 'HTTP ' + e.via : e.via, ...(run ? [edgeTitle(run, this.store.testName())] : []), ...contract].join('\n');
         return {
           d, from: e.from, to: e.to, back, http, via: e.via, c, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 4, run: run?.status ?? null,
-          both: http && bothSides(run), title,
+          both: http && bothSides(run), title, bridged: false,
         };
       });
+    // around removed areas: from the caller shown to the step, dashed, in the colour of the call into the step
+    const direct = new Set(edges.map((e) => e.from + '>' + e.to));
+    for (const n of nodes) {
+      if (!n.bridged.length || !n.caller || direct.has(n.caller + '>' + n.step.segmentId)) {
+        continue;
+      }
+      const a = byId.get(n.caller)!;
+      const x1 = a.x + NODE_W;
+      const y1 = a.y + NODE_H / 2;
+      const x2 = n.x;
+      const y2 = n.y + NODE_H / 2;
+      const back = x2 <= x1;
+      const d = back
+        ? `M ${x1} ${y1} C ${x1 + 40} ${y1}, ${x1 + 40} ${y2}, ${n.x + NODE_W} ${y2}`
+        : `M ${x1} ${y1} C ${x1 + COL_GAP / 2} ${y1}, ${x2 - COL_GAP / 2} ${y2}, ${x2 - 4} ${y2}`;
+      const into = this.flow().edges.findIndex((e) => e.to === n.step.segmentId && e.from === n.step.parentSegmentId);
+      edges.push({
+        d, from: n.caller, to: n.step.segmentId, back, http: false, via: '', c: edgeColorIndex(Math.max(0, into)),
+        lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 4, run: null, both: false, bridged: true,
+        title: t('Über entfernte Bereiche: {areas}', { areas: n.bridged.join(', ') }),
+      });
+    }
     const width = Math.max(...nodes.map((n) => n.x + NODE_W), 0) + 48;
     const height = Math.max(...nodes.map((n) => n.y + NODE_H), 0) + 4;
     return { edges, width, height, nodeW: NODE_W, nodeH: NODE_H };
@@ -154,7 +210,7 @@ export class FlowView {
 
   protected readonly stepOf = computed(() => {
     const map: Record<string, number> = {};
-    this.nodes().forEach((n) => (map[n.step.segmentId] = n.no));
+    this.allSteps().forEach((n) => (map[n.step.segmentId] = n.no));
     return map;
   });
 
@@ -193,6 +249,13 @@ export class FlowView {
       this.layoutConnectors();
       onCleanup(() => observer.disconnect());
     });
+    // Another flow in the same view: the cards start at the left/top (only the editor scrolls vertically).
+    afterRenderEffect(() => {
+      this.flow().id;
+      const host = untracked(() => this.cards().nativeElement);
+      host.scrollTop = 0;
+      host.scrollLeft = 0;
+    });
     afterRenderEffect(() => {
       const target = this.store.focusSegment();
       this.visible();
@@ -228,6 +291,29 @@ export class FlowView {
       this.lastFocus.set(id);
     }
     this.stepIndex.set(null);
+  }
+
+  /** Takes an area out of the overview (diagram and code) or brings it back; the last area left stays. */
+  protected toggleArea(id: string): void {
+    const next = new Set(this.store.hiddenAreas());
+    if (next.has(id)) {
+      next.delete(id);
+    } else if (this.areas().some((a) => a.id !== id && !a.removed)) {
+      next.add(id);
+    }
+    this.store.hiddenAreas.set(next);
+    this.stepIndex.set(null);
+  }
+
+  protected showAllAreas(): void {
+    const next = new Set(this.store.hiddenAreas());
+    this.areas().forEach((a) => next.delete(a.id));
+    this.store.hiddenAreas.set(next);
+  }
+
+  /** The area cannot be removed: it is the only one left. */
+  protected lastArea(id: string): boolean {
+    return this.areas().every((a) => a.id === id || a.removed);
   }
 
   protected showAll(): void {
@@ -273,7 +359,7 @@ export class FlowView {
 
   /** A changed test stubs this step's function (mock warning). */
   protected mockWarned(id: string): boolean {
-    return this.store.mockWarningsBySegment().has(id);
+    return this.store.testInfo() && this.store.mockWarningsBySegment().has(id);
   }
 
   protected calledBy(node: Node): string | null {
@@ -333,6 +419,13 @@ export class FlowView {
 
   /** Jumps to a step (making it visible first); segments outside this flow are shown at their own place. */
   protected scrollTo(segmentId: string): void {
+    const removedStep = this.allSteps().find((s) => s.step.segmentId === segmentId && this.store.hiddenAreas().has(s.area));
+    if (removedStep) {
+      // a step of a removed area: bring the area back rather than leaving the flow
+      const next = new Set(this.store.hiddenAreas());
+      next.delete(removedStep.area);
+      this.store.hiddenAreas.set(next);
+    }
     const index = this.nodes().findIndex((n) => n.step.segmentId === segmentId);
     if (index < 0) {
       this.store.reveal(segmentId);
@@ -430,10 +523,27 @@ export class FlowView {
       return { d, from: item.edge.from, to: item.edge.to, c: item.c, http: item.edge.kind === 'http' };
     });
     this.gutter.set(Math.max(MIN_GUTTER, 8 + lanes.length * LANE + 14));
-    this.railHeight.set(host.scrollHeight);
-    this.railWidth.set(host.scrollWidth);
+    // Size of the blocks, not host.scrollHeight/-Width: those include the rails themselves, so the rails could never
+    // shrink again (a shorter flow, collapsed blocks) and made the cards scroll inside, hiding the blocks.
+    const content = contentSize(host);
+    this.railHeight.set(content.height);
+    this.railWidth.set(content.width);
     this.connectors.set(result);
   }
+}
+
+/** Extent of the cards' children in layout px, leaving out the absolutely positioned rails. */
+export function contentSize(host: HTMLElement): { width: number; height: number } {
+  let width = 0;
+  let height = 0;
+  for (const child of Array.from(host.children)) {
+    if (!(child instanceof HTMLElement)) {
+      continue; // the rails are an SVG element
+    }
+    width = Math.max(width, child.offsetLeft + child.offsetWidth);
+    height = Math.max(height, child.offsetTop + child.offsetHeight);
+  }
+  return { width, height };
 }
 
 function shortName(name: string): string {

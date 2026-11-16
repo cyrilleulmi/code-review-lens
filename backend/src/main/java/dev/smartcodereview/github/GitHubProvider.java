@@ -17,6 +17,7 @@ import dev.smartcodereview.model.Model.Snapshot;
 import dev.smartcodereview.model.Model.User;
 import dev.smartcodereview.provider.JsonHttp;
 import dev.smartcodereview.provider.ProviderException;
+import dev.smartcodereview.provider.RepoLists;
 import dev.smartcodereview.provider.ReviewProvider;
 import dev.smartcodereview.provider.Tokens;
 import jakarta.annotation.PostConstruct;
@@ -109,7 +110,106 @@ public class GitHubProvider implements ReviewProvider {
         Map<String, PullRequestSummary> byKey = new LinkedHashMap<>();
         searchInto(byKey, "is:pr is:open archived:false review-requested:@me", "review-requested");
         searchInto(byKey, "is:pr is:open archived:false author:@me", "authored");
+        searchInto(byKey, "is:pr is:open archived:false involves:@me", "involved");
+        searchInto(byKey, "is:pr is:open archived:false assignee:@me", "involved");
         return new ArrayList<>(byKey.values());
+    }
+
+    @Override
+    public List<Model.RepositorySummary> repositories(String query) {
+        List<Model.RepositorySummary> mine = new ArrayList<>();
+        for (JsonNode r : getJson("/user/repos?sort=pushed&per_page=100&affiliation=owner,collaborator,organization_member")) {
+            Model.RepositorySummary s = toRepository(r);
+            if (RepoLists.matches(s, query)) {
+                mine.add(s);
+            }
+        }
+        List<Model.RepositorySummary> found = new ArrayList<>();
+        if (query != null && !query.isBlank()) {
+            JsonNode res = getJson("/search/repositories?per_page=20&q="
+                    + URLEncoder.encode(scoped(query.trim() + " in:name", mine()), StandardCharsets.UTF_8));
+            res.path("items").forEach(r -> found.add(toRepository(r)));
+        }
+        return RepoLists.merge(mine, found);
+    }
+
+    private Model.RepositorySummary toRepository(JsonNode r) {
+        return new Model.RepositorySummary(id(), r.path("owner").path("login").asText(), r.path("name").asText(),
+                r.path("description").asText(""), r.path("html_url").asText(),
+                r.path("pushed_at").asText(r.path("updated_at").asText("")));
+    }
+
+    @Override
+    public List<PullRequestSummary> repositoryPullRequests(String owner, String repo) {
+        String me = currentUser().login();
+        JsonNode list = getJson("/repos/" + owner + "/" + repo
+                + "/pulls?state=open&sort=updated&direction=desc&per_page=100");
+        List<PullRequestSummary> result = new ArrayList<>();
+        for (JsonNode pr : list) {
+            String author = pr.path("user").path("login").asText();
+            List<String> roles = new ArrayList<>();
+            if (author.equalsIgnoreCase(me)) {
+                roles.add("authored");
+            }
+            for (JsonNode rr : pr.path("requested_reviewers")) {
+                if (rr.path("login").asText().equalsIgnoreCase(me)) {
+                    roles.add("review-requested");
+                }
+            }
+            result.add(new PullRequestSummary(id(), owner, repo, pr.path("number").asInt(), pr.path("title").asText(),
+                    author, pr.path("html_url").asText(), pr.path("draft").asBoolean(false),
+                    pr.path("created_at").asText(), pr.path("updated_at").asText(), roles, null));
+        }
+        return result;
+    }
+
+    @Override
+    public List<PullRequestSummary> searchPullRequests(String query) {
+        String me = currentUser().login();
+        JsonNode res = getJson("/search/issues?per_page=50&sort=updated&q="
+                + URLEncoder.encode("is:pr is:open archived:false " + scoped(query.trim(), mine()), StandardCharsets.UTF_8));
+        List<PullRequestSummary> result = new ArrayList<>();
+        for (JsonNode item : res.path("items")) {
+            String[] repoParts = item.path("repository_url").asText().split("/");
+            String author = item.path("user").path("login").asText();
+            List<String> roles = author.equalsIgnoreCase(me) ? List.of("authored") : List.of();
+            result.add(new PullRequestSummary(id(), repoParts[repoParts.length - 2], repoParts[repoParts.length - 1],
+                    item.path("number").asInt(), item.path("title").asText(), author, item.path("html_url").asText(),
+                    item.path("draft").asBoolean(false), item.path("created_at").asText(),
+                    item.path("updated_at").asText(), roles, null));
+        }
+        return result;
+    }
+
+    /** A search qualifier like org:acme, repo:o/r or author:x. */
+    private static final Pattern QUALIFIER = Pattern.compile("(^|\\s)[a-z-]+:\\S");
+
+    /** The user and their organisations: where a search without own qualifiers looks. */
+    private List<String> mine() {
+        List<String> owners = new ArrayList<>();
+        owners.add("user:" + currentUser().login());
+        for (JsonNode org : getJson("/user/orgs?per_page=100")) {
+            owners.add("org:" + org.path("login").asText());
+        }
+        return owners;
+    }
+
+    /**
+     * Limits a search to the given owners (OR-ed by GitHub) unless the query already has qualifiers like org: or
+     * repo: - free text over all of GitHub finds mostly strangers' projects. Stays within GitHub's query length.
+     */
+    static String scoped(String query, List<String> owners) {
+        if (QUALIFIER.matcher(query.replace(" in:name", "")).find()) {
+            return query;
+        }
+        StringBuilder q = new StringBuilder(query);
+        for (String owner : owners) {
+            if (q.length() + owner.length() + 1 > 250) {
+                break;
+            }
+            q.append(' ').append(owner);
+        }
+        return q.toString();
     }
 
     private void searchInto(Map<String, PullRequestSummary> byKey, String query, String role) {
@@ -121,8 +221,13 @@ public class GitHubProvider implements ReviewProvider {
             int number = item.path("number").asInt();
             String key = owner + "/" + repo + "#" + number;
             PullRequestSummary existing = byKey.get(key);
+            if ("involved".equals(role) && existing != null && !existing.roles().isEmpty()) {
+                continue; // keep the list clean: "involved" only for PRs without a more specific role
+            }
             List<String> roles = new ArrayList<>(existing == null ? List.of() : existing.roles());
-            roles.add(role);
+            if (!roles.contains(role)) {
+                roles.add(role);
+            }
             byKey.put(key, new PullRequestSummary(id(), owner, repo, number, item.path("title").asText(),
                     item.path("user").path("login").asText(), item.path("html_url").asText(),
                     item.path("draft").asBoolean(false), item.path("created_at").asText(),

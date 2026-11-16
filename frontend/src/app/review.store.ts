@@ -39,7 +39,7 @@ export type Selection =
   /** coverage of the changed code on its own page (when there is no switched-on test category to show it in) */
   | { kind: 'coverage' };
 
-export type PrFilter = 'all' | 'authored' | 'review-requested';
+export type PrFilter = 'all' | 'authored' | 'review-requested' | 'involved';
 
 export interface Progress {
   ok: number;
@@ -89,6 +89,11 @@ export class ReviewStore {
   readonly log = signal<LogEntry[]>([]);
   readonly selection = signal<Selection>({ kind: 'overview' });
   readonly collapseDone = signal(true);
+  /**
+   * Areas (layers: frontend, api, logic, ...; '' = none) taken out of the flow views: their steps leave diagram and
+   * code, the flow is bridged around them. Applies to every flow, not stored (like the other focus tools).
+   */
+  readonly hiddenAreas = signal<ReadonlySet<string>>(new Set());
   /** "Collapse all" / "expand all" of the current view; code blocks follow it. Reset on navigation. */
   readonly collapseCommand = signal<{ collapsed: boolean; seq: number } | null>(null);
   /** Segment to scroll to after the next render (e.g. clicked in a flow diagram). */
@@ -104,6 +109,12 @@ export class ReviewStore {
   readonly reloadInfo = signal<ReloadInfo | null>(null);
   /** git blame annotations in the code blocks ("Annotate with Git Blame" in IntelliJ). */
   readonly annotate = signal(readFlag('scr.annotate'));
+  /**
+   * Test enrichments in the code and flow views: coverage and test badges, "Testet / Getestet von" links, line chips
+   * of the test analysis, test colouring of flow steps and connections. Off by default (switched on in the toolbar or
+   * at the top of a flow); the Tests category and the test overview stay as they are.
+   */
+  readonly testInfo = signal(readFlag('scr.testInfo'));
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
   readonly blames = signal<ReadonlyMap<string, Blame | 'loading' | null>>(new Map());
   /** commit from the URL, applied once the commits are loaded */
@@ -619,6 +630,12 @@ export class ReviewStore {
     const on = !this.annotate();
     this.annotate.set(on);
     writeFlag('scr.annotate', on);
+  }
+
+  toggleTestInfo(): void {
+    const on = !this.testInfo();
+    this.testInfo.set(on);
+    writeFlag('scr.testInfo', on);
   }
 
   /** Fetches the blame of a file once (cached by the backend per head commit). */

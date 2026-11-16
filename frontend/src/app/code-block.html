@@ -94,12 +94,25 @@
 
 @if (!collapsed()) {
   <div class="code" role="table">
-    @for (line of seg.lines; track $index; let i = $index) {
+    @for (row of rows(); track row.f; let i = $index) {
+      @let line = row.line;
       @if (line.type === 'gap') {
-        <div class="gap">⋯ {{ line.text ? serverText(line.text) : t('{n} unveränderte Zeilen', { n: line.gapSize }) }}</div>
+        @if (line.hidden?.length) {
+          <button type="button" class="gap expandable" [class.open]="row.open" (click)="toggleGap(row.f, $event)"
+                  [title]="row.open ? t('Wieder einklappen') : t('Ausgeblendete Zeilen aufklappen')">
+            <app-icon [name]="row.open ? 'chevronDown' : 'chevronRight'" [size]="11" />
+            @if (row.open) {
+              {{ t('{n} Zeilen einklappen', { n: line.hidden!.length }) }}
+            } @else {
+              ⋯ {{ line.text ? serverText(line.text) : t('{n} unveränderte Zeilen', { n: line.gapSize }) }}
+            }
+          </button>
+        } @else {
+          <div class="gap">⋯ {{ line.text ? serverText(line.text) : t('{n} unveränderte Zeilen', { n: line.gapSize }) }}</div>
+        }
       } @else {
         @let byOtherCommit = otherCommit(line);
-        <div class="row" [class]="'row t-' + line.type" [class.ok]="line.own && !byOtherCommit && isOk(line)" [class.foreign]="!line.own && line.type !== 'ctx'"
+        <div class="row" [class]="'row t-' + line.type" [class.unfolded]="row.unfolded" [class.ok]="line.own && !byOtherCommit && isOk(line)" [class.foreign]="!line.own && line.type !== 'ctx'"
              [class.other-commit]="byOtherCommit" [class.has-refs]="!!line.refs?.length" [attr.data-new]="line.newLine" [attr.data-old]="line.oldLine">
           @if (annotations(); as an) {
             @let a = an[i];
@@ -143,7 +156,7 @@
             }
           </span>
           <span class="g-sign">{{ line.type === 'add' ? '+' : line.type === 'del' ? '−' : '' }}</span>
-          <span class="src"><code [innerHTML]="html()[i]"></code>
+          <span class="src"><code [innerHTML]="html()[row.f]"></code>
             @if (halfNotes().get(i); as other) {
               <button type="button" class="half-note" (click)="goElsewhere(line, $event)" [title]="t('Bereits akzeptiert in: {places} – Klick springt dorthin', { places: other.labels })">
                 <app-icon name="check" [size]="10" /> {{ other.ids.length === 1 ? t('bereits an anderem Ort akzeptiert') : t('bereits an {n} anderen Orten akzeptiert', { n: other.ids.length }) }}

@@ -19,6 +19,7 @@ import dev.smartcodereview.model.Model.Snapshot;
 import dev.smartcodereview.model.Model.User;
 import dev.smartcodereview.provider.JsonHttp;
 import dev.smartcodereview.provider.ProviderException;
+import dev.smartcodereview.provider.RepoLists;
 import dev.smartcodereview.provider.ReviewProvider;
 import dev.smartcodereview.provider.Tokens;
 import jakarta.annotation.PostConstruct;
@@ -130,7 +131,74 @@ public class GitLabProvider implements ReviewProvider {
         listInto(byKey, "/merge_requests?state=opened&scope=all&per_page=100&reviewer_username="
                 + URLEncoder.encode(me, StandardCharsets.UTF_8), "review-requested");
         listInto(byKey, "/merge_requests?state=opened&scope=created_by_me&per_page=100", "authored");
+        listInto(byKey, "/merge_requests?state=opened&scope=assigned_to_me&per_page=100", "involved");
         return new ArrayList<>(byKey.values());
+    }
+
+    @Override
+    public List<Model.RepositorySummary> repositories(String query) {
+        requireToken();
+        String q = query == null || query.isBlank() ? "" : "&search=" + enc(query.trim());
+        List<Model.RepositorySummary> mine =
+                projects("/projects?membership=true&simple=true&order_by=last_activity_at&per_page=50" + q);
+        List<Model.RepositorySummary> visible = q.isEmpty() ? List.of()
+                : projects("/projects?simple=true&order_by=last_activity_at&per_page=20" + q);
+        return RepoLists.merge(mine, visible);
+    }
+
+    private List<Model.RepositorySummary> projects(String path) {
+        List<Model.RepositorySummary> result = new ArrayList<>();
+        for (JsonNode p : getJson(path)) {
+            String full = p.path("path_with_namespace").asText();
+            int slash = full.lastIndexOf('/');
+            if (slash < 0) {
+                continue;
+            }
+            result.add(new Model.RepositorySummary(id(), full.substring(0, slash).replace('/', '~'),
+                    full.substring(slash + 1), p.path("description").asText(""), p.path("web_url").asText(),
+                    p.path("last_activity_at").asText("")));
+        }
+        return result;
+    }
+
+    @Override
+    public List<PullRequestSummary> repositoryPullRequests(String owner, String repo) {
+        requireToken();
+        String me = username != null ? username : currentUser().login();
+        JsonNode list = getJson(projectPath(new PrRef(id(), owner, repo, 0))
+                + "/merge_requests?state=opened&order_by=updated_at&per_page=100");
+        List<PullRequestSummary> result = new ArrayList<>();
+        for (JsonNode mr : list) {
+            String author = mr.path("author").path("username").asText();
+            List<String> roles = new ArrayList<>();
+            if (author.equalsIgnoreCase(me)) {
+                roles.add("authored");
+            }
+            for (JsonNode rv : mr.path("reviewers")) {
+                if (rv.path("username").asText().equalsIgnoreCase(me)) {
+                    roles.add("review-requested");
+                }
+            }
+            result.add(new PullRequestSummary(id(), owner, repo, mr.path("iid").asInt(), mr.path("title").asText(),
+                    author, mr.path("web_url").asText(), isDraft(mr), mr.path("created_at").asText(),
+                    mr.path("updated_at").asText(), roles, null));
+        }
+        return result;
+    }
+
+    @Override
+    public List<PullRequestSummary> searchPullRequests(String query) {
+        requireToken();
+        String me = username != null ? username : currentUser().login();
+        Map<String, PullRequestSummary> byKey = new LinkedHashMap<>();
+        listInto(byKey, "/merge_requests?scope=all&state=opened&per_page=50&search=" + enc(query.trim()), null);
+        List<PullRequestSummary> result = new ArrayList<>();
+        for (PullRequestSummary s : byKey.values()) {
+            result.add(new PullRequestSummary(s.provider(), s.owner(), s.repo(), s.number(), s.title(), s.author(),
+                    s.url(), s.draft(), s.createdAt(), s.updatedAt(),
+                    s.author().equalsIgnoreCase(me) ? List.of("authored") : List.of(), null));
+        }
+        return result;
     }
 
     private void listInto(Map<String, PullRequestSummary> byKey, String path, String role) {
@@ -143,8 +211,13 @@ public class GitLabProvider implements ReviewProvider {
             int iid = mr.path("iid").asInt();
             String key = projectPath + "!" + iid;
             PullRequestSummary existing = byKey.get(key);
+            if ("involved".equals(role) && existing != null && !existing.roles().isEmpty()) {
+                continue; // keep the list clean: "involved" only for PRs without a more specific role
+            }
             List<String> roles = new ArrayList<>(existing == null ? List.of() : existing.roles());
-            roles.add(role);
+            if (role != null && !roles.contains(role)) {
+                roles.add(role);
+            }
             byKey.put(key, new PullRequestSummary(id(), owner, repo, iid, mr.path("title").asText(),
                     mr.path("author").path("username").asText(), mr.path("web_url").asText(), isDraft(mr),
                     mr.path("created_at").asText(), mr.path("updated_at").asText(), roles, null));

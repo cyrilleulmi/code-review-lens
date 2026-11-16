@@ -28,29 +28,63 @@ for (const [name, lang] of Object.entries(LANGUAGES)) {
   hljs.registerLanguage(name, lang);
 }
 
+/** A display line of a block with its hidden lines unfolded: where it sits and in which gap it is hidden. */
+export interface FlatLine {
+  line: DisplayLine;
+  /** index (in the flat list) of the gap this line is hidden in; null for lines shown without expanding */
+  gap: number | null;
+}
+
+/**
+ * The lines of a block with the hidden lines of every gap placed right after the gap (nested gaps too), in file
+ * order. The gap itself stays in the list, so callers can show either the gap or its lines.
+ */
+export function flattenLines(lines: DisplayLine[]): FlatLine[] {
+  const result: FlatLine[] = [];
+  const add = (list: DisplayLine[], gap: number | null) => {
+    for (const line of list) {
+      const index = result.length;
+      result.push({ line, gap });
+      if (line.type === 'gap' && line.hidden?.length) {
+        add(line.hidden, index);
+      }
+    }
+  };
+  add(lines, null);
+  return result;
+}
+
 /**
  * Highlights the lines of a code block. The new version (context + added lines) and the old version
- * (context + deleted lines) are highlighted as two continuous texts so multi-line constructs (comments,
+ * (context + deleted lines) are highlighted as continuous texts so multi-line constructs (comments,
  * template strings) stay correct; each display line then takes its HTML from the matching version.
+ * Pass the flat list (flattenLines) so the hidden lines of gaps are read too: a comment that opens before a gap
+ * and closes inside it must not run on. A gap without its lines (unknown text) starts a new text, for the same reason.
  */
 export function highlightLines(lines: DisplayLine[], language: string): string[] {
   const lang = hljs.getLanguage(language) ? language : null;
-  const newIdx: number[] = [];
-  const oldIdx: number[] = [];
-  lines.forEach((l, i) => {
-    if (l.type === 'ctx' || l.type === 'add') newIdx.push(i);
-    if (l.type === 'ctx' || l.type === 'del') oldIdx.push(i);
-  });
   const result: string[] = lines.map((l) => escape(l.text ?? ''));
   if (!lang) {
     return result;
   }
-  const newHtml = splitHtml(highlight(newIdx.map((i) => lines[i].text ?? '').join('\n'), lang));
-  newIdx.forEach((lineIdx, n) => (result[lineIdx] = newHtml[n] ?? result[lineIdx]));
-  const oldHtml = splitHtml(highlight(oldIdx.map((i) => lines[i].text ?? '').join('\n'), lang));
-  oldIdx.forEach((lineIdx, n) => {
-    if (lines[lineIdx].type === 'del') result[lineIdx] = oldHtml[n] ?? result[lineIdx];
+  let newIdx: number[] = [];
+  let oldIdx: number[] = [];
+  const flush = () => {
+    const newHtml = splitHtml(highlight(newIdx.map((i) => lines[i].text ?? '').join('\n'), lang));
+    newIdx.forEach((lineIdx, n) => (result[lineIdx] = newHtml[n] ?? result[lineIdx]));
+    const oldHtml = splitHtml(highlight(oldIdx.map((i) => lines[i].text ?? '').join('\n'), lang));
+    oldIdx.forEach((lineIdx, n) => {
+      if (lines[lineIdx].type === 'del') result[lineIdx] = oldHtml[n] ?? result[lineIdx];
+    });
+    newIdx = [];
+    oldIdx = [];
+  };
+  lines.forEach((l, i) => {
+    if (l.type === 'gap' && !l.hidden?.length) flush();
+    if (l.type === 'ctx' || l.type === 'add') newIdx.push(i);
+    if (l.type === 'ctx' || l.type === 'del') oldIdx.push(i);
   });
+  flush();
   return result;
 }
 

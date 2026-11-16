@@ -31,8 +31,17 @@ public interface ReviewProvider {
 
     User currentUser();
 
-    /** Open PRs authored by the user or waiting for the user's review. */
+    /** Open PRs authored by the user, waiting for the user's review, or (role "involved") otherwise involving the user. */
     List<PullRequestSummary> openPullRequests();
+
+    /** Repositories the user can see, most recently active first, at most ~50; blank query = no filter. */
+    List<Model.RepositorySummary> repositories(String query);
+
+    /** Open PRs of one repository, newest update first; roles are "authored"/"review-requested" or empty. */
+    List<PullRequestSummary> repositoryPullRequests(String owner, String repo);
+
+    /** Free-text search over open PRs (provider-specific qualifiers allowed). */
+    List<PullRequestSummary> searchPullRequests(String query);
 
     /** Recognises a PR web URL of this host, or a repository URL (number 0 = the whole repository). */
     Optional<PrRef> parseUrl(String url);

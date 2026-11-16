@@ -505,7 +505,7 @@ Integrations- und E2E-Tests rufen den Backend-Code oft nicht beim Namen auf, son
 
 ## 6. Anzeige
 
-* Symbol-Segmente zeigen die **ganze Funktion** aus der neuen Datei, mit eingewobenen gelöschten Zeilen. Unveränderte Strecken über 2 Zeilen ausserhalb von ±2 Zeilen um Änderungen und Aufrufstellen werden zu «⋯ n unveränderte Zeilen».
+* Symbol-Segmente zeigen die **ganze Funktion** aus der neuen Datei, mit eingewobenen gelöschten Zeilen. Unveränderte Strecken über 2 Zeilen ausserhalb von ±2 Zeilen um Änderungen und Aufrufstellen werden zu «⋯ n unveränderte Zeilen». Die Lücke trägt ihre Zeilen mit (`hidden`): Das UI klappt sie per Klick auf, und das Syntax-Highlighting liest über sie hinweg, damit ein Kommentar, der in der Lücke endet, nicht den Rest des Blocks einfärbt. Auch der Rest eines Blocks über 400 Zeilen («n weitere Zeilen (zu gross für die Anzeige)») steckt so in der letzten Lücke.
 * Zeilen anderer Segmente innerhalb des Bereichs (z. B. eine verschachtelte geänderte Funktion) werden **gedimmt** und ohne Häkchen gezeigt.
 * Aufrufstellen tragen `refs` → im UI ein Chip, der zum aufgerufenen Block springt; in der Flow-Ansicht zusätzlich eine Verbindungslinie.
 

@@ -665,6 +665,33 @@
   margin: 2px 0;
 }
 
+/* gap with its lines along: click unfolds them, an open gap folds them back */
+button.gap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  border-inline: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.gap:hover {
+  color: var(--fg);
+  background: var(--tint-hover);
+}
+
+button.gap.open {
+  background: none;
+  border-bottom-style: none;
+  margin-bottom: 0;
+}
+
+/* unfolded lines are unchanged context: a quiet left rule tells them from the lines shown anyway */
+.row.unfolded {
+  box-shadow: inset 2px 0 0 var(--border);
+}
+
 /* ------------------------------------------------------------- comments */
 
 .thread {
