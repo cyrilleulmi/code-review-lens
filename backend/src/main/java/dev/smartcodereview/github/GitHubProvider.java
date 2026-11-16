@@ -127,7 +127,7 @@ public class GitHubProvider implements ReviewProvider {
         List<Model.RepositorySummary> found = new ArrayList<>();
         if (query != null && !query.isBlank()) {
             JsonNode res = getJson("/search/repositories?per_page=20&q="
-                    + URLEncoder.encode(query.trim() + " in:name", StandardCharsets.UTF_8));
+                    + URLEncoder.encode(scoped(query.trim() + " in:name", mine()), StandardCharsets.UTF_8));
             res.path("items").forEach(r -> found.add(toRepository(r)));
         }
         return RepoLists.merge(mine, found);
@@ -167,7 +167,7 @@ public class GitHubProvider implements ReviewProvider {
     public List<PullRequestSummary> searchPullRequests(String query) {
         String me = currentUser().login();
         JsonNode res = getJson("/search/issues?per_page=50&sort=updated&q="
-                + URLEncoder.encode("is:pr is:open archived:false " + query.trim(), StandardCharsets.UTF_8));
+                + URLEncoder.encode("is:pr is:open archived:false " + scoped(query.trim(), mine()), StandardCharsets.UTF_8));
         List<PullRequestSummary> result = new ArrayList<>();
         for (JsonNode item : res.path("items")) {
             String[] repoParts = item.path("repository_url").asText().split("/");
@@ -179,6 +179,37 @@ public class GitHubProvider implements ReviewProvider {
                     item.path("updated_at").asText(), roles, null));
         }
         return result;
+    }
+
+    /** A search qualifier like org:acme, repo:o/r or author:x. */
+    private static final Pattern QUALIFIER = Pattern.compile("(^|\\s)[a-z-]+:\\S");
+
+    /** The user and their organisations: where a search without own qualifiers looks. */
+    private List<String> mine() {
+        List<String> owners = new ArrayList<>();
+        owners.add("user:" + currentUser().login());
+        for (JsonNode org : getJson("/user/orgs?per_page=100")) {
+            owners.add("org:" + org.path("login").asText());
+        }
+        return owners;
+    }
+
+    /**
+     * Limits a search to the given owners (OR-ed by GitHub) unless the query already has qualifiers like org: or
+     * repo: - free text over all of GitHub finds mostly strangers' projects. Stays within GitHub's query length.
+     */
+    static String scoped(String query, List<String> owners) {
+        if (QUALIFIER.matcher(query.replace(" in:name", "")).find()) {
+            return query;
+        }
+        StringBuilder q = new StringBuilder(query);
+        for (String owner : owners) {
+            if (q.length() + owner.length() + 1 > 250) {
+                break;
+            }
+            q.append(' ').append(owner);
+        }
+        return q.toString();
     }
 
     private void searchInto(Map<String, PullRequestSummary> byKey, String query, String role) {
