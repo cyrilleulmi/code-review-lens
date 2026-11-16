@@ -6,6 +6,8 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+## [0.7.0] – 2026-11-16
+
 ### Neu
 - **Bereiche im Datenfluss:** Geht ein Flow durch mehrere Bereiche (Frontend, API, Backend, Daten …), stehen sie oben als Chips mit Farbe und Anzahl Schritte. Ein Klick nimmt einen Bereich aus Diagramm und Code, ein zweiter holt ihn zurück. Der Flow bleibt lesbar: Verbindungen über den entfernten Bereich hinweg sind gestrichelt, Spalten und Einrückung rücken nach. Die Auswahl gilt für alle Flows, bis man sie zurücksetzt.
 - **Repositories und PRs/MRs finden, die einem nicht zugewiesen sind:** Das Suchfeld der PR-Liste sucht ab 2 Zeichen auch beim Code-Host – unter «Repositories» die eigenen und weitere passende Repositories, unter «Weitere Pull Requests» offene PRs/MRs per Volltext. Auf GitHub sucht freier Text beim eigenen Konto und in den eigenen Organisationen; mit Qualifiern wie `org:` oder `repo:` überall. Ein Klick auf ein Repository zeigt seine offenen PRs/MRs und «Ganzes Repository analysieren»; bei leerem Suchfeld stehen die zuletzt geöffneten Repositories da. Neuer Filter «Beteiligt» für PRs/MRs, denen man zugewiesen ist oder an denen man sich beteiligt hat (GitHub `involves:@me`/`assignee:@me`, GitLab «assigned to me»). API: `GET /api/repos?q=`, `GET /api/repos/{provider}/{owner}/{repo}/prs`, `GET /api/search?q=`.
@@ -113,7 +115,8 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 ### Neu
 - Erster PoC: offene GitHub-PRs (eigene und Review-Anfragen), Zerlegung in Segmente, Quick wins per Regeln (ohne KI), Datenflüsse in Aufrufreihenfolge mit Diagramm, zeilenweises «ok» lokal in JSON-Dateien für Agenten, Inline-Kommentare werden sofort veröffentlicht, IntelliJ-artiges UI.
 
-[Unreleased]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.3.0...v0.4.0
