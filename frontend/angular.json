@@ -23,6 +23,7 @@
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
+            "allowedCommonJsDependencies": ["elkjs"],
             "styles": [
               "@fontsource/inter/400.css",
               "@fontsource/inter/500.css",

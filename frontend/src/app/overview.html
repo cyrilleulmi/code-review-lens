@@ -65,7 +65,8 @@
           <span class="warning" [title]="t('Für diese Änderungen erwarten die Regeln einen Test einer bestimmten Form (z. B. verweigerter Zugriff, Test über HTTP), der fehlt – Details unter «Erwartete Tests (Regeln)»')">{{ c.rules }}</span>
         }
       </span>
-      <span class="ring" [style.--p]="percent(c.progress)">
+      <span class="ring" [style.--p]="percent(c.progress)" [style.--pa]="percentAll(c.progress)"
+            [title]="t('{ok} von {total} Zeilen hier akzeptiert, {all} davon überall', { ok: c.progress.ok, total: c.progress.total, all: c.progress.all })">
         <span>{{ percent(c.progress) }}%</span>
       </span>
       <span class="switch on" role="switch" aria-checked="true" tabindex="0" [title]="t('Kategorie ausschalten (ausgeblendet, braucht kein Ok)')"

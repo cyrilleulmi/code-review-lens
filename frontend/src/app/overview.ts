@@ -97,6 +97,11 @@ export class Overview {
     return p.total === 0 ? 0 : Math.round((p.ok / p.total) * 100);
   }
 
+  /** Share of the lines accepted at all their places (the blue part of the ring). */
+  protected percentAll(p: { all: number; total: number }): number {
+    return p.total === 0 ? 0 : Math.round((p.all / p.total) * 100);
+  }
+
   protected openCategory(id: string): void {
     const cat = this.store.bundle()!.analysis.categories.find((c) => c.id === id);
     if (cat && isFlowView(cat) && cat.groups[0]?.flowId) {

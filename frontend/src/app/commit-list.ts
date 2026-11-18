@@ -49,7 +49,7 @@ interface Row {
             <app-icon name="refresh" [size]="14" class="ico" />
             <span class="title">{{ t('Neu seit letztem Review') }}</span>
             @if (sp.total > 0 && sp.ok === sp.total) {
-              <app-icon name="check" [size]="13" class="okicon" />
+              <app-icon name="checkAll" [size]="13" class="okicon" />
             } @else {
               <span class="cnt">{{ sp.ok }}/{{ sp.total }}</span>
             }
@@ -101,7 +101,7 @@ interface Row {
             </span>
             @if (p.total > 0) {
               @if (p.ok === p.total) {
-                <app-icon name="check" [size]="13" class="okicon" />
+                <app-icon name="checkAll" [size]="13" class="okicon" />
               } @else {
                 <span class="cnt">{{ p.ok }}/{{ p.total }}</span>
               }
@@ -168,7 +168,7 @@ interface Row {
       background: color-mix(in srgb, var(--warn) 8%, transparent);
     }
     .cnt { font-size: 11px; color: var(--fg-muted); font-variant-numeric: tabular-nums; flex: none; }
-    .okicon { color: var(--ok); }
+    .okicon { color: var(--ok-all-fg); }
     .mark {
       display: inline-grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 4px;
       background: none; color: var(--fg-muted); cursor: pointer; opacity: 0; flex: none;

@@ -238,6 +238,7 @@ Bei einem Fehler zeigt das UI eine Meldung und lädt den Status neu. Ändert ein
 ### 6.3 Commits und Blame
 
 * `GET …/commits`: Commit-Liste vom Host (PR: alle Commits; ganzes Repo: die letzten 50 des Branches), dazu der Diff jedes Commits (parallel, max. 6). `Attribution` spielt die Diffs entlang der First-Parent-Kette nach und ordnet jede geänderte Zeile des PR-Diffs einem Commit zu. Das Ergebnis landet in `commits.json` und gilt, solange `headSha` und `Attribution.VERSION` gleich bleiben. Fehlt der Host, kommt das letzte Ergebnis oder eine leere Liste mit `error`.
+* `GET …/file?path=`: erst wenn das UI im Flow «Ganze Klassen» zeigt, pro Datei; aus `sources/` (eine dort fehlende Datei wird einmal vom Host geholt), nicht gecacht – die Zeilen entstehen aus Quelltext und Diff.
 * `GET …/blame?path=`: erst wenn das UI annotiert, pro Datei. GitHub über GraphQL, GitLab über REST. Cache unter `blame/<pfad>.json` pro `headSha`.
 
 ### 6.4 Ganzes Repository (`number` = 0)
@@ -376,7 +377,8 @@ Die vollständige, belegte Liste steht in [11-verbesserungen.md](11-verbesserung
 |---|---|
 | **Bundle** | Antwort auf `GET …/{number}`: PR-Infos, Dateiliste, Analyse, Review-Status in einem. |
 | **Slot** | Ein Segment an einem Ort (UI-intern). Einheit für Fortschritt und «Block ok». |
-| **Halb akzeptiert** | Zeile ist an einem anderen ihrer Orte akzeptiert, hier noch nicht (abgeleitet, nicht gespeichert). |
+| **Halb akzeptiert** | Zeile ist an einem Teil ihrer Orte akzeptiert (abgeleitet, nicht gespeichert); im UI grün. |
+| **Überall akzeptiert** | Zeile ist an allen ihren Orten akzeptiert (Feld `ok`); im UI blau – auch eine Zeile mit nur einem Ort. |
 | **SegmentFacts** | Was ein Kategorie-Modul über ein Segment wissen darf (Pfad, Regel, Schicht, Aspekt, Querschnitt, «in einem Fluss»). |
 | **Attribution** | Zuordnung jeder geänderten Zeile zu dem Commit, der sie gemacht hat. |
 | **First-Parent-Kette** | Vom Head immer dem ersten Parent folgen; Seitenzweige laufen über ihren Merge-Commit. |

@@ -208,7 +208,7 @@ function noteworthy(e: SpecEntry): boolean {
               }
               <span class="where">{{ e.line ?? e.oldLine }}</span>
               @if (r.done) {
-                <app-icon name="check" [size]="12" class="ok" />
+                <app-icon name="checkAll" [size]="12" class="ok" />
               }
             </div>
             @if (r.changes.length && isExpanded(key)) {
@@ -277,7 +277,7 @@ function noteworthy(e: SpecEntry): boolean {
     .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .prev { color: var(--fg-dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .where { margin-left: auto; flex: none; color: var(--fg-dim); font: 11px var(--font-ui); }
-    .ok { color: var(--ok); flex: none; }
+    .ok { color: var(--ok-all-fg); flex: none; }
     .xmarks { display: inline-flex; align-items: center; gap: 5px; flex: none; padding: 0 6px; border: 1px solid var(--border-strong);
       border-radius: 4px; background: none; color: var(--fg-muted); font: 10.5px var(--font-ui); cursor: pointer; white-space: nowrap; }
     .xmarks.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent);

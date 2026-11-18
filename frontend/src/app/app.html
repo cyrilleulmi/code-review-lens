@@ -53,6 +53,11 @@
             [title]="t('Annotieren mit Git Blame: Commit, Autor und Datum jeder Zeile')">
       <app-icon name="annotate" />
     </button>
+    <button type="button" class="tb-btn" [class.on]="store.diffMode() === 'split'" [attr.aria-pressed]="store.diffMode() === 'split'"
+            (click)="store.setDiffMode(store.diffMode() === 'split' ? 'unified' : 'split')"
+            [title]="store.diffMode() === 'split' ? t('Kombinierte Ansicht: entfernte und neue Zeilen untereinander') : t('Seite an Seite: alter Code links, neuer Code rechts')">
+      <app-icon name="split" />
+    </button>
     <button type="button" class="tb-btn" [class.on]="store.testInfo()" (click)="store.toggleTestInfo()" [attr.aria-pressed]="store.testInfo()"
             [title]="store.testInfo() ? t('Testinfos ausblenden: Abdeckung, Test-Verknüpfungen und Hinweise im Code, Testfarben im Flow') : t('Testinfos einblenden: Abdeckung, Test-Verknüpfungen und Hinweise im Code, Testfarben im Flow')">
       <app-icon name="test" />

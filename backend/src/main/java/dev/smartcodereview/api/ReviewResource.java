@@ -12,6 +12,7 @@ import dev.smartcodereview.model.Model.PullRequestSummary;
 import dev.smartcodereview.model.Model.ReviewBundle;
 import dev.smartcodereview.model.Model.ReviewState;
 import dev.smartcodereview.model.Model.Settings;
+import dev.smartcodereview.model.Model.WholeFile;
 import dev.smartcodereview.provider.ProviderException;
 import dev.smartcodereview.store.DataStore;
 import jakarta.inject.Inject;
@@ -149,6 +150,17 @@ public class ReviewResource {
     public Commits commits(@PathParam("provider") String provider, @PathParam("owner") String owner,
                            @PathParam("repo") String repo, @PathParam("number") int number) {
         return service.commits(new PrRef(provider, owner, repo, number));
+    }
+
+    /** A changed file as a whole at the PR head, deleted lines woven in. */
+    @GET
+    @Path("/prs/{provider}/{owner}/{repo}/{number}/file")
+    public WholeFile wholeFile(@PathParam("provider") String provider, @PathParam("owner") String owner,
+                               @PathParam("repo") String repo, @PathParam("number") int number, @QueryParam("path") String path) {
+        if (path == null || path.isBlank()) {
+            throw new IllegalArgumentException("path fehlt");
+        }
+        return service.wholeFile(new PrRef(provider, owner, repo, number), path);
     }
 
     /** git blame of a changed file at the PR head. */

@@ -13,9 +13,17 @@
     <span class="knob" aria-hidden="true"><span></span></span>
   </button>
   <span class="progress-text">{{ t('{ok}/{total} Zeilen ok', { ok: progress().ok, total: progress().total }) }}</span>
-  <button type="button" class="btn" [class.success]="progress().total > 0 && progress().ok === progress().total" (click)="markFlow()">
-    <app-icon name="check" [size]="14" /> {{ t('Ganzen Flow als ok markieren') }}
+  @let flowLevel = accepted(progress());
+  <button type="button" class="btn" [class.success]="flowLevel !== 'open'" [class.acc-all]="flowLevel === 'all'" (click)="markFlow()"
+          [title]="flowLevel !== 'open' ? t('Markierung in diesem Flow entfernen') : t('Alle Zeilen in diesem Flow als ok markieren')">
+    <app-icon [name]="flowLevel === 'all' ? 'checkAll' : 'check'" [size]="14" /> {{ t('Ganzen Flow als ok markieren') }}
   </button>
+  @if (progress().multi > 0) {
+    <button type="button" class="btn everywhere" [class.success]="flowLevel === 'all'" (click)="markFlowEverywhere()"
+            [title]="flowLevel === 'all' ? t('An den anderen Orten wieder zurücknehmen') : t('Alle Zeilen des Flows an allen ihren Orten als ok markieren')">
+      <app-icon name="checkAll" [size]="14" /> {{ t('Flow überall ok') }}
+    </button>
+  }
 </div>
 
 <div class="focus-bar">
@@ -36,10 +44,10 @@
     <span class="hint">{{ t('Im Knoten:') }} <app-icon name="focus" [size]="11" /> {{ t('alles ausser diesem Knoten und was dahinter liegt ausblenden') }} · <app-icon name="eye" [size]="11" /> {{ t('ein-/ausblenden') }}</span>
   } @else {
     @let i = stepIndex()!;
-    <span class="step-info">{{ t('Schritt') }} <b>{{ i + 1 }}</b> {{ t('von') }} {{ nodes().length }}</span>
+    <span class="step-info">{{ codeLevel() === 'class' ? t('Klasse') : t('Schritt') }} <b>{{ i + 1 }}</b> {{ t('von') }} {{ units().length }}</span>
     <button type="button" class="ftool" [disabled]="i === 0" (click)="step(-1)"><app-icon name="arrowLeft" [size]="13" /> {{ t('Zurück') }}</button>
     <button type="button" class="ftool primary" (click)="okAndNext()"><app-icon name="check" [size]="13" /> {{ t('Ok & weiter') }}</button>
-    <button type="button" class="ftool" [disabled]="i === nodes().length - 1" (click)="step(1)">{{ t('Weiter') }} <app-icon name="arrowRight" [size]="13" /></button>
+    <button type="button" class="ftool" [disabled]="i === units().length - 1" (click)="step(1)">{{ t('Weiter') }} <app-icon name="arrowRight" [size]="13" /></button>
     <span class="spacer"></span>
     <button type="button" class="ftool" (click)="stepIndex.set(null)"><app-icon name="close" [size]="13" /> {{ t('Beenden') }}</button>
   }
@@ -67,7 +75,7 @@
   <div class="run-legend" [attr.aria-label]="t('Was die Tests ausführen')">
     <span class="lbl">{{ t('Tests:') }}</span>
     @for (r of runLegend; track r) {
-      <span class="run-key" [class]="'run-key run-' + r"><span class="swatch"></span>{{ t(stepLabels[r]) }}</span>
+      <span class="run-key" [class]="'run-key run-' + r"><app-icon name="test" [size]="13" />{{ t(stepLabels[r]) }}</span>
     }
     <span class="sep">·</span>
     <span class="edge-key" [title]="t('Ein Test läuft durch diesen Aufruf')"><svg width="22" height="8"><path d="M1 4 H21" class="k-solid" /></svg>{{ t(edgeLabels.tested) }}</span>
@@ -82,7 +90,69 @@
   </div>
 }
 
-<div class="diagram" role="list">
+<div class="level-bar">
+  <span class="lbl">{{ t('Diagramm') }}</span>
+  <div class="seg-switch text" role="group" [attr.aria-label]="t('Ebene des Diagramms')">
+    <button type="button" [class.on]="level() === 'class'" [attr.aria-pressed]="level() === 'class'" (click)="setLevel('class')"
+            [title]="t('Ein Knoten pro Klasse: ihre Methoden des Flows zusammengefasst, Verbindungen zwischen den Klassen')">{{ t('Klassen') }}</button>
+    <button type="button" [class.on]="level() === 'combined'" [attr.aria-pressed]="level() === 'combined'" (click)="setLevel('combined')"
+            [title]="t('Klassen als Rahmen, ihre Methoden als kleinere Knoten darin; Verbindungen zwischen den Methoden')">{{ t('Klassen + Methoden') }}</button>
+    <button type="button" [class.on]="level() === 'method'" [attr.aria-pressed]="level() === 'method'" (click)="setLevel('method')"
+            [title]="t('Ein Knoten pro Methode bzw. Funktion')">{{ t('Methoden') }}</button>
+  </div>
+  @let classCount = level() === 'class' ? boxes().length : frames().length;
+  @let methodCount = level() === 'class' ? 0 : boxes().length;
+  <span class="hint">
+    @if (classCount) {
+      {{ classCount === 1 ? t('1 Klasse') : t('{n} Klassen', { n: classCount }) }}
+    }
+    @if (classCount && methodCount) {
+      ·
+    }
+    @if (methodCount) {
+      {{ methodCount === 1 ? t('1 Methode') : t('{n} Methoden', { n: methodCount }) }}
+    }
+  </span>
+  <span class="spacer"></span>
+  @if (hasMoved()) {
+    <button type="button" class="ftool" (click)="resetLayout()" [title]="t('Alle verschobenen Knoten wieder automatisch anordnen')">
+      <app-icon name="refresh" [size]="13" /> {{ t('Anordnung zurücksetzen') }}
+    </button>
+  }
+  <span class="hint">{{ t('Knoten und Klassen lassen sich ziehen') }}</span>
+</div>
+
+<div class="diagram" role="list" [class.dragging]="dragging()">
+  @for (f of frames(); track f.key) {
+    @let fp = progressOf(f.ids);
+    @let fl = accepted(fp);
+    <div class="frame" [style.left.px]="f.x" [style.top.px]="f.y" [style.width.px]="f.w" [style.height.px]="f.h" [style.--area]="areaColor(f.area)"
+         [class.done]="fl !== 'open'" [class.acc-all]="fl === 'all'" [class.off]="isOff(f.ids)" [class.root]="focused() === f.key">
+      <div class="frame-head" role="button" tabindex="0" [title]="f.hint"
+           (mouseenter)="hover(f.ids)" (mouseleave)="hover(null)" (click)="openBox(f)" (keydown.enter)="openBox(f)"
+           (pointerdown)="dragStart($event, f.ids)" (pointermove)="dragMove($event)" (pointerup)="dragEnd($event)" (pointercancel)="dragEnd($event)">
+        <app-symbol-badge kind="class" />
+        <span class="name">{{ f.name }}</span>
+        @if (areaLabel(f.area); as a) {
+          <b class="area">{{ a }}</b>
+        }
+        @if (fl !== 'open') {
+          <app-icon [name]="fl === 'all' ? 'checkAll' : 'check'" [size]="13" class="ok" [title]="fl === 'all' ? t('überall akzeptiert') : t('in diesem Flow akzeptiert, noch nicht überall')" />
+        } @else {
+          <span class="cnt">{{ fp.ok }}/{{ fp.total }}</span>
+        }
+        <span class="acts">
+          <button type="button" class="eye" (click)="toggleHidden(f.ids, $event)" [title]="allHidden(f.ids) ? t('Einblenden') : t('Ausblenden')">
+            <app-icon [name]="allHidden(f.ids) ? 'eyeOff' : 'eye'" [size]="12" />
+          </button>
+          <button type="button" class="focus" [class.on]="focused() === f.key" (click)="focusOn(f, $event)"
+                  [title]="focused() === f.key ? t('Alle wieder einblenden') : t('Alle anderen Knoten ausblenden (dieser Knoten und alle dahinter bleiben sichtbar)')">
+            <app-icon name="focus" [size]="12" />
+          </button>
+        </span>
+      </div>
+    </div>
+  }
   <svg [attr.width]="d.width" [attr.height]="d.height" class="edges">
     <defs>
       <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -95,8 +165,8 @@
       }
     </defs>
     @for (e of d.edges; track $index) {
-      <path [attr.d]="e.d" class="edge" [class.hot]="hovered() === e.from || hovered() === e.to" [class.back]="e.back" [class.http]="e.http" [class.bridged]="e.bridged"
-            [class.dim]="!!hovered() && hovered() !== e.from && hovered() !== e.to"
+      <path [attr.d]="e.d" class="edge" [class.hot]="isHot(e.ends)" [class.back]="e.back" [class.http]="e.http" [class.bridged]="e.bridged"
+            [class.dim]="!!hovered() && !isHot(e.ends)"
             [class.run-separate]="e.run === 'separate'" [class.run-faint]="e.run === 'partial' || e.run === 'none'"
             [style.stroke]="'var(--edge-' + e.c + ')'" [attr.marker-end]="'url(#arrow-' + e.c + ')'"><title>{{ e.title }}</title></path>
       @if (e.http) {
@@ -109,46 +179,78 @@
       }
     }
   </svg>
-  @for (n of nodes(); track n.step.segmentId; let i = $index) {
-    @let p = nodeProgress(n.step.segmentId);
-    @let run = runOf(n.step.segmentId);
+  @for (b of boxes(); track b.key) {
+    @let p = progressOf(b.ids);
+    @let pl = accepted(p);
+    @let run = runOf(b.ids);
     <div class="node" role="listitem" tabindex="0"
-            [style.left.px]="n.x" [style.top.px]="n.y" [style.width.px]="d.nodeW" [style.height.px]="d.nodeH"
-            [class.done]="p.total > 0 && p.ok === p.total" [class.quick]="n.segment.category === 'quick-wins'"
-            [class.off]="!visible().has(n.step.segmentId)" [class.other-commit]="!store.inCommitSegment(n.step.segmentId)" [class.current]="stepIndex() === i" [class.root]="focused() === n.step.segmentId"
-            [style.--area]="areaColor(areaOf(n.segment))"
+            [style.left.px]="b.x" [style.top.px]="b.y" [style.width.px]="b.w" [style.height.px]="b.h"
+            [class.done]="pl !== 'open'" [class.acc-all]="pl === 'all'" [class.quick]="b.quick" [class.cls]="level() === 'class'" [class.mini]="b.mini"
+            [class.off]="isOff(b.ids)" [class.other-commit]="otherCommit(b.ids)" [class.current]="isCurrent(b.ids)" [class.root]="focused() === b.key"
+            [style.--area]="areaColor(b.area)"
             [class.run-tested]="run === 'tested'" [class.run-mocked]="run === 'mocked'" [class.run-none]="run === 'none'"
-            [title]="runTitle(n.step.segmentId)"
-            (mouseenter)="hovered.set(n.step.segmentId)" (mouseleave)="hovered.set(null)"
-            (click)="scrollTo(n.step.segmentId)" (keydown.enter)="scrollTo(n.step.segmentId)">
-      <span class="no">{{ n.no }}</span>
+            [title]="runTitle(b.ids)"
+            (mouseenter)="hover(b.ids)" (mouseleave)="hover(null)"
+            (pointerdown)="dragStart($event, [b.key])" (pointermove)="dragMove($event)" (pointerup)="dragEnd($event)" (pointercancel)="dragEnd($event)"
+            (click)="openBox(b)" (keydown.enter)="openBox(b)">
+      <span class="no">{{ b.no }}</span>
       <span class="txt">
-        <span class="name"><app-symbol-badge [kind]="n.segment.symbolKind" /> {{ nodeName(n.segment) }}</span>
-        <span class="file">
-          @if (areaText(n.segment); as a) {
-            <b class="area">{{ a }}</b>
-          }
-          {{ nodeHint(n.segment) }}</span>
+        <span class="name"><app-symbol-badge [kind]="b.kind" /> {{ b.name }}</span>
+        @if (!b.mini) {
+          <span class="file">
+            @if (areaLabel(b.area); as a) {
+              <b class="area">{{ a }}</b>
+            }
+            {{ b.hint }}</span>
+        }
       </span>
-      @if (mockWarned(n.step.segmentId)) {
+      @if (run) {
+        <app-icon name="test" [size]="13" class="run-ico" />
+      }
+      @if (mockWarned(b.ids)) {
         <app-icon name="warning" [size]="13" class="mock-warn" />
       }
-      @if (p.total > 0 && p.ok === p.total) {
-        <app-icon name="check" [size]="14" class="ok" />
+      @if (pl !== 'open') {
+        <app-icon [name]="pl === 'all' ? 'checkAll' : 'check'" [size]="14" class="ok" />
       } @else {
         <span class="cnt">{{ p.ok }}/{{ p.total }}</span>
       }
       <span class="acts">
-        <button type="button" class="eye" (click)="toggleHidden(n.step.segmentId, $event)" [title]="hidden().has(n.step.segmentId) ? t('Einblenden') : t('Ausblenden')">
-          <app-icon [name]="hidden().has(n.step.segmentId) ? 'eyeOff' : 'eye'" [size]="12" />
+        <button type="button" class="eye" (click)="toggleHidden(b.ids, $event)" [title]="allHidden(b.ids) ? t('Einblenden') : t('Ausblenden')">
+          <app-icon [name]="allHidden(b.ids) ? 'eyeOff' : 'eye'" [size]="12" />
         </button>
-        <button type="button" class="focus" [class.on]="focused() === n.step.segmentId" (click)="focusOn(n.step.segmentId, $event)"
-                [title]="focused() === n.step.segmentId ? t('Alle wieder einblenden') : t('Alle anderen Knoten ausblenden (dieser Knoten und alle dahinter bleiben sichtbar)')">
+        <button type="button" class="focus" [class.on]="focused() === b.key" (click)="focusOn(b, $event)"
+                [title]="focused() === b.key ? t('Alle wieder einblenden') : t('Alle anderen Knoten ausblenden (dieser Knoten und alle dahinter bleiben sichtbar)')">
           <app-icon name="focus" [size]="12" />
         </button>
       </span>
     </div>
   }
+</div>
+
+<div class="level-bar">
+  <span class="lbl">{{ t('Code') }}</span>
+  <div class="seg-switch text" role="group" [attr.aria-label]="t('Ebene des Codes')">
+    <button type="button" [class.on]="codeLevel() === 'whole'" [attr.aria-pressed]="codeLevel() === 'whole'" (click)="setCodeLevel('whole')"
+            [title]="t('Ein Block pro Klasse mit der ganzen Datei: die Methoden des Flows an ihrem Ort, dazwischen alles, was sich in der Klasse nicht geändert hat')">{{ t('Ganze Klassen') }}</button>
+    <button type="button" [class.on]="codeLevel() === 'class'" [attr.aria-pressed]="codeLevel() === 'class'" (click)="setCodeLevel('class')"
+            [title]="t('Eine Karte pro Klasse: ihre Methoden des Flows zusammen, in der Reihenfolge der Datei')">{{ t('Klassen') }}</button>
+    <button type="button" [class.on]="codeLevel() === 'method'" [attr.aria-pressed]="codeLevel() === 'method'" (click)="setCodeLevel('method')"
+            [title]="t('Ein Block pro Methode bzw. Funktion, in Aufrufreihenfolge; aufeinanderfolgende Methoden einer Klasse stehen unter ihrem Namen zusammen')">{{ t('Methoden') }}</button>
+    <button type="button" [class.on]="codeLevel() === 'inline'" [attr.aria-pressed]="codeLevel() === 'inline'" (click)="setCodeLevel('inline')"
+            [title]="t('Zeile für Zeile: der aufgerufene Block steht direkt nach der Zeile, die ihn aufruft – eine Methode wird nicht erst zu Ende gelesen. Mehrfach aufgerufene Blöcke stehen mehrfach da, die Häkchen gelten überall')">{{ t('Zeile') }}</button>
+  </div>
+  <button type="button" class="ftool" [class.on]="codeFollows()" [attr.aria-pressed]="codeFollows()" (click)="toggleCodeFollows()"
+          [title]="codeFollows() ? t('Der Code folgt dem Diagramm: Klassen bei «Klassen», sonst Methoden. Klick: die Ebene des Codes eigens festhalten') : t('Der Code hat eine eigene Ebene. Klick: wieder dem Diagramm folgen')">
+    <app-icon name="link" [size]="13" /> {{ t('wie Diagramm') }}
+  </button>
+  <span class="spacer"></span>
+  <div class="seg-switch text" role="group" [attr.aria-label]="t('Ansicht der Änderungen')">
+    <button type="button" [class.on]="store.diffMode() === 'unified'" [attr.aria-pressed]="store.diffMode() === 'unified'" (click)="store.setDiffMode('unified')"
+            [title]="t('Kombinierte Ansicht: entfernte und neue Zeilen untereinander')">{{ t('Kombiniert') }}</button>
+    <button type="button" [class.on]="store.diffMode() === 'split'" [attr.aria-pressed]="store.diffMode() === 'split'" (click)="store.setDiffMode('split')"
+            [title]="t('Seite an Seite: alter Code links, neuer Code rechts')">{{ t('Seite an Seite') }}</button>
+  </div>
 </div>
 
 <div class="cards" #cards>
@@ -164,36 +266,165 @@
       }
     </defs>
     @for (c of connectors(); track $index) {
-      <path [attr.d]="c.d" class="rail" [class.hot]="hovered() === c.from || hovered() === c.to"
-            [class.dim]="!!hovered() && hovered() !== c.from && hovered() !== c.to" [class.http]="c.http"
+      <path [attr.d]="c.d" class="rail" [class.hot]="isHot([c.from, c.to])"
+            [class.dim]="!!hovered() && !isHot([c.from, c.to])" [class.http]="c.http"
             [style.stroke]="'var(--edge-' + c.c + ')'"
             [attr.marker-start]="'url(#rail-start-' + c.c + ')'" [attr.marker-end]="'url(#rail-end-' + c.c + ')'" />
     }
   </svg>
-  @for (n of nodes(); track n.step.segmentId; let i = $index) {
-    @if (visible().has(n.step.segmentId)) {
-      <app-code-block
-        [segment]="n.segment"
-        [place]="place()"
-        [step]="n.no"
-        [stepOf]="stepOf()"
-        [calledBy]="calledBy(n)"
-        [edgeColors]="edgeColors()"
-        [calledByColor]="calledByColor(n)"
-        [style.margin-left.px]="gutter() + n.depth * indent"
-        (mouseenter)="hovered.set(n.step.segmentId)"
-        (mouseleave)="hovered.set(null)"
-        (refClick)="scrollTo($event)"
-        (calledByClick)="scrollToParent(n)"
-      />
+  <!-- code by line: a block, and inside it after each calling line the block that is called -->
+  <ng-template #inlineStep let-s>
+    @if (nodeOf(s.id); as n) {
+      @if (s.cut) {
+        <button type="button" class="hidden-step" (click)="scrollTo(s.id)" [title]="t('Dieser Block steht weiter oben schon – Klick springt dorthin')">
+          <span class="no">{{ n.no }}</span> {{ nodeName(n.segment) }}
+          <span class="dim">{{ t('weiter oben gezeigt') }}</span>
+          <app-icon name="arrowRight" [size]="12" />
+        </button>
+      } @else if (visible().has(s.id)) {
+        <app-code-block
+          [segment]="n.segment"
+          [place]="place()"
+          [step]="n.no"
+          [stepOf]="stepOf()"
+          [edgeColors]="edgeColors()"
+          [inline]="s.children"
+          [inlineTpl]="inlineStep"
+          (mouseover)="hoverInner($event, s.id)"
+          (refClick)="scrollTo($event)"
+        />
+      } @else {
+        @if (stepIndex() === null) {
+          <button type="button" class="hidden-step" (click)="toggleHidden([s.id], $event)" [title]="t('Einblenden')">
+            <span class="no">{{ n.no }}</span> {{ nodeName(n.segment) }}
+            <span class="dim">{{ isDone(s.id) && !hidden().has(s.id) ? t('erledigt') : t('ausgeblendet') }}</span>
+            <app-icon name="eye" [size]="12" />
+          </button>
+        }
+        <!-- its own code is not shown, the blocks it calls still are -->
+        @for (c of s.children; track c.key) {
+          <ng-container [ngTemplateOutlet]="inlineStep" [ngTemplateOutletContext]="{ $implicit: c }" />
+        }
+      }
+    }
+  </ng-template>
+  <!-- whole classes: every file of a class as one block -->
+  @for (w of wholeCards(); track w.key) {
+    @if (anyVisible(w.ids)) {
+      <div class="unit whole" [attr.data-class]="w.classKey" (mouseenter)="hover(w.ids)" (mouseleave)="hover(null)">
+        @if (w.block; as b) {
+          <app-code-block
+            [segment]="b.segment"
+            [place]="place()"
+            [parts]="b.parts"
+            [owners]="b.owners"
+            [starts]="b.starts"
+            [stepOf]="stepOf()"
+            [edgeColors]="edgeColors()"
+            (refClick)="scrollTo($event)"
+          />
+        } @else {
+          <div class="whole-note" [class.failed]="w.failed">
+            <app-symbol-badge kind="class" /> <b>{{ w.name }}</b> <span class="dim">{{ w.path }}</span>
+            @if (w.failed) {
+              <span><app-icon name="warning" [size]="12" /> {{ t('Die Datei liess sich nicht laden – es stehen nur die Methoden des Flows da') }}</span>
+            } @else {
+              <span><span class="spinner"></span> {{ t('Datei wird geladen …') }}</span>
+            }
+          </div>
+          @if (w.failed) {
+            @for (n of w.members; track n.step.segmentId) {
+              <app-code-block [segment]="n.segment" [place]="place()" [step]="n.no" [stepOf]="stepOf()" [edgeColors]="edgeColors()" (refClick)="scrollTo($event)" />
+            }
+          }
+        }
+      </div>
     } @else if (stepIndex() === null) {
-      <button type="button" class="hidden-step" [style.margin-left.px]="gutter() + n.depth * indent" (click)="toggleHidden(n.step.segmentId, $event)"
-              [title]="t('Einblenden')">
-        <span class="no">{{ n.no }}</span> {{ nodeName(n.segment) }}
-        <span class="dim">{{ isDone(n.step.segmentId) && !hidden().has(n.step.segmentId) ? t('erledigt') : t('ausgeblendet') }}
-</span>
+      <button type="button" class="hidden-step" (click)="toggleHidden(w.ids, $event)" [title]="t('Einblenden')">
+        <app-symbol-badge kind="class" /> {{ w.name }}
+        <span class="dim">{{ t('ausgeblendet') }}</span>
         <app-icon name="eye" [size]="12" />
       </button>
+    }
+  }
+  @for (root of inlineRoots(); track root.key) {
+    <div class="unit inline" (mouseleave)="hover(null)">
+      <ng-container [ngTemplateOutlet]="inlineStep" [ngTemplateOutletContext]="{ $implicit: root }" />
+    </div>
+  }
+  @for (u of codeCards(); track u.key) {
+    @if (stepIndex() === null || anyVisible(u.ids)) {
+      @let cardLevel = u.framed ? accepted(progressOf(u.ids)) : 'open';
+      <div class="unit" [class.class-card]="u.framed" [class.done]="cardLevel !== 'open'" [class.acc-all]="cardLevel === 'all'" [class.run]="!u.framed" [class.lit]="!u.framed && hoveredClass() === u.classKey" [class.wide]="u.wide"
+           [attr.data-class]="u.classKey" [style.margin-left.px]="gutter() + u.depth * indent()" [style.--area]="areaColor(u.area)">
+        @if (u.framed) {
+          @let up = progressOf(u.ids);
+          @let ul = accepted(up);
+          <header class="class-head" [class.acc-all]="ul === 'all'" (mouseenter)="hover(u.ids)" (mouseleave)="hover(null)">
+            <app-symbol-badge kind="class" />
+            <span class="cname">{{ u.name }}</span>
+            @if (areaLabel(u.area); as a) {
+              <span class="area-tag" [style.--t]="areaColor(u.area)" [title]="t('Schicht')">{{ a }}</span>
+            }
+            <span class="files" [title]="u.files">{{ u.files }}</span>
+            <span class="count-steps">{{ u.ids.length === 1 ? t('1 Methode im Flow') : t('{n} Methoden im Flow', { n: u.ids.length }) }}</span>
+            <span class="spacer"></span>
+            <span class="count" [class.complete]="ul !== 'open'">{{ up.ok }}/{{ up.total }}</span>
+            <button type="button" class="ok-btn" [class.on]="ul !== 'open'" (click)="markUnit(u, $event)"
+                    [title]="ul !== 'open' ? t('Markierung in diesem Flow entfernen') : t('Alle Methoden der Klasse in diesem Flow als ok markieren')">
+              <app-icon [name]="ul === 'all' ? 'checkAll' : 'check'" [size]="14" /> {{ ul !== 'open' ? t('Ok') : t('Klasse ok') }}
+            </button>
+            @if (up.multi > 0) {
+              <button type="button" class="ok-btn everywhere" [class.on]="ul === 'all'" (click)="markUnitEverywhere(u, $event)"
+                      [title]="ul === 'all' ? t('An den anderen Orten wieder zurücknehmen') : t('Alle Methoden der Klasse an allen ihren Orten als ok markieren')">
+                <app-icon name="checkAll" [size]="14" /> {{ ul === 'all' ? t('Überall ok') : t('Klasse überall ok') }}
+              </button>
+            }
+          </header>
+        } @else {
+          <header class="run-head" (mouseenter)="hoverClass(u)" (mouseleave)="hoverClass(null)"
+                  [title]="t('Die Blöcke an dieser Klammer gehören zur selben Klasse')">
+            <app-symbol-badge kind="class" />
+            <span class="cname">{{ u.name }}</span>
+            <span class="files">{{ u.files }}</span>
+            @if (u.ids.length > 1) {
+              <span class="count-steps">{{ t('{n} Methoden', { n: u.ids.length }) }}</span>
+            }
+            @if (u.others.length) {
+              <span class="others">{{ t('auch:') }}
+                @for (o of u.others; track o.id) {
+                  <button type="button" class="other" (click)="scrollTo(o.id)" [title]="t('Gleiche Klasse an anderer Stelle des Flows – Klick springt dorthin')"><b>{{ o.no }}</b> {{ o.name }}</button>
+                }
+              </span>
+            }
+          </header>
+        }
+        @for (m of u.members; track m.node.step.segmentId) {
+          @let n = m.node;
+          @if (visible().has(n.step.segmentId)) {
+            <app-code-block
+              [segment]="n.segment"
+              [place]="place()"
+              [step]="n.no"
+              [stepOf]="stepOf()"
+              [calledBy]="calledBy(n)"
+              [edgeColors]="edgeColors()"
+              [calledByColor]="calledByColor(n)"
+              [style.margin-left.px]="m.indent * indent()"
+              (mouseenter)="hover([n.step.segmentId])"
+              (mouseleave)="hover(null)"
+              (refClick)="scrollTo($event)"
+              (calledByClick)="scrollToParent(n)"
+            />
+          } @else if (stepIndex() === null) {
+            <button type="button" class="hidden-step" [style.margin-left.px]="m.indent * indent()" (click)="toggleHidden([n.step.segmentId], $event)" [title]="t('Einblenden')">
+              <span class="no">{{ n.no }}</span> {{ nodeName(n.segment) }}
+              <span class="dim">{{ isDone(n.step.segmentId) && !hidden().has(n.step.segmentId) ? t('erledigt') : t('ausgeblendet') }}</span>
+              <app-icon name="eye" [size]="12" />
+            </button>
+          }
+        }
+      </div>
     }
   }
 </div>

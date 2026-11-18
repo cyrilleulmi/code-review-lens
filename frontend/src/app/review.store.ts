@@ -6,6 +6,7 @@ import {
   Comment,
   Commit,
   Commits,
+  Component,
   LineMark,
   LogEntry,
   Me,
@@ -19,13 +20,16 @@ import {
   SetupImpact,
   SpecEntry,
   TestInfo,
+  WholeFile,
   errorMessage,
   isTestsView,
   prLabel,
   providerInfo,
 } from './api';
-import { AcceptStatus, Acceptance, accept, acceptedElsewhere, acceptedIn, statusOf } from './acceptance';
+import { LineBoxes, everywhereTargets, lineBoxes } from './accept-boxes';
+import { AcceptStatus, Acceptance, accept, statusOf } from './acceptance';
 import { laterExpectationsByTest } from './commit-findings';
+import { FlowCodeLevel, FlowDiagramLevel } from './flow-classes';
 import { groupWarnings, testNamer } from './mock-boundaries';
 import { reloadMessage } from './reload-message';
 import { serverText, t } from './i18n';
@@ -42,8 +46,13 @@ export type Selection =
 export type PrFilter = 'all' | 'authored' | 'review-requested' | 'involved';
 
 export interface Progress {
+  /** lines accepted at the place they are counted at (without a place: at all their places) */
   ok: number;
   total: number;
+  /** lines accepted at all their places ("everywhere"); the same as ok when counted without a place */
+  all: number;
+  /** lines shown at several places: only for these "here" and "everywhere" are different things */
+  multi: number;
 }
 
 /**
@@ -64,6 +73,21 @@ export interface PlaceInfo {
 }
 
 const SEP = '\u0000';
+
+/** How code blocks show a diff: in one column or side by side. */
+export type DiffMode = 'unified' | 'split';
+
+/** The settings of the page of one flow (see ReviewStore.flowPage). */
+export interface FlowPage {
+  /** level of the diagram; the default shows classes as frames with their methods inside */
+  level: FlowDiagramLevel;
+  /** own level of the code; null = the code follows the diagram (codeLevelFor) */
+  code: FlowCodeLevel | null;
+  /** areas (layers: frontend, api, logic, ...; '' = none) taken out of diagram and code, the flow is bridged around them */
+  hiddenAreas: ReadonlySet<string>;
+}
+
+const FLOW_PAGE_DEFAULT: FlowPage = { level: 'combined', code: null, hiddenAreas: new Set() };
 
 /** Commit filter value for "new or changed since my last review" (also in the URL: …/c/since-review). */
 export const SINCE_REVIEW = 'since-review';
@@ -90,10 +114,10 @@ export class ReviewStore {
   readonly selection = signal<Selection>({ kind: 'overview' });
   readonly collapseDone = signal(true);
   /**
-   * Areas (layers: frontend, api, logic, ...; '' = none) taken out of the flow views: their steps leave diagram and
-   * code, the flow is bridged around them. Applies to every flow, not stored (like the other focus tools).
+   * What the user set on the page of a flow, by flow id: the levels of diagram and code and the areas taken out. It
+   * holds for that flow only and while its PR is open; nothing of it is stored, every flow starts with the defaults.
    */
-  readonly hiddenAreas = signal<ReadonlySet<string>>(new Set());
+  private readonly flowPages = signal<ReadonlyMap<string, FlowPage>>(new Map());
   /** "Collapse all" / "expand all" of the current view; code blocks follow it. Reset on navigation. */
   readonly collapseCommand = signal<{ collapsed: boolean; seq: number } | null>(null);
   /** Segment to scroll to after the next render (e.g. clicked in a flow diagram). */
@@ -115,8 +139,15 @@ export class ReviewStore {
    * at the top of a flow); the Tests category and the test overview stay as they are.
    */
   readonly testInfo = signal(readFlag('scr.testInfo'));
+  /**
+   * How the code blocks show a diff: 'unified' = one column, deleted above added lines; 'split' = side by side, old
+   * code left and new code right. Stored per browser.
+   */
+  readonly diffMode = signal<DiffMode>(readChoice('scr.diffMode', ['unified', 'split'] as const) ?? 'unified');
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
   readonly blames = signal<ReadonlyMap<string, Blame | 'loading' | null>>(new Map());
+  /** Whole files by path (code view "Ganze Klassen" of a flow): loaded on demand; null = could not be loaded. */
+  readonly wholeFiles = signal<ReadonlyMap<string, WholeFile | 'loading' | null>>(new Map());
   /** commit from the URL, applied once the commits are loaded */
   private pendingCommit: string | null = null;
   private blameErrorShown = false;
@@ -195,8 +226,7 @@ export class ReviewStore {
 
   /** Reviewable lines new or changed since the last review, with their progress. */
   readonly sinceReviewProgress = computed<Progress>(() => {
-    const lines = this.sinceReviewLines();
-    return { ok: lines.filter((l) => this.isOkAt(l.path, l.key, null)).length, total: lines.length };
+    return this.progressOfLines(this.sinceReviewLines());
   });
 
   /** Commits that came after the last review (the head reviewed before is one of the PR's commits). */
@@ -287,6 +317,15 @@ export class ReviewStore {
     const map = new Map<string, string>();
     for (const c of this.bundle()?.analysis.components ?? []) {
       c.segmentIds.forEach((id) => map.set(id, c.area));
+    }
+    return map;
+  });
+
+  /** Component (class, module) of each segment. */
+  readonly componentBySegment = computed(() => {
+    const map = new Map<string, Component>();
+    for (const c of this.bundle()?.analysis.components ?? []) {
+      c.segmentIds.forEach((id) => map.set(id, c));
     }
     return map;
   });
@@ -452,6 +491,7 @@ export class ReviewStore {
 
   close(): void {
     this.resetCommits();
+    this.flowPages.set(new Map());
     this.bundle.set(null);
     this.comments.set([]);
     this.ok.set(new Set());
@@ -463,6 +503,9 @@ export class ReviewStore {
     const previous = this.bundle()?.pr;
     if (!previous || prLabel(previous) !== prLabel(b.pr) || previous.headSha !== b.pr.headSha) {
       this.resetCommits(); // another PR, or new commits: blame and attribution are outdated
+    }
+    if (!previous || prLabel(previous) !== prLabel(b.pr)) {
+      this.flowPages.set(new Map()); // the flows of another PR
     }
     this.bundle.set(b);
     this.applyState(b.state);
@@ -527,6 +570,7 @@ export class ReviewStore {
     this.commitFilter.set(null);
     this.blames.set(new Map());
     this.blameErrorShown = false;
+    this.wholeFiles.set(new Map());
   }
 
   loadCommits(): void {
@@ -591,8 +635,13 @@ export class ReviewStore {
 
   /** Review progress of a commit's lines (a line counts when it is ok at all its places). */
   commitProgress(sha: string): Progress {
-    const lines = this.commitLines(sha);
-    return { ok: lines.filter((l) => this.isOkAt(l.path, l.key, null)).length, total: lines.length };
+    return this.progressOfLines(this.commitLines(sha));
+  }
+
+  /** Progress of lines counted without a place: a line counts when it is ok at all its places. */
+  private progressOfLines(lines: LineMark[]): Progress {
+    const ok = lines.filter((l) => this.isOkAt(l.path, l.key, null)).length;
+    return { ok, total: lines.length, all: ok, multi: 0 };
   }
 
   /** sha of the commit that made the change on a line of the PR diff, if known */
@@ -638,6 +687,21 @@ export class ReviewStore {
     writeFlag('scr.testInfo', on);
   }
 
+  setDiffMode(mode: DiffMode): void {
+    this.diffMode.set(mode);
+    writeChoice('scr.diffMode', mode);
+  }
+
+  /** The settings of the page of a flow (the defaults until the user changes one there). */
+  flowPage(flowId: string): FlowPage {
+    return this.flowPages().get(flowId) ?? FLOW_PAGE_DEFAULT;
+  }
+
+  /** Changes settings of the page of one flow; the pages of the other flows keep theirs. */
+  setFlowPage(flowId: string, change: Partial<FlowPage>): void {
+    this.flowPages.set(new Map(this.flowPages()).set(flowId, { ...this.flowPage(flowId), ...change }));
+  }
+
   /** Fetches the blame of a file once (cached by the backend per head commit). */
   ensureBlame(path: string): void {
     const key = this.prKey();
@@ -654,6 +718,15 @@ export class ReviewStore {
         }
       },
     });
+  }
+
+  /** Loads a changed file as a whole (once per PR snapshot). */
+  ensureWholeFile(path: string): void {
+    const key = this.prKey();
+    if (!key || this.wholeFiles().has(path)) return;
+    const put = (value: WholeFile | 'loading' | null) => this.wholeFiles.set(new Map(this.wholeFiles()).set(path, value));
+    put('loading');
+    this.api.wholeFile(key, path).subscribe({ next: (f) => put(f), error: () => put(null) });
   }
 
   /** Shows the coverage of the changed code: in the test category if switched on, else on its own page. */
@@ -764,23 +837,16 @@ export class ReviewStore {
     return statusOf(this.acceptanceOf(k, this.linePlaces().get(k) ?? []), this.linePlaces().get(k) ?? [], place);
   }
 
-  /** The other places (group ids) at which the line is already accepted. */
-  acceptedElsewhere(path: string, key: string, place: string | null): string[] {
-    const k = path + SEP + key;
-    const places = this.linePlaces().get(k) ?? [];
-    return acceptedElsewhere(this.acceptanceOf(k, places), places, place);
-  }
-
   /** Is the line ok at this place? place null: ok at all its places. */
   isOkAt(path: string, key: string, place: string | null): boolean {
     return this.lineStatus(path, key, place) === 'accepted';
   }
 
-  /** How many of the line's places are ok (for lines shown at several places). */
-  okCount(path: string, key: string): { ok: number; of: number } {
+  /** The boxes of a line as seen from a place: one per place the line is shown at (switched-off categories do not count). */
+  lineBoxes(path: string, key: string, place: string | null): LineBoxes {
     const k = path + SEP + key;
     const places = this.linePlaces().get(k) ?? [];
-    return { ok: acceptedIn(this.acceptanceOf(k, places), places).length, of: places.length };
+    return lineBoxes(this.acceptanceOf(k, places), places, place);
   }
 
   /** Lines of the slots; every slot (segment at a place) counts on its own. */
@@ -788,6 +854,9 @@ export class ReviewStore {
     const segs = this.segments();
     let total = 0;
     let done = 0;
+    let all = 0;
+    let multi = 0;
+    const linePlaces = this.linePlaces();
     const seen = new Set<string>();
     const ignored = this.ignored();
     for (const slot of slots) {
@@ -802,12 +871,21 @@ export class ReviewStore {
           continue;
         }
         total++;
-        if (this.isOkAt(s.path, k, slot.place)) {
+        const line = s.path + SEP + k;
+        const places = linePlaces.get(line) ?? [];
+        const acceptance = this.acceptanceOf(line, places);
+        if (statusOf(acceptance, places, slot.place) === 'accepted') {
           done++;
+        }
+        if (statusOf(acceptance, places, null) === 'accepted') {
+          all++;
+        }
+        if (places.length > 1) {
+          multi++;
         }
       }
     }
-    return { ok: done, total };
+    return { ok: done, total, all, multi };
   }
 
   linesOf(slots: Iterable<Slot>): LineMark[] {
@@ -833,6 +911,26 @@ export class ReviewStore {
   toggle(lines: LineMark[], scope: string): void {
     const allOk = lines.length > 0 && lines.every((l) => this.isOkAt(l.path, l.key, l.place));
     this.mark(lines, !allOk, scope);
+  }
+
+  /**
+   * "Ok everywhere": accepts the lines at all their places (ok), or takes that step back: the accept at the other
+   * places goes, the place of the mark stays as it is. A mark without a place is taken back at all places.
+   */
+  markEverywhere(lines: LineMark[], ok: boolean, scope: string): void {
+    if (ok) {
+      this.mark(lines.map((l) => ({ ...l, place: null })), true, scope);
+      return;
+    }
+    const linePlaces = this.linePlaces();
+    this.mark(lines.flatMap((l) => everywhereTargets(linePlaces.get(l.path + SEP + l.key) ?? [], l.place, false)
+      .map((place): LineMark => ({ ...l, place }))), false, scope);
+  }
+
+  /** Accepts the lines everywhere, or - if all of them already are - takes that back (see markEverywhere). */
+  toggleEverywhere(lines: LineMark[], scope: string): void {
+    const allOk = lines.length > 0 && lines.every((l) => this.isOkAt(l.path, l.key, null));
+    this.markEverywhere(lines, !allOk, scope);
   }
 
   /** Optimistic version of the backend logic (ReviewService.mark): one ok per place, then "ok everywhere". */
@@ -947,8 +1045,26 @@ function readFlag(name: string): boolean {
 }
 
 function writeFlag(name: string, on: boolean): void {
+  writeChoice(name, String(on));
+}
+
+/** A stored choice out of a fixed set; null when nothing (valid) is stored. */
+function readChoice<T extends string>(name: string, allowed: readonly T[]): T | null {
   try {
-    localStorage.setItem(name, String(on));
+    const value = localStorage.getItem(name);
+    return allowed.find((a) => a === value) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeChoice(name: string, value: string | null): void {
+  try {
+    if (value == null) {
+      localStorage.removeItem(name);
+    } else {
+      localStorage.setItem(name, value);
+    }
   } catch {
     // storage unavailable - the setting is just not remembered
   }

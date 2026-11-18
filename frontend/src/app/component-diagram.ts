@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component as NgComponent, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component as NgComponent, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Component } from './api';
+import { FRAME_PADDING, Layout, Rect, curvePath, frameAround, layoutFlow, packRows, routePath } from './flow-layout';
 import { Icon } from './icon';
 import { t } from './i18n';
 import { areaColor } from './look';
@@ -12,7 +13,18 @@ interface Box {
   file: string;
 }
 
-/** Columns from the outside in: who calls whom, roughly left to right. */
+/** The frame of a layer around its components. */
+interface Frame extends Rect {
+  id: string;
+  label: string;
+}
+
+/** Room for the name of a layer in the head of its frame. */
+function headWidth(label: string): number {
+  return 40 + t(label).length * 8.5;
+}
+
+/** The layers from the outside in: who calls whom, roughly left to right. */
 /** Labels in German, translated with t(). */
 const AREAS: { id: string; label: string }[] = [
   { id: 'test', label: 'Tests' },
@@ -29,13 +41,16 @@ const AREAS: { id: string; label: string }[] = [
 const W = 196;
 const H = 44;
 const GAP = 64;
-const ROW = 10;
-const HEAD = 28;
+const ROW = 14;
+/** Distance between components side by side in a layer without connections, and between such layers. */
+const LOOSE_GAP = 22;
 
 /**
- * Overview of the whole change as components (classes / modules, template and styles included) in columns by
- * layer, with the calls between them; REST calls from the frontend into the backend are drawn dashed.
- * The focus button of a component shows only it and everything it depends on.
+ * Overview of the whole change as components (classes / modules, template and styles included) with the calls
+ * between them; REST calls from the frontend into the backend are drawn dashed. Every layer is a frame around its
+ * components. Like the flow diagrams it is placed by the layout engine (flow-layout.ts): callers left of what they
+ * call, few crossings, connections at right angles around the boxes - the components of a layer need not stand in
+ * one column. The focus button of a component shows only it and everything it depends on.
  */
 @NgComponent({
   selector: 'app-component-diagram',
@@ -61,12 +76,14 @@ const HEAD = 28;
     } @else {
       <div class="scroll">
         <div class="canvas" [style.width.px]="size().w" [style.height.px]="size().h">
-          @for (col of columns(); track col.id) {
-            <div class="col-head" [style.left.px]="col.x" [style.width.px]="w" [style.--area]="areaColor(col.id)">{{ t(col.label) }}</div>
+          @for (f of frames(); track f.id) {
+            <div class="frame" [style.left.px]="f.x" [style.top.px]="f.y" [style.width.px]="f.w" [style.height.px]="f.h" [style.--area]="areaColor(f.id)">
+              <span class="frame-head">{{ t(f.label) }}</span>
+            </div>
           }
           <svg [attr.width]="size().w" [attr.height]="size().h" class="edges">
             <defs>
-              <marker id="cd-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <marker id="cd-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
                 <path d="M0 0 L8 4 L0 8 z" fill="currentColor" />
               </marker>
             </defs>
@@ -89,7 +106,7 @@ const HEAD = 28;
                 <span class="file">{{ b.file }}</span>
               </span>
               @if (p.total > 0 && p.ok === p.total) {
-                <app-icon name="check" [size]="13" class="ok" />
+                <app-icon name="checkAll" [size]="13" class="ok" />
               } @else {
                 <span class="cnt">{{ p.ok }}/{{ p.total }}</span>
               }
@@ -114,10 +131,13 @@ const HEAD = 28;
     .legend i { display: inline-block; width: 18px; border-top: 2px solid var(--fg-dim); }
     .legend i.l-http { border-top: 2px dashed var(--fg-dim); }
     .empty { color: var(--fg-muted); padding: 12px; margin: 0; }
-    .scroll { overflow: auto; max-height: 560px; }
-    .canvas { position: relative; margin: 10px 14px 14px; }
-    .col-head { position: absolute; top: 0; height: 20px; color: var(--area); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; border-bottom: 2px solid color-mix(in srgb, var(--area) 50%, transparent); }
-    .edges { position: absolute; inset: 0; overflow: visible; color: var(--fg-dim); }
+    .scroll { overflow: auto; max-height: 78vh; }
+    .canvas { position: relative; margin: 14px; }
+    .frame { position: absolute; box-sizing: border-box; border: 1px solid color-mix(in srgb, var(--area) 40%, var(--border)); border-radius: 12px;
+      background: color-mix(in srgb, var(--area) 6%, transparent); }
+    .frame-head { display: block; padding: 11px 14px 0; color: var(--area); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+    .edges { position: absolute; inset: 0; overflow: visible; color: var(--fg-dim); pointer-events: none; }
+    .edge { pointer-events: stroke; }
     .edge { fill: none; stroke: var(--diagram-line); stroke-width: 1.5; transition: stroke 0.15s, opacity 0.15s; }
     .edge { opacity: 0.75; }
     .edge.http { stroke-dasharray: 5 3; }
@@ -127,14 +147,15 @@ const HEAD = 28;
       background: color-mix(in srgb, var(--area) 7%, var(--bg-editor));
       border: 1px solid var(--node-border); border-left: 4px solid var(--area); border-radius: 8px; cursor: pointer; transition: border-color 0.15s, opacity 0.15s; }
     .node:hover { border-color: var(--accent); }
-    .node.done { border-color: var(--ok-border); background: var(--ok-head); }
+    /* accepted (counted without a place: everywhere): the outline in the accept colour, the left edge stays the layer's */
+    .node.done { border-color: var(--ok-all); border-left-color: var(--area); }
     .node.root { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(53, 116, 240, 0.3); }
     .node.dim { opacity: 0.4; }
     .txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
     .name { font: 600 12px var(--font-code); color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .file { font-size: 10.5px; color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cnt { font-size: 10.5px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
-    .ok { color: var(--ok); }
+    .ok { color: var(--ok-all-fg); }
     .focus { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--fg-dim); cursor: pointer; flex: none; }
     .focus:hover { background: var(--bg-hover); color: var(--fg); }
     .focus.on { color: var(--accent-fg); background: rgba(53, 116, 240, 0.18); }
@@ -182,12 +203,17 @@ export class ComponentDiagram {
     return { comps, edges: edges.filter((e) => shownIds.has(e.from) && shownIds.has(e.to)) };
   });
 
-  protected readonly columns = computed(() =>
-    AREAS.filter((a) => this.shown().comps.some((c) => c.area === a.id)).map((a, i) => ({ ...a, x: i * (W + GAP) })),
-  );
+  /** The layers that have a component shown, as columns of the sketch. */
+  private readonly columns = computed(() => {
+    const step = W + FRAME_PADDING.left + FRAME_PADDING.right + GAP;
+    return AREAS.filter((a) => this.shown().comps.some((c) => c.area === a.id)).map((a, i) => ({ ...a, x: FRAME_PADDING.left + i * step }));
+  });
 
-  /** Column layout; inside a column, components are ordered by the average row of their callers (fewer crossings). */
-  protected readonly boxes = computed<Box[]>(() => {
+  /**
+   * The sketch, shown until the layout engine has answered (and kept if it cannot be loaded): one column per layer;
+   * inside a column, components are ordered by the average row of their callers (fewer crossings).
+   */
+  private readonly sketch = computed<Box[]>(() => {
     const { comps, edges } = this.shown();
     const row = new Map<string, number>();
     const boxes: Box[] = [];
@@ -202,42 +228,130 @@ export class ComponentDiagram {
         row.set(c.id, i);
         const code = c.paths.find((p) => !/\.(html?|s?css|less)$/.test(p)) ?? c.paths[0];
         const file = c.paths.map((p) => p.substring(p.lastIndexOf('/') + 1)).join(' · ');
-        boxes.push({ c: { ...c, paths: [code, ...c.paths.filter((p) => p !== code)] }, x: col.x, y: HEAD + i * (H + ROW), file });
+        boxes.push({ c: { ...c, paths: [code, ...c.paths.filter((p) => p !== code)] }, x: col.x, y: FRAME_PADDING.top + i * (H + ROW), file });
       });
     }
     return boxes;
   });
 
-  protected readonly size = computed(() => ({
-    w: Math.max(...this.boxes().map((b) => b.x + W), 0) + 30,
-    h: Math.max(...this.boxes().map((b) => b.y + H), 0) + 6,
-  }));
+  /** What the layout was computed for: the components shown, their layers and the connections. */
+  private readonly layoutKey = computed(() =>
+    this.sketch().map((b) => b.c.id + ':' + b.c.area).join(',') + '|' + this.shown().edges.map((e) => e.from + '>' + e.to).join(','));
+  /** The layout of the engine with the key it was computed for; null until the first one arrives. */
+  private readonly placed = signal<{ key: string; layout: Layout } | null>(null);
+  private readonly auto = computed(() => {
+    const placed = this.placed();
+    return placed?.key === this.layoutKey() ? placed.layout : null;
+  });
+
+  /**
+   * Layers without any connection: the layered layout has no place for them (it would stack them in its first
+   * column), so they are packed in rows below it, their components side by side.
+   */
+  private readonly loose = computed(() => {
+    const connected = new Set(this.shown().edges.flatMap((e) => [e.from, e.to]));
+    return new Set(this.columns().filter((col) => !this.shown().comps.some((c) => c.area === col.id && connected.has(c.id))).map((col) => col.id));
+  });
+
+  constructor() {
+    // Let the layout engine place the connected part of the diagram whenever the components or connections shown change.
+    effect(() => {
+      const key = this.layoutKey();
+      const loose = this.loose();
+      const boxes = this.sketch().filter((b) => !loose.has(b.c.area));
+      const edges = this.shown().edges;
+      const frames = this.columns().filter((f) => !loose.has(f.id));
+      untracked(() => {
+        layoutFlow({
+          boxes: boxes.map((b) => ({ key: 'b:' + b.c.id, w: W, h: H, frame: 'f:' + b.c.area })),
+          // room for the name of the layer in the head of its frame
+          frames: frames.map((f) => ({ key: 'f:' + f.id, minW: headWidth(f.label) })),
+          edges: edges.map((e, i) => ({ id: 'e' + i, from: 'b:' + e.from, to: 'b:' + e.to })),
+        }).then((layout) => {
+          if (this.layoutKey() === key) {
+            this.placed.set({ key, layout });
+          }
+        }).catch(() => {
+          // the engine could not be loaded or failed: the sketch stays
+        });
+      });
+    });
+  }
+
+  /**
+   * The diagram as it is drawn: a frame per layer around its components. Connected layers where the layout engine
+   * put them, the layers without connection in rows below; before the engine has answered, the sketch.
+   */
+  private readonly arranged = computed<{ boxes: Box[]; frames: Frame[] }>(() => {
+    const auto = this.auto();
+    const sketch = this.sketch();
+    const around = (boxes: Box[]) => frameAround(boxes.map((b) => ({ x: b.x, y: b.y, w: W, h: H })));
+    if (!auto) {
+      return {
+        boxes: sketch,
+        frames: this.columns().map((col) => ({ id: col.id, label: col.label, ...around(sketch.filter((b) => b.c.area === col.id)) })),
+      };
+    }
+    const loose = this.loose();
+    const boxes: Box[] = [];
+    const frames: Frame[] = [];
+    for (const col of this.columns().filter((c) => !loose.has(c.id))) {
+      const members = sketch.filter((b) => b.c.area === col.id).map((b) => ({ ...b, ...(auto.boxes.get('b:' + b.c.id) ?? { x: b.x, y: b.y }) }));
+      boxes.push(...members);
+      frames.push({ id: col.id, label: col.label, ...(auto.frames.get('f:' + col.id) ?? around(members)) });
+    }
+    // the layers without connection: components in up to three columns, the frames in rows as wide as the rest
+    const pad = FRAME_PADDING;
+    const packs = this.columns().filter((c) => loose.has(c.id)).map((col) => {
+      const members = sketch.filter((b) => b.c.area === col.id);
+      const columns = Math.min(members.length, members.length <= 4 ? 2 : 3);
+      const rows = Math.ceil(members.length / columns);
+      return {
+        col, members, columns,
+        w: Math.max(headWidth(col.label), columns * (W + LOOSE_GAP) - LOOSE_GAP + pad.left + pad.right),
+        h: rows * (H + ROW) - ROW + pad.top + pad.bottom,
+      };
+    });
+    const bottom = Math.max(0, ...frames.map((f) => f.y + f.h));
+    const width = Math.max(900, ...frames.map((f) => f.x + f.w));
+    packRows(packs, width, LOOSE_GAP).forEach((at, i) => {
+      const { col, members, columns, w, h } = packs[i];
+      const y = at.y + (bottom ? bottom + LOOSE_GAP + 6 : 0);
+      frames.push({ id: col.id, label: col.label, x: at.x, y, w, h });
+      members.forEach((b, n) => boxes.push({
+        ...b, x: at.x + pad.left + (n % columns) * (W + LOOSE_GAP), y: y + pad.top + Math.floor(n / columns) * (H + ROW),
+      }));
+    });
+    return { boxes, frames };
+  });
+
+  protected readonly boxes = computed(() => this.arranged().boxes);
+  protected readonly frames = computed(() => this.arranged().frames);
 
   protected readonly lines = computed(() => {
+    const auto = this.auto();
     const byId = new Map(this.boxes().map((b) => [b.c.id, b]));
     return this.shown().edges
-      .filter((e) => byId.has(e.from) && byId.has(e.to))
-      .map((e) => {
+      .flatMap((e, i) => (byId.has(e.from) && byId.has(e.to) ? [{ e, i }] : []))
+      .map(({ e, i }) => {
         const a = byId.get(e.from)!;
         const b = byId.get(e.to)!;
-        const y1 = a.y + H / 2;
-        const y2 = b.y + H / 2;
-        let d: string;
-        if (b.x > a.x) {
-          const x1 = a.x + W;
-          d = `M ${x1} ${y1} C ${x1 + GAP / 2} ${y1}, ${b.x - GAP / 2} ${y2}, ${b.x - 3} ${y2}`;
-        } else if (b.x < a.x) {
-          const x1 = a.x;
-          d = `M ${x1} ${y1} C ${x1 - GAP / 2} ${y1}, ${b.x + W + GAP / 2} ${y2}, ${b.x + W + 3} ${y2}`;
-        } else {
-          const x1 = a.x + W;
-          d = `M ${x1} ${y1} C ${x1 + 34} ${y1}, ${x1 + 34} ${y2}, ${x1 + 3} ${y2}`;
-        }
+        const route = auto?.routes.get('e' + i);
+        const d = route ? routePath(route) : curvePath({ x: a.x, y: a.y, w: W, h: H }, { x: b.x, y: b.y, w: W, h: H }).d;
         const width = 1.3 + Math.min(2.5, Math.log2(e.calls));
         const title = `${a.c.name} → ${b.c.name}: ${t(e.calls === 1 ? '{n} Aufruf' : '{n} Aufrufe', { n: e.calls })}${e.http ? t(' (über REST/HTTP)') : ''}`;
         // a connection takes the colour of the calling layer: frontend -> backend reads cyan, backend calls orange/...
-        return { key: e.from + '>' + e.to, d, http: e.http, from: e.from, to: e.to, width, title, color: areaColor(a.c.area) };
+        return { key: e.from + '>' + e.to, d, http: e.http, from: e.from, to: e.to, width, title, color: areaColor(a.c.area), route };
       });
+  });
+
+  protected readonly size = computed(() => {
+    const frames = this.frames();
+    const points = this.lines().flatMap((l) => l.route ?? []);
+    return {
+      w: Math.max(...frames.map((f) => f.x + f.w), ...points.map((p) => p.x), 0) + 24,
+      h: Math.max(...frames.map((f) => f.y + f.h), ...points.map((p) => p.y), 0) + 12,
+    };
   });
 
   protected readonly focusName = computed(() => this.all().find((c) => c.id === this.focus())?.name ?? null);

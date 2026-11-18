@@ -191,7 +191,7 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
                   <span class="where">{{ fileOf(c.segment.path) }}:{{ range(c.segment) }}</span>
                   <span class="how">{{ c.how }}</span>
                   @if (c.done) {
-                    <app-icon name="check" [size]="12" class="ok" />
+                    <app-icon name="checkAll" [size]="12" class="ok" />
                   }
                 </button>
               } @empty {
@@ -242,11 +242,11 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
     .subject:disabled { cursor: default; color: var(--fg-muted); }
     .subject em { font-style: normal; color: var(--fg-dim); font-size: 11px; }
     .cover.indirect { border-style: dashed; }
-    .cover.done { border-color: var(--ok-border); }
+    .cover.done { border-color: var(--ok-all-border); }
     .sym { font-family: var(--font-code); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
     .where { color: var(--fg-dim); font-size: 11px; }
     .how { color: var(--fg-muted); font-size: 11px; padding-left: 4px; border-left: 1px solid var(--border); }
-    .ok { color: var(--ok); }
+    .ok { color: var(--ok-all-fg); }
     .none { color: var(--fg-dim); font-size: 12px; padding-top: 2px; }
     .summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 4px; margin: 0; padding: 8px 12px; color: var(--fg-muted);
       font-size: 12.5px; border-bottom: 1px solid var(--border); }

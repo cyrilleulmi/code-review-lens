@@ -3,6 +3,8 @@ package dev.smartcodereview;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.smartcodereview.analysis.Analyzer;
+import dev.smartcodereview.analysis.CodeText;
+import dev.smartcodereview.analysis.FileView;
 import dev.smartcodereview.analysis.Languages;
 import dev.smartcodereview.analysis.OpenApi;
 import dev.smartcodereview.analysis.Rules;
@@ -35,6 +37,7 @@ import dev.smartcodereview.model.Model.ReviewState;
 import dev.smartcodereview.model.Model.Settings;
 import dev.smartcodereview.model.Model.Segment;
 import dev.smartcodereview.model.Model.Snapshot;
+import dev.smartcodereview.model.Model.WholeFile;
 import dev.smartcodereview.provider.ProviderException;
 import dev.smartcodereview.provider.ReviewProvider;
 import dev.smartcodereview.repo.RepositorySnapshot;
@@ -807,6 +810,27 @@ public class ReviewService {
         Blame blame = provider(ref.provider()).blame(ref, path, sha);
         store.write(file, blame);
         return blame;
+    }
+
+    /**
+     * A changed file as a whole at the PR head, with the deleted lines woven in (code view "Ganze Klassen"). Its
+     * content comes from sources/; a file the analysis did not need is fetched once.
+     */
+    public WholeFile wholeFile(PrRef ref, String path) {
+        Snapshot snapshot = snapshot(ref);
+        DiffFile f = snapshot.files().stream().filter(x -> x.path().equals(path)).findFirst()
+                .orElseThrow(() -> new ProviderException(404, "Datei ist nicht Teil des Pull Requests: " + path));
+        String sha = snapshot.pr().headSha();
+        String source = "";
+        if (!"removed".equals(f.status())) {
+            Path file = DataStore.resolveInside(store.sourcesDir(ref), path);
+            if (!Files.isRegularFile(file)) {
+                fetchFiles(ref, List.of(path), sha, store.sourcesDir(ref));
+            }
+            source = store.readText(file)
+                    .orElseThrow(() -> new ProviderException(404, "Inhalt der Datei ist nicht verfügbar: " + path));
+        }
+        return new WholeFile(path, sha, FileView.whole(CodeText.of(source).lines, f.hunks()));
     }
 
     private Snapshot snapshot(PrRef ref) {

@@ -47,8 +47,9 @@
   }
   @for (n of rows(); track n.id) {
     @let p = progress(n);
+    @let lv = accepted(p);
     <div class="row" role="treeitem" [class]="'row d' + n.depth + ' ' + (n.css ?? '')" [class.selected]="isSelected(n)"
-         [class.done]="p.total > 0 && p.ok === p.total" [style.padding-left.px]="6 + n.depth * 16" (click)="open(n)" [title]="n.title ?? n.label">
+         [class.done]="lv !== 'open'" [style.padding-left.px]="6 + n.depth * 16" (click)="open(n)" [title]="n.title ?? n.label">
       <span class="chev" (click)="n.children?.length ? toggleOpen(n, $event) : null">
         @if (n.children?.length) {
           <app-icon [name]="isOpen(n) ? 'chevronDown' : 'chevronRight'" [size]="12" />
@@ -69,8 +70,9 @@
       }
       <span class="spacer"></span>
       @if (p.total > 0) {
-        @if (p.ok === p.total) {
-          <app-icon name="check" [size]="13" class="okicon" />
+        @if (lv !== 'open') {
+          <app-icon [name]="lv === 'all' ? 'checkAll' : 'check'" [size]="13" class="okicon" [class.acc-all]="lv === 'all'"
+                    [title]="lv === 'all' ? t('überall akzeptiert') : t('hier akzeptiert, noch nicht an allen Orten')" />
         } @else {
           <span class="cnt">{{ p.ok }}/{{ p.total }}</span>
         }

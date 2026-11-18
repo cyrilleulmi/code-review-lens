@@ -173,6 +173,13 @@ export interface Blame {
   commits: Commit[];
 }
 
+/** A changed file as a whole at the PR head: every line of the new version, deleted lines woven in. */
+export interface WholeFile {
+  path: string;
+  sha: string;
+  lines: DisplayLine[];
+}
+
 export interface LineRef {
   segmentId: string;
   symbol: string;
@@ -874,6 +881,10 @@ export class Api {
 
   commits(pr: PrKey): Observable<Commits> {
     return this.http.get<Commits>(`${base(pr)}/commits`);
+  }
+
+  wholeFile(pr: PrKey, path: string): Observable<WholeFile> {
+    return this.http.get<WholeFile>(`${base(pr)}/file`, { params: { path } });
   }
 
   blame(pr: PrKey, path: string): Observable<Blame> {

@@ -13,9 +13,10 @@
   background: color-mix(in srgb, var(--area-frontend) 3%, var(--bg-editor));
 }
 
+/* accepted: the outline in the accept colour - no tinted head; the left edge keeps the colour of the layer */
 :host(.done) {
-  border-color: var(--ok-border);
-  border-left-color: var(--area, var(--ok-border));
+  border-color: var(--acc);
+  border-left-color: var(--area, var(--acc));
 }
 
 :host(.flash) {
@@ -25,7 +26,8 @@
 
 /* a line jumped to from outside (e.g. an assertion in the Spec-Diff) */
 .row.flash-line {
-  box-shadow: inset 0 0 0 1px var(--accent);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
 
 .head {
@@ -43,10 +45,6 @@
   &.clickable {
     cursor: pointer;
   }
-}
-
-:host(.done) .head {
-  background: var(--ok-head);
 }
 
 .step-no {
@@ -187,6 +185,9 @@
   cursor: pointer;
   padding: 2px 4px;
   border-radius: 4px;
+  /* a narrow block (deep in a flow, inside a class card) cuts the caller, not the progress and the ok button */
+  min-width: 0;
+  overflow: hidden;
 
   &:hover {
     background: var(--bg-hover);
@@ -200,6 +201,12 @@
 .hint {
   color: var(--fg-dim);
   font-size: 11px;
+  flex: none;
+}
+
+.count,
+.ok-btn {
+  flex: none;
 }
 
 .count {
@@ -208,7 +215,7 @@
   font-size: 11.5px;
 
   &.complete {
-    color: var(--ok);
+    color: var(--acc-fg);
   }
 }
 
@@ -227,14 +234,26 @@
   cursor: pointer;
 
   &:hover {
-    border-color: var(--ok);
-    color: var(--ok);
+    border-color: var(--acc);
+    color: var(--acc-fg);
   }
 
   &.on {
-    background: var(--ok);
-    border-color: var(--ok);
-    color: var(--on-ok);
+    background: var(--acc);
+    border-color: var(--acc);
+    color: var(--on-acc);
+  }
+
+  /* "ok everywhere": blue on hover, filled blue once the block is accepted at all its places */
+  &.everywhere:hover {
+    border-color: var(--ok-all);
+    color: var(--ok-all-fg);
+  }
+
+  &.everywhere.on {
+    background: var(--ok-all);
+    border-color: var(--ok-all);
+    color: var(--on-ok-all);
   }
 }
 
@@ -248,20 +267,26 @@
   padding: 4px 0;
 }
 
+/* a row holds the blame cell (when annotated) and its sides: one in the unified view, old and new side by side */
 .row {
   display: grid;
-  grid-template-columns: 22px 38px 38px 18px 14px minmax(0, 1fr);
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
   min-width: max-content;
   position: relative;
 
-  &:hover {
+  &:hover > .side {
     background-color: var(--tint-hover);
   }
 
   &:hover .add-comment {
     opacity: 1;
   }
+}
+
+.side {
+  display: grid;
+  grid-template-columns: var(--check-w, 22px) 38px 38px 18px 14px minmax(0, 1fr);
+  align-items: start;
 }
 
 .t-add {
@@ -282,12 +307,12 @@
   }
 }
 
-.row.foreign {
+.side.foreign {
   opacity: 0.45;
 }
 
 /* commit view: a change made by another commit of the PR */
-.row.other-commit {
+.side.other-commit {
   background: none;
   opacity: 0.4;
 
@@ -300,7 +325,7 @@
 /* ------------------------------------------------------------- git blame column */
 
 :host(.annotated) .row {
-  grid-template-columns: 168px 22px 38px 38px 18px 14px minmax(0, 1fr);
+  grid-template-columns: 168px minmax(0, 1fr);
 }
 
 .g-blame {
@@ -371,7 +396,7 @@
   text-overflow: ellipsis;
 }
 
-.row.ok {
+.side.ok {
   .src code {
     opacity: 0.5;
   }
@@ -385,7 +410,7 @@
   }
 }
 
-.row.has-refs {
+.side.has-refs {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
@@ -396,26 +421,40 @@
   position: relative;
 }
 
-.half-note {
+/* the boxes of a line: one per place it is shown at, the place shown in front */
+.boxes {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  margin-left: 10px;
-  padding: 0 6px;
-  height: 15px;
-  border: 1px dashed color-mix(in srgb, var(--ok) 55%, transparent);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ok);
-  font: 500 10px/1 var(--font-ui);
-  cursor: pointer;
-  vertical-align: middle;
-  opacity: 0.85;
+}
 
-  &:hover {
-    opacity: 1;
-    background: color-mix(in srgb, var(--ok) 12%, transparent);
-  }
+/* the boxes of the other places act as one control: accept everywhere */
+.rest {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--code-line);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* whole class: the step of the flow that starts at this line */
+.step-mark {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  margin-left: 10px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font: 600 10.5px/1 var(--font-ui);
+  vertical-align: middle;
+  cursor: default;
 }
 
 /* Fall- und Effekt-Abgleich: an open finding on this line */
@@ -448,24 +487,6 @@
     &:hover {
       background: var(--bg-hover);
     }
-  }
-}
-
-.check.part {
-  border-color: var(--ok);
-  background: linear-gradient(135deg, var(--ok) 50%, transparent 50%);
-}
-
-.multi {
-  position: absolute;
-  right: -3px;
-  top: 1px;
-  font: 600 8.5px/1 var(--font-ui);
-  color: var(--cat-amber);
-  cursor: help;
-
-  &.done {
-    color: var(--ok);
   }
 }
 
@@ -522,7 +543,7 @@
   }
 
   &.done {
-    color: var(--ok);
+    color: var(--acc-fg);
   }
 
   &.indirect {
@@ -564,20 +585,66 @@
   padding: 0;
   display: grid;
   place-items: center;
+  box-sizing: border-box;
   border: 1px solid var(--check-border);
   border-radius: 3px;
   background: transparent;
-  color: var(--on-ok);
-  cursor: pointer;
+  color: var(--on-acc);
 
-  &:hover {
-    border-color: var(--ok);
+  &.small {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+  }
+
+  app-icon {
+    visibility: hidden;
   }
 
   &.on {
-    background: var(--ok);
-    border-color: var(--ok);
+    background: var(--acc);
+    border-color: var(--acc);
+
+    app-icon {
+      visibility: visible;
+    }
   }
+}
+
+button.check {
+  cursor: pointer;
+}
+
+/*
+ * Preview of a click: the boxes it ticks are shown filled with their check mark, in the colour they get - green for
+ * "here", blue when the click accepts the line everywhere (the other boxes, or the last box that was missing).
+ */
+.boxes:not(.acc-all) {
+  .front:not(.on):hover {
+    background: color-mix(in srgb, var(--ok) 60%, transparent);
+    border-color: var(--ok);
+    color: var(--on-ok);
+
+    app-icon {
+      visibility: visible;
+    }
+  }
+
+  &.completes:has(.front:not(.on):hover) .check,
+  &:has(.rest:hover) .check {
+    background: var(--ok-all);
+    border-color: var(--ok-all);
+    color: var(--on-ok-all);
+
+    app-icon {
+      visibility: visible;
+    }
+  }
+}
+
+/* accepted everywhere: a click on the other boxes takes them back */
+.boxes.acc-all .rest:hover .check {
+  opacity: 0.45;
 }
 
 .g-num {
@@ -656,7 +723,7 @@
 }
 
 .gap {
-  padding: 2px 0 2px 116px;
+  padding: 2px 0 2px calc(var(--check-w, 22px) + 94px);
   color: var(--fg-dim);
   font-family: var(--font-ui);
   font-size: 11.5px;
@@ -688,14 +755,100 @@ button.gap.open {
 }
 
 /* unfolded lines are unchanged context: a quiet left rule tells them from the lines shown anyway */
-.row.unfolded {
+.side.unfolded:not(.s-new) {
   box-shadow: inset 2px 0 0 var(--border);
+}
+
+/* ------------------------------------------------------------- side by side: old code left, new code right */
+
+.row.split {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-width: 0;
+
+  /* both halves stay as wide as the block: long lines wrap instead of scrolling one half away */
+  .src {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .g-blame {
+    height: auto;
+    min-height: var(--code-line);
+  }
+
+  > .side:last-child {
+    border-left: 1px solid var(--border);
+  }
+}
+
+:host(.annotated) .row.split {
+  grid-template-columns: 168px minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.side.s-old,
+.side.s-new,
+.side.empty {
+  grid-template-columns: var(--check-w, 22px) 38px 18px 14px minmax(0, 1fr);
+}
+
+/* nothing on this side: the line was added (left empty) or removed (right empty) */
+.side.empty {
+  background: repeating-linear-gradient(135deg, transparent 0 6px, var(--tint-stripe) 6px 12px);
+}
+
+/* flow: the call is on the new half - a dotted line in its colour leads there from the connector in the margin */
+.side.lead {
+  background-image: linear-gradient(to right, var(--lead) 50%, transparent 0);
+  background-size: 6px 1px;
+  background-position: left bottom;
+  background-repeat: repeat-x;
+}
+
+.code.split {
+  .gap {
+    padding-left: calc(var(--check-w, 22px) + 56px);
+  }
+
+  .thread {
+    margin-left: calc(var(--check-w, 22px) + 56px);
+    max-width: calc(50% - 100px);
+  }
+
+  .thread.right {
+    margin-left: calc(50% + var(--check-w, 22px) + 56px);
+  }
+}
+
+/* ------------------------------------------------------------- blocks inside the code (flow code by line) */
+
+/* the called block right after the calling line: indented under the call, in the fonts of the page again */
+.inline-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 10px 10px 44px;
+  font: 13px/1.4 var(--font-ui);
+  white-space: normal;
+
+  /* nothing to show in it (its blocks are hidden) */
+  &:empty {
+    display: none;
+  }
+}
+
+/* a collapsed block keeps the blocks it calls in view */
+.code.inline-only {
+  padding: 0;
+
+  .inline-slot {
+    margin-top: 8px;
+  }
 }
 
 /* ------------------------------------------------------------- comments */
 
 .thread {
-  margin: 4px 16px 8px 116px;
+  margin: 4px 16px 8px calc(var(--check-w, 22px) + 94px);
   padding: 8px 10px;
   max-width: 760px;
   background: var(--bg-panel);

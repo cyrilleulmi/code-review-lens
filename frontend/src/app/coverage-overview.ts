@@ -93,7 +93,7 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
                     <app-symbol-badge [kind]="r.segment.symbolKind" />
                     <span class="sym">{{ r.segment.symbol }}</span>
                     @if (r.done) {
-                      <app-icon name="check" [size]="12" class="ok" />
+                      <app-icon name="checkAll" [size]="12" class="ok" />
                     }
                     @if (r.open) {
                       <app-icon name="warning" [size]="12" class="open-mark" [title]="t(r.open === 1 ? '{n} offener Fall' : '{n} offene Fälle', { n: r.open }) + ': ' + t('kein Test prüft das')" />
@@ -231,7 +231,7 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
     .case-list li.clickable:hover .ctext { color: var(--accent-fg); text-decoration: underline; }
     .case-list .ctext { color: var(--fg); }
     .case-list .cline { color: var(--fg-dim); font-size: 11px; }
-    .ok { color: var(--ok); }
+    .ok { color: var(--ok-all-fg); }
     @media (max-width: 900px) {
       .row { grid-template-columns: minmax(0, 1fr) auto; }
       .tests { grid-column: 1 / -1; }

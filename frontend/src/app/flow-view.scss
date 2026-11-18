@@ -6,7 +6,9 @@
   position: relative;
   margin: 0 0 20px;
   padding: 16px;
-  overflow-x: auto;
+  overflow: auto;
+  /* a big flow keeps the code below in reach: the diagram scrolls inside */
+  max-height: 78vh;
   background:
     radial-gradient(circle at 1px 1px, var(--tint-dots) 1px, transparent 0) 0 0 / 16px 16px,
     var(--bg-panel-2);
@@ -19,10 +21,153 @@
   }
 }
 
+/* combined level: the frame of a class behind the smaller boxes of its methods */
+.frame {
+  position: absolute;
+  margin: 16px;
+  box-sizing: border-box;
+  border: 1px solid var(--node-border);
+  border-left: 4px solid var(--area, var(--node-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--area, transparent) 7%, var(--bg-panel));
+  transition: border-color 0.15s, opacity 0.15s;
+
+  /* accepted: the outline in the accept colour, the left edge keeps the colour of the layer */
+  &.done {
+    border-color: var(--acc);
+    border-left-color: var(--area, var(--acc));
+  }
+
+  &.root {
+    border-color: var(--accent);
+    border-left-color: var(--area, var(--accent));
+  }
+
+  &.off {
+    border-style: dashed;
+  }
+
+  &.off .frame-head {
+    opacity: 0.5;
+  }
+}
+
+.frame-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 6px 0 9px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+
+  .name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font: 600 12px var(--font-code);
+    color: var(--fg);
+  }
+
+  &:hover .name {
+    color: var(--accent-fg);
+  }
+
+  .area {
+    color: var(--area);
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+
+  .cnt {
+    color: var(--fg-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ok {
+    color: var(--acc-fg);
+  }
+
+  .acts {
+    display: inline-flex;
+    gap: 2px;
+
+    button {
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--fg-muted);
+      cursor: pointer;
+
+      &:hover {
+        background: var(--bg-hover);
+        color: var(--fg);
+      }
+    }
+
+    .focus.on {
+      color: var(--accent-fg);
+      background: rgba(53, 116, 240, 0.18);
+    }
+  }
+
+}
+
+/* boxes and frames can be moved with the pointer; while one is dragged nothing eases behind it */
+.node {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.diagram.dragging {
+  cursor: grabbing;
+
+  .node,
+  .frame-head {
+    cursor: grabbing;
+  }
+
+  .node,
+  .frame,
+  .edge {
+    transition: none;
+  }
+}
+
+/* a method inside the frame of its class: one line */
+.node.mini {
+  gap: 6px;
+  padding: 0 6px 0 7px;
+  border-radius: 6px;
+
+  .no {
+    min-width: 17px;
+    height: 17px;
+    font-size: 10px;
+  }
+}
+
 .edges {
   display: block;
   color: var(--diagram-line);
   overflow: visible;
+  pointer-events: none;
+
+  .edge,
+  text {
+    pointer-events: auto;
+  }
 }
 
 .edge {
@@ -56,21 +201,22 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  /* hovering never moves the box: the buttons in it stay where they are */
+  transition: border-color 0.15s, box-shadow 0.15s;
 
   &:hover {
     border-color: var(--accent);
     box-shadow: 0 4px 14px var(--shadow-color);
-    transform: translateY(-1px);
   }
 
   &.quick {
     border-style: dashed;
   }
 
+  /* accepted: the outline in the accept colour - no tinted box; the left edge keeps the colour of the layer */
   &.done {
-    border-color: var(--ok-border);
-    background: var(--ok-head);
+    border-color: var(--acc);
+    border-left-color: var(--area, var(--acc));
   }
 
   .no {
@@ -118,7 +264,38 @@
   }
 
   .ok {
-    color: var(--ok);
+    color: var(--acc-fg);
+  }
+}
+
+/* whole classes: while the file of a class is loading, or when it could not be loaded */
+.whole-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--fg-muted);
+  font-size: 12px;
+
+  b {
+    font: 600 12.5px var(--font-code);
+    color: var(--fg);
+  }
+
+  .dim {
+    color: var(--fg-dim);
+  }
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  &.failed app-icon {
+    color: var(--warn);
   }
 }
 
@@ -133,10 +310,222 @@
   /* only the editor scrolls vertically: a scrolled-away inside hid the blocks of the next flow */
   overflow-y: hidden;
 
-  > app-code-block,
-  > .hidden-step {
+  /* a card: one step, or a class with its steps */
+  > .unit {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     flex: none;
     min-width: 760px;
+  }
+
+  /* side by side: room for the old and the new half */
+  > .unit.wide {
+    min-width: 1040px;
+  }
+}
+
+/* ------------------------------------------------------------- levels: methods or classes, for diagram and code */
+
+.level-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 12px;
+
+  .lbl {
+    color: var(--fg-muted);
+    font-weight: 600;
+  }
+
+  .hint {
+    color: var(--fg-dim);
+    font-size: 11.5px;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+}
+
+/* class level of the diagram: a class box is a little heavier than a step */
+.node.cls .name {
+  font-weight: 600;
+}
+
+/* method level of the code: consecutive steps of one class hang on one bracket under the name of the class */
+.run {
+  padding: 2px 0 6px 8px;
+  border-left: 3px solid color-mix(in srgb, var(--area, var(--border-strong)) 55%, var(--border-strong));
+  border-radius: 6px;
+  /* a faint band in the colour of the layer: tells the bracket from the connectors beside it */
+  background: color-mix(in srgb, var(--area, transparent) 5%, transparent);
+  transition: border-color 0.15s;
+
+  &.lit {
+    border-left-color: var(--accent);
+
+    .run-head .cname {
+      color: var(--accent-fg);
+    }
+  }
+}
+
+.run-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+  margin-bottom: -2px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: default;
+
+  .cname {
+    font: 600 12px var(--font-code);
+    color: var(--fg);
+    transition: color 0.15s;
+  }
+
+  .files,
+  .count-steps,
+  .others {
+    color: var(--fg-dim);
+  }
+
+  .others {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .other {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 18px;
+    padding: 0 7px 0 2px;
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+    background: none;
+    color: var(--fg-muted);
+    font: 11px var(--font-code);
+    cursor: pointer;
+
+    b {
+      display: inline-grid;
+      place-items: center;
+      min-width: 14px;
+      height: 14px;
+      border-radius: 7px;
+      background: var(--bg-hover);
+      font: 600 9.5px var(--font-ui);
+    }
+
+    &:hover {
+      border-color: var(--accent);
+      color: var(--fg);
+    }
+  }
+}
+
+/* class level of the code: the steps of a class in one frame, in file order */
+.class-card {
+  padding: 0 8px 8px;
+  border: 1px solid var(--border-strong);
+  border-left: 4px solid var(--area, var(--border-strong));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--area, transparent) 5%, var(--bg-panel-2));
+
+  &.done {
+    border-color: var(--acc);
+    border-left-color: var(--area, var(--acc));
+  }
+}
+
+.class-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 2px 2px 0;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+
+  .cname {
+    font: 600 13px var(--font-code);
+    color: var(--fg);
+  }
+
+  .files {
+    color: var(--fg-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 40px;
+  }
+
+  .count-steps {
+    color: var(--fg-muted);
+    font-size: 11.5px;
+    flex: none;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .count {
+    color: var(--fg-muted);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+
+    &.complete {
+      color: var(--acc-fg);
+    }
+  }
+}
+
+.ok-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--bg-editor);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  flex: none;
+
+  &:hover {
+    border-color: var(--acc);
+    color: var(--acc-fg);
+  }
+
+  &.on {
+    background: var(--acc);
+    border-color: var(--acc);
+    color: var(--on-acc);
+  }
+
+  /* "ok everywhere": blue on hover, filled blue once the class is accepted at all its places */
+  &.everywhere:hover {
+    border-color: var(--ok-all);
+    color: var(--ok-all-fg);
+  }
+
+  &.everywhere.on {
+    background: var(--ok-all);
+    border-color: var(--ok-all);
+    color: var(--on-ok-all);
   }
 }
 
@@ -196,17 +585,9 @@
     }
   }
 
+  /* hide and focus are always there: a button that only appears on hover would push its neighbours aside */
   .acts {
     display: inline-flex;
-  }
-
-  .acts .eye {
-    display: none;
-  }
-
-  &:hover .acts .eye,
-  &.off .acts .eye {
-    display: grid;
   }
 
   .acts .focus.on {
@@ -335,12 +716,8 @@
   align-items: center;
   gap: 5px;
 
-  .swatch {
-    width: 12px;
-    height: 10px;
-    border: 1.5px solid var(--run);
-    border-radius: 3px;
-    background: color-mix(in srgb, var(--run) 14%, transparent);
+  app-icon {
+    color: var(--run);
   }
 
   &.run-tested {
@@ -353,11 +730,6 @@
 
   &.run-none {
     --run: var(--run-none);
-
-    .swatch {
-      border-style: dashed;
-      background: transparent;
-    }
   }
 }
 
@@ -382,7 +754,7 @@
   }
 }
 
-/* step box coloured by run status (the layer stripe on the left and done/current/root keep their meaning) */
+/* run status of a step: the test icon in its box, in the colour of the status - the box itself keeps its look */
 .node {
   &.run-tested {
     --run: var(--run-tested);
@@ -394,34 +766,11 @@
 
   &.run-none {
     --run: var(--run-none);
-    border-style: dashed;
   }
 
-  &.run-tested,
-  &.run-mocked,
-  &.run-none {
-    border-top-color: color-mix(in srgb, var(--run) 70%, transparent);
-    border-right-color: color-mix(in srgb, var(--run) 70%, transparent);
-    border-bottom-color: color-mix(in srgb, var(--run) 70%, transparent);
-
-    &:not(.done) {
-      background: color-mix(in srgb, var(--run) 6%, var(--bg-editor));
-    }
-
-    &:hover {
-      border-color: var(--accent);
-    }
-  }
-
-  &.run-none:not(.done) .name {
-    color: var(--fg-muted);
-  }
-
-  &.root,
-  &.current {
-    border-top-color: var(--accent);
-    border-right-color: var(--accent);
-    border-bottom-color: var(--accent);
+  .run-ico {
+    flex: none;
+    color: var(--run);
   }
 
   .mock-warn {
