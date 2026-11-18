@@ -71,6 +71,7 @@ cd frontend && npm start              # UI auf :4200, /api wird an :8080 weiterg
 | Kommentar | Sprechblase im Gutter (nur auf Zeilen im Diff), Ctrl+Enter sendet sofort an GitHub/GitLab |
 | Aufruf folgen | Farbige Chips `→ ② saveEvent` an der Aufrufstelle, «← aufgerufen von …» im Block-Kopf; jede Verbindung hat ihre Farbe (gleich im Diagramm und in der Linie links) |
 | Schichten erkennen | Farbiger Streifen + Badge an jedem Block und Knoten: Frontend (cyan), API/Adapter ein (orange), Use Case (violett), Application (blau), Domäne (grün), Daten/Adapter aus (gelb), Test (rosa); dazu die Sprache (TS, Java, …) |
+| Seite an Seite | Toolbar-Knopf (zwei Spalten): alter Code links, neuer rechts statt der kombinierten Ansicht; Blöcke mit nur neuen oder nur entfernten Zeilen bleiben einspaltig; pro Browser gespeichert |
 | Erledigtes ausblenden | Toolbar-Knopf (Pfeile): vollständig markierte Blöcke einklappen |
 | Fokussieren | Blocktitel anklicken = ein-/ausklappen; Leiste über jeder Liste: *Einzeln durchgehen* (ein Block nach dem anderen, «Ok & weiter»), *Alle ein-/ausklappen*; im Flow zusätzlich *Erledigte ausblenden* und pro Knoten 👁 ein-/ausblenden bzw. ⌖ «nur dieser Zweig» (blendet alle übrigen Knoten aus, wie einzeln mit 👁; sie bleiben im Diagramm) |
 | Kategorien | Schalter auf jeder Kategorie-Karte der Übersicht (bzw. Auge im Review-Baum): ausgeschaltete Kategorien sind ausgeblendet und brauchen kein Ok |

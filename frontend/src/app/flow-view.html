@@ -180,14 +180,14 @@
         [calledBy]="calledBy(n)"
         [edgeColors]="edgeColors()"
         [calledByColor]="calledByColor(n)"
-        [style.margin-left.px]="gutter() + n.depth * indent"
+        [style.margin-left.px]="gutter() + n.depth * indent()"
         (mouseenter)="hovered.set(n.step.segmentId)"
         (mouseleave)="hovered.set(null)"
         (refClick)="scrollTo($event)"
         (calledByClick)="scrollToParent(n)"
       />
     } @else if (stepIndex() === null) {
-      <button type="button" class="hidden-step" [style.margin-left.px]="gutter() + n.depth * indent" (click)="toggleHidden(n.step.segmentId, $event)"
+      <button type="button" class="hidden-step" [style.margin-left.px]="gutter() + n.depth * indent()" (click)="toggleHidden(n.step.segmentId, $event)"
               [title]="t('Einblenden')">
         <span class="no">{{ n.no }}</span> {{ nodeName(n.segment) }}
         <span class="dim">{{ isDone(n.step.segmentId) && !hidden().has(n.step.segmentId) ? t('erledigt') : t('ausgeblendet') }}

@@ -20,6 +20,7 @@ import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock
 import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
 import { ReviewStore } from './review.store';
 import { serverText, t } from './i18n';
+import { diffSides } from './split-diff';
 
 interface Node {
   step: FlowStep;
@@ -53,6 +54,8 @@ const COL_GAP = 56;
 const ROW_GAP = 12;
 /** Indentation of the code blocks per call level (the cards scroll horizontally when it gets deep). */
 const INDENT = 56;
+/** Side by side the blocks need the width for their two halves: the call levels are only hinted at. */
+const SPLIT_INDENT = 14;
 /** Horizontal distance between two connector lanes in the left margin. */
 const LANE = 11;
 const MIN_GUTTER = 32;
@@ -89,7 +92,9 @@ export class FlowView {
     return map;
   });
   protected readonly hovered = signal<string | null>(null);
-  protected readonly indent = INDENT;
+  /** Side by side (old | new) and a step has both sides: the blocks are less indented, see SPLIT_INDENT. */
+  protected readonly split = computed(() => this.store.diffMode() === 'split' && this.nodes().some((n) => diffSides(n.segment.lines) === 'both'));
+  protected readonly indent = computed(() => (this.split() ? SPLIT_INDENT : INDENT));
 
   /** Mock-Grenzen: what the tests really execute, per step (segment id) and per edge ("from>to"). */
   /** What the tests run in this flow; nothing while the test enrichments are switched off. */
@@ -243,6 +248,7 @@ export class FlowView {
       this.store.okAt();
       this.store.comments();
       this.store.collapseDone();
+      this.store.diffMode();
       const host = this.cards().nativeElement;
       const observer = new ResizeObserver(() => this.layoutConnectors());
       observer.observe(host);

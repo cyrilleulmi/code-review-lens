@@ -65,6 +65,9 @@ export interface PlaceInfo {
 
 const SEP = '\u0000';
 
+/** How code blocks show a diff: in one column or side by side. */
+export type DiffMode = 'unified' | 'split';
+
 /** Commit filter value for "new or changed since my last review" (also in the URL: …/c/since-review). */
 export const SINCE_REVIEW = 'since-review';
 
@@ -115,6 +118,11 @@ export class ReviewStore {
    * at the top of a flow); the Tests category and the test overview stay as they are.
    */
   readonly testInfo = signal(readFlag('scr.testInfo'));
+  /**
+   * How the code blocks show a diff: 'unified' = one column, deleted above added lines; 'split' = side by side, old
+   * code left and new code right. Stored per browser.
+   */
+  readonly diffMode = signal<DiffMode>(readChoice('scr.diffMode', ['unified', 'split'] as const) ?? 'unified');
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
   readonly blames = signal<ReadonlyMap<string, Blame | 'loading' | null>>(new Map());
   /** commit from the URL, applied once the commits are loaded */
@@ -638,6 +646,11 @@ export class ReviewStore {
     writeFlag('scr.testInfo', on);
   }
 
+  setDiffMode(mode: DiffMode): void {
+    this.diffMode.set(mode);
+    writeChoice('scr.diffMode', mode);
+  }
+
   /** Fetches the blame of a file once (cached by the backend per head commit). */
   ensureBlame(path: string): void {
     const key = this.prKey();
@@ -947,8 +960,26 @@ function readFlag(name: string): boolean {
 }
 
 function writeFlag(name: string, on: boolean): void {
+  writeChoice(name, String(on));
+}
+
+/** A stored choice out of a fixed set; null when nothing (valid) is stored. */
+function readChoice<T extends string>(name: string, allowed: readonly T[]): T | null {
   try {
-    localStorage.setItem(name, String(on));
+    const value = localStorage.getItem(name);
+    return allowed.find((a) => a === value) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeChoice(name: string, value: string | null): void {
+  try {
+    if (value == null) {
+      localStorage.removeItem(name);
+    } else {
+      localStorage.setItem(name, value);
+    }
   } catch {
     // storage unavailable - the setting is just not remembered
   }

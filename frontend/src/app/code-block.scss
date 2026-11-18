@@ -25,7 +25,8 @@
 
 /* a line jumped to from outside (e.g. an assertion in the Spec-Diff) */
 .row.flash-line {
-  box-shadow: inset 0 0 0 1px var(--accent);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
 
 .head {
@@ -248,20 +249,26 @@
   padding: 4px 0;
 }
 
+/* a row holds the blame cell (when annotated) and its sides: one in the unified view, old and new side by side */
 .row {
   display: grid;
-  grid-template-columns: 22px 38px 38px 18px 14px minmax(0, 1fr);
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
   min-width: max-content;
   position: relative;
 
-  &:hover {
+  &:hover > .side {
     background-color: var(--tint-hover);
   }
 
   &:hover .add-comment {
     opacity: 1;
   }
+}
+
+.side {
+  display: grid;
+  grid-template-columns: 22px 38px 38px 18px 14px minmax(0, 1fr);
+  align-items: start;
 }
 
 .t-add {
@@ -282,12 +289,12 @@
   }
 }
 
-.row.foreign {
+.side.foreign {
   opacity: 0.45;
 }
 
 /* commit view: a change made by another commit of the PR */
-.row.other-commit {
+.side.other-commit {
   background: none;
   opacity: 0.4;
 
@@ -300,7 +307,7 @@
 /* ------------------------------------------------------------- git blame column */
 
 :host(.annotated) .row {
-  grid-template-columns: 168px 22px 38px 38px 18px 14px minmax(0, 1fr);
+  grid-template-columns: 168px minmax(0, 1fr);
 }
 
 .g-blame {
@@ -371,7 +378,7 @@
   text-overflow: ellipsis;
 }
 
-.row.ok {
+.side.ok {
   .src code {
     opacity: 0.5;
   }
@@ -385,7 +392,7 @@
   }
 }
 
-.row.has-refs {
+.side.has-refs {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
@@ -688,8 +695,68 @@ button.gap.open {
 }
 
 /* unfolded lines are unchanged context: a quiet left rule tells them from the lines shown anyway */
-.row.unfolded {
+.side.unfolded:not(.s-new) {
   box-shadow: inset 2px 0 0 var(--border);
+}
+
+/* ------------------------------------------------------------- side by side: old code left, new code right */
+
+.row.split {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-width: 0;
+
+  /* both halves stay as wide as the block: long lines wrap instead of scrolling one half away */
+  .src {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .g-blame {
+    height: auto;
+    min-height: var(--code-line);
+  }
+
+  > .side:last-child {
+    border-left: 1px solid var(--border);
+  }
+}
+
+:host(.annotated) .row.split {
+  grid-template-columns: 168px minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.side.s-old,
+.side.s-new,
+.side.empty {
+  grid-template-columns: 22px 38px 18px 14px minmax(0, 1fr);
+}
+
+/* nothing on this side: the line was added (left empty) or removed (right empty) */
+.side.empty {
+  background: repeating-linear-gradient(135deg, transparent 0 6px, var(--tint-stripe) 6px 12px);
+}
+
+/* flow: the call is on the new half - a dotted line in its colour leads there from the connector in the margin */
+.side.lead {
+  background-image: linear-gradient(to right, var(--lead) 50%, transparent 0);
+  background-size: 6px 1px;
+  background-position: left bottom;
+  background-repeat: repeat-x;
+}
+
+.code.split {
+  .gap {
+    padding-left: 78px;
+  }
+
+  .thread {
+    margin-left: 78px;
+    max-width: calc(50% - 100px);
+  }
+
+  .thread.right {
+    margin-left: calc(50% + 78px);
+  }
 }
 
 /* ------------------------------------------------------------- comments */

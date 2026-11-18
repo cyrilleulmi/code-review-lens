@@ -6,6 +6,9 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+### Neu
+- **Seite an Seite:** Ein neuer Knopf in der Toolbar (zwei Spalten) schaltet alle Code-Blöcke zwischen der kombinierten Ansicht und «Seite an Seite» um: alter Code links, neuer rechts, geänderte Zeilen nebeneinander, leere Gegenseiten schraffiert. Häkchen, Kommentare, Hinweis-Chips und Blame bleiben an ihrer Zeile; lange Zeilen umbrechen, damit beide Hälften sichtbar bleiben. Blöcke mit nur neuen oder nur entfernten Zeilen bleiben einspaltig (Hinweis im Kopf) – eine halb leere Hälfte würde nur Platz kosten. In Datenflüssen werden zweispaltige Blöcke breiter und die Einrückung nach Aufruftiefe kleiner; eine gepunktete Linie führt von der Verbindung am linken Rand zum Aufruf auf der neuen Seite. Die Wahl gilt pro Browser.
+
 ## [0.7.0] – 2026-11-16
 
 ### Neu

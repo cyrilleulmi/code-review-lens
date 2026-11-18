@@ -55,6 +55,8 @@
   }
   @if (collapsed()) {
     <span class="hint">{{ t('eingeklappt') }}</span>
+  } @else if (oneSided(); as one) {
+    <span class="hint" [title]="t('Seite an Seite: Dieser Block hat nur neue oder nur entfernte Zeilen, es gibt nichts gegenüberzustellen – er bleibt einspaltig')">{{ one === 'new' ? t('nur neue Zeilen') : t('nur entfernte Zeilen') }}</span>
   }
   <span class="count" [class.complete]="allOk()">{{ progress().ok }}/{{ progress().total }}</span>
   <button type="button" class="ok-btn" [class.on]="allOk()" (click)="toggleBlock($event)"
@@ -93,29 +95,27 @@
 }
 
 @if (!collapsed()) {
-  <div class="code" role="table">
-    @for (row of rows(); track row.f; let i = $index) {
-      @let line = row.line;
-      @if (line.type === 'gap') {
-        @if (line.hidden?.length) {
+  <div class="code" [class.split]="split()" role="table">
+    @for (row of view(); track row.f; let v = $index) {
+      @if (row.gap; as gap) {
+        @if (gap.hidden?.length) {
           <button type="button" class="gap expandable" [class.open]="row.open" (click)="toggleGap(row.f, $event)"
                   [title]="row.open ? t('Wieder einklappen') : t('Ausgeblendete Zeilen aufklappen')">
             <app-icon [name]="row.open ? 'chevronDown' : 'chevronRight'" [size]="11" />
             @if (row.open) {
-              {{ t('{n} Zeilen einklappen', { n: line.hidden!.length }) }}
+              {{ t('{n} Zeilen einklappen', { n: gap.hidden!.length }) }}
             } @else {
-              ⋯ {{ line.text ? serverText(line.text) : t('{n} unveränderte Zeilen', { n: line.gapSize }) }}
+              ⋯ {{ gap.text ? serverText(gap.text) : t('{n} unveränderte Zeilen', { n: gap.gapSize }) }}
             }
           </button>
         } @else {
-          <div class="gap">⋯ {{ line.text ? serverText(line.text) : t('{n} unveränderte Zeilen', { n: line.gapSize }) }}</div>
+          <div class="gap">⋯ {{ gap.text ? serverText(gap.text) : t('{n} unveränderte Zeilen', { n: gap.gapSize }) }}</div>
         }
       } @else {
-        @let byOtherCommit = otherCommit(line);
-        <div class="row" [class]="'row t-' + line.type" [class.unfolded]="row.unfolded" [class.ok]="line.own && !byOtherCommit && isOk(line)" [class.foreign]="!line.own && line.type !== 'ctx'"
-             [class.other-commit]="byOtherCommit" [class.has-refs]="!!line.refs?.length" [attr.data-new]="line.newLine" [attr.data-old]="line.oldLine">
+        @let lead = leadColor(row);
+        <div class="row" [class.split]="split()" [attr.data-new]="row.cells[row.cells.length - 1]?.line?.newLine" [attr.data-old]="row.cells[0]?.line?.oldLine">
           @if (annotations(); as an) {
-            @let a = an[i];
+            @let a = an[v];
             @if (a) {
               <button type="button" class="g-blame" [class.pr]="a.no != null" [class.first]="a.first" [class.removed]="a.removed"
                       [class.sel]="a.sha === store.commitFilter()" [style.--age]="a.age" [title]="a.title" (click)="openAnnotation(a, $event)">
@@ -130,115 +130,139 @@
               <span class="g-blame empty"></span>
             }
           }
-          <span class="g-check">
-            @if (line.own && !byOtherCommit) {
-              @let m = multi(line);
-              @let other = elsewhere(line);
-              <button type="button" class="check" [class.on]="isOk(line)" [class.part]="isHalf(line)"
-                      (click)="toggleLine(i, $event)"
-                      [title]="other ? t('Halb akzeptiert: bereits akzeptiert in {places}. Klick: auch hier akzeptieren', { places: other.labels }) : m ? (place() ? t('Hier als ok markieren ({ok}/{of} Orte ok)', { ok: m.ok, of: m.of }) : t('An allen {of} Orten als ok markieren ({ok}/{of} ok)', { ok: m.ok, of: m.of })) : t('Als ok markieren (Shift-Klick: Bereich)')">
-                @if (isOk(line)) {
-                  <app-icon name="check" [size]="11" />
+          @for (c of row.cells; track $index; let first = $first) {
+            @if (c) {
+              @let line = c.line;
+              @let i = c.i;
+              @let byOtherCommit = otherCommit(line);
+              <div [class]="'side t-' + line.type + ' s-' + c.side" [class.unfolded]="row.unfolded" [class.ok]="c.main && line.own && !byOtherCommit && isOk(line)"
+                   [class.foreign]="!line.own && line.type !== 'ctx'" [class.other-commit]="byOtherCommit" [class.has-refs]="c.main && !!line.refs?.length"
+                   [class.lead]="first && !!lead" [style.--lead]="first ? lead : null">
+                <span class="g-check">
+                  @if (c.main && line.own && !byOtherCommit) {
+                    @let m = multi(line);
+                    @let other = elsewhere(line);
+                    <button type="button" class="check" [class.on]="isOk(line)" [class.part]="isHalf(line)"
+                            (click)="toggleLine(i, $event)"
+                            [title]="other ? t('Halb akzeptiert: bereits akzeptiert in {places}. Klick: auch hier akzeptieren', { places: other.labels }) : m ? (place() ? t('Hier als ok markieren ({ok}/{of} Orte ok)', { ok: m.ok, of: m.of }) : t('An allen {of} Orten als ok markieren ({ok}/{of} ok)', { ok: m.ok, of: m.of })) : t('Als ok markieren (Shift-Klick: Bereich)')">
+                      @if (isOk(line)) {
+                        <app-icon name="check" [size]="11" />
+                      }
+                    </button>
+                    @if (m && !place()) {
+                      <span class="multi" [class.done]="m.ok === m.of" [title]="t('Zeile ist {of} Orten zugewiesen, {ok} davon ok – Sprünge oben im Block', { ok: m.ok, of: m.of })">{{ m.of }}</span>
+                    }
+                  }
+                </span>
+                @if (c.side !== 'new') {
+                  <span class="g-num">{{ line.oldLine ?? '' }}</span>
                 }
-              </button>
-              @if (m && !place()) {
-                <span class="multi" [class.done]="m.ok === m.of" [title]="t('Zeile ist {of} Orten zugewiesen, {ok} davon ok – Sprünge oben im Block', { ok: m.ok, of: m.of })">{{ m.of }}</span>
-              }
-            }
-          </span>
-          <span class="g-num">{{ line.oldLine ?? '' }}</span>
-          <span class="g-num">{{ line.newLine ?? '' }}</span>
-          <span class="g-act">
-            @if (line.inDiff && line.key && !store.isRepo()) {
-              <button type="button" class="add-comment" (click)="openEditor(line)" [title]="t('Kommentar auf {host}', { host: store.provider().label })">
-                <app-icon name="comment" [size]="12" />
-              </button>
-            }
-          </span>
-          <span class="g-sign">{{ line.type === 'add' ? '+' : line.type === 'del' ? '−' : '' }}</span>
-          <span class="src"><code [innerHTML]="html()[row.f]"></code>
-            @if (halfNotes().get(i); as other) {
-              <button type="button" class="half-note" (click)="goElsewhere(line, $event)" [title]="t('Bereits akzeptiert in: {places} – Klick springt dorthin', { places: other.labels })">
-                <app-icon name="check" [size]="10" /> {{ other.ids.length === 1 ? t('bereits an anderem Ort akzeptiert') : t('bereits an {n} anderen Orten akzeptiert', { n: other.ids.length }) }}
-              </button>
-            }
-            @for (n of caseNotes().get(i) ?? []; track $index) {
-              <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
-                <app-icon name="warning" [size]="10" /> {{ n.text }}
-              </button>
-            }
-            @for (n of smellNotes().get(i) ?? []; track $index) {
-              <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
-                <app-icon name="warning" [size]="10" /> {{ n.text }}
-              </button>
-            }
-            @for (n of laterNotes().get(i) ?? []; track $index) {
-              <button type="button" class="case-note" [class.info]="!n.warn" (click)="showCommit(n.sha, $event)" [title]="n.title">
-                <app-icon name="commit" [size]="10" /> {{ n.text }}
-              </button>
-            }
-            @for (n of ruleNotes().get(i) ?? []; track $index) {
-              <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
-                <app-icon name="shield" [size]="10" /> {{ n.text }}
-              </button>
-            }
-            @for (ref of line.refs ?? []; track ref.segmentId) {
-              <button type="button" class="ref" [style.--c]="refColor(ref.segmentId)" (click)="refClick.emit(ref.segmentId)" [title]="t('Springe zu {name}', { name: serverText(ref.symbol) })">
-                <app-icon name="arrowRight" [size]="11" />
-                @if (stepOf()[ref.segmentId]; as n) {
-                  <b>{{ n }}</b>
+                @if (c.side !== 'old') {
+                  <span class="g-num">{{ line.newLine ?? '' }}</span>
                 }
-                {{ serverText(ref.symbol) }}
-              </button>
+                <span class="g-act">
+                  @if (c.main && line.inDiff && line.key && !store.isRepo()) {
+                    <button type="button" class="add-comment" (click)="openEditor(line)" [title]="t('Kommentar auf {host}', { host: store.provider().label })">
+                      <app-icon name="comment" [size]="12" />
+                    </button>
+                  }
+                </span>
+                <span class="g-sign">{{ line.type === 'add' ? '+' : line.type === 'del' ? '−' : '' }}</span>
+                <span class="src"><code [innerHTML]="html()[c.f]"></code>
+                  @if (c.main) {
+                    @if (halfNotes().get(i); as other) {
+                      <button type="button" class="half-note" (click)="goElsewhere(line, $event)" [title]="t('Bereits akzeptiert in: {places} – Klick springt dorthin', { places: other.labels })">
+                        <app-icon name="check" [size]="10" /> {{ other.ids.length === 1 ? t('bereits an anderem Ort akzeptiert') : t('bereits an {n} anderen Orten akzeptiert', { n: other.ids.length }) }}
+                      </button>
+                    }
+                    @for (n of caseNotes().get(i) ?? []; track $index) {
+                      <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
+                        <app-icon name="warning" [size]="10" /> {{ n.text }}
+                      </button>
+                    }
+                    @for (n of smellNotes().get(i) ?? []; track $index) {
+                      <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
+                        <app-icon name="warning" [size]="10" /> {{ n.text }}
+                      </button>
+                    }
+                    @for (n of laterNotes().get(i) ?? []; track $index) {
+                      <button type="button" class="case-note" [class.info]="!n.warn" (click)="showCommit(n.sha, $event)" [title]="n.title">
+                        <app-icon name="commit" [size]="10" /> {{ n.text }}
+                      </button>
+                    }
+                    @for (n of ruleNotes().get(i) ?? []; track $index) {
+                      <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
+                        <app-icon name="shield" [size]="10" /> {{ n.text }}
+                      </button>
+                    }
+                    @for (ref of line.refs ?? []; track ref.segmentId) {
+                      <button type="button" class="ref" [style.--c]="refColor(ref.segmentId)" (click)="refClick.emit(ref.segmentId)" [title]="t('Springe zu {name}', { name: serverText(ref.symbol) })">
+                        <app-icon name="arrowRight" [size]="11" />
+                        @if (stepOf()[ref.segmentId]; as n) {
+                          <b>{{ n }}</b>
+                        }
+                        {{ serverText(ref.symbol) }}
+                      </button>
+                    }
+                  }
+                </span>
+              </div>
+            } @else {
+              <div class="side empty" [class.lead]="first && !!lead" [style.--lead]="first ? lead : null"></div>
             }
-          </span>
+          }
         </div>
 
-        @if (showThreads(line)) {
-          @for (th of threads().get(line.key!) ?? []; track th.root.id) {
-            <div class="thread">
-              @for (c of [th.root].concat(th.replies); track c.id) {
-                <div class="comment">
-                  @if (c.avatarUrl) {
-                    <img [src]="c.avatarUrl" alt="" />
-                  }
-                  <div>
-                    <div class="meta"><b>{{ c.author }}</b> · {{ time(c.createdAt) }}
-                      <a [href]="c.url" target="_blank" rel="noopener" [title]="t('Auf {host} öffnen', { host: store.provider().label })"><app-icon name="external" [size]="11" /></a>
+        @for (c of row.cells; track $index) {
+          @if (c && c.main) {
+            @let line = c.line;
+            @if (showThreads(line)) {
+              @for (th of threads().get(line.key!) ?? []; track th.root.id) {
+                <div class="thread" [class.right]="c.side === 'new'">
+                  @for (cm of [th.root].concat(th.replies); track cm.id) {
+                    <div class="comment">
+                      @if (cm.avatarUrl) {
+                        <img [src]="cm.avatarUrl" alt="" />
+                      }
+                      <div>
+                        <div class="meta"><b>{{ cm.author }}</b> · {{ time(cm.createdAt) }}
+                          <a [href]="cm.url" target="_blank" rel="noopener" [title]="t('Auf {host} öffnen', { host: store.provider().label })"><app-icon name="external" [size]="11" /></a>
+                        </div>
+                        <div class="body">{{ cm.body }}</div>
+                      </div>
                     </div>
-                    <div class="body">{{ c.body }}</div>
-                  </div>
+                  }
+                  @if (replyTo() === th.root.id) {
+                    <div class="editor">
+                      <textarea rows="3" [placeholder]="t('Antwort … (Ctrl+Enter: senden, Esc: abbrechen)')" [value]="draft()"
+                                (input)="input($event)" (keydown)="keydown($event, null)" autofocus></textarea>
+                      <div class="actions">
+                        <button type="button" class="btn" (click)="cancel()">{{ t('Abbrechen') }}</button>
+                        <button type="button" class="btn primary" [disabled]="sending() || !draft().trim()" (click)="submit(null)">{{ t('Antworten') }}</button>
+                      </div>
+                    </div>
+                  } @else {
+                    <button type="button" class="reply" (click)="openReply(th)">{{ t('Antworten') }}</button>
+                  }
                 </div>
               }
-              @if (replyTo() === th.root.id) {
+            }
+
+            @if (editorKey() === line.key && line.key) {
+              <div class="thread new" [class.right]="c.side === 'new'">
                 <div class="editor">
-                  <textarea rows="3" [placeholder]="t('Antwort … (Ctrl+Enter: senden, Esc: abbrechen)')" [value]="draft()"
-                            (input)="input($event)" (keydown)="keydown($event, null)" autofocus></textarea>
+                  <textarea rows="3" [placeholder]="t('Kommentar zu Zeile {line} – wird sofort auf {host} veröffentlicht (Ctrl+Enter)', { line: line.newLine ?? line.oldLine, host: store.provider().label })"
+                            [value]="draft()" (input)="input($event)" (keydown)="keydown($event, line)" autofocus></textarea>
                   <div class="actions">
                     <button type="button" class="btn" (click)="cancel()">{{ t('Abbrechen') }}</button>
-                    <button type="button" class="btn primary" [disabled]="sending() || !draft().trim()" (click)="submit(null)">{{ t('Antworten') }}</button>
+                    <button type="button" class="btn primary" [disabled]="sending() || !draft().trim()" (click)="submit(line)">
+                      {{ sending() ? t('Sende …') : t('Kommentieren') }}
+                    </button>
                   </div>
                 </div>
-              } @else {
-                <button type="button" class="reply" (click)="openReply(th)">{{ t('Antworten') }}</button>
-              }
-            </div>
-          }
-        }
-
-        @if (editorKey() === line.key && line.key) {
-          <div class="thread new">
-            <div class="editor">
-              <textarea rows="3" [placeholder]="t('Kommentar zu Zeile {line} – wird sofort auf {host} veröffentlicht (Ctrl+Enter)', { line: line.newLine ?? line.oldLine, host: store.provider().label })"
-                        [value]="draft()" (input)="input($event)" (keydown)="keydown($event, line)" autofocus></textarea>
-              <div class="actions">
-                <button type="button" class="btn" (click)="cancel()">{{ t('Abbrechen') }}</button>
-                <button type="button" class="btn primary" [disabled]="sending() || !draft().trim()" (click)="submit(line)">
-                  {{ sending() ? t('Sende …') : t('Kommentieren') }}
-                </button>
               </div>
-            </div>
-          </div>
+            }
+          }
         }
       }
     }

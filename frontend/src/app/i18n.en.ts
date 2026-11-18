@@ -22,6 +22,12 @@ export const EN: Record<string, string> = {
     'Analyse the whole repository: review all files of the default branch like a pull request',
   'Annotieren mit Git Blame: Commit, Autor und Datum jeder Zeile': 'Annotate with Git Blame: commit, author and date of every line',
   'Tests im Flow': 'Tests in the flow',
+  'Seite an Seite: alter Code links, neuer Code rechts': 'Split view: old code on the left, new code on the right',
+  'Kombinierte Ansicht: entfernte und neue Zeilen untereinander': 'Unified view: removed and new lines one below the other',
+  'Seite an Seite: Dieser Block hat nur neue oder nur entfernte Zeilen, es gibt nichts gegenüberzustellen – er bleibt einspaltig':
+    'Split view: this block has only new or only removed lines, there is nothing to put side by side – it stays in one column',
+  'nur neue Zeilen': 'new lines only',
+  'nur entfernte Zeilen': 'removed lines only',
   'Bereiche': 'Areas',
   'Bereiche:': 'Areas:',
   'ohne Schicht': 'no layer',

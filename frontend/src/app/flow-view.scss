@@ -138,6 +138,11 @@
     flex: none;
     min-width: 760px;
   }
+
+  /* side by side: room for the old and the new half */
+  > app-code-block.split-view {
+    min-width: 1040px;
+  }
 }
 
 .rails {

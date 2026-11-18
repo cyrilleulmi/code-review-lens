@@ -13,6 +13,7 @@ import { Icon, SymbolBadge } from './icon';
 import { areaColor, areaLabel, areaOfSegment, langColor, langLabel } from './look';
 import { ReviewStore } from './review.store';
 import { locale, serverText, t } from './i18n';
+import { diffSides, pairLines } from './split-diff';
 
 /**
  * Scrolls to the row of a new-file line inside a rendered code block and flashes it; false when the row is not shown
@@ -52,6 +53,29 @@ interface Thread {
   replies: Comment[];
 }
 
+/** One line as it is shown in a row: in the unified view the whole row, side by side its old or its new half. */
+interface Cell {
+  line: DisplayLine;
+  /** index in lines() (marks, notes) */
+  i: number;
+  /** index in flat() (highlighted HTML) */
+  f: number;
+  /** both = unified row with both line numbers; old / new = one half of a side-by-side row */
+  side: 'both' | 'old' | 'new';
+  /** carries checkbox, comment button, chips and threads; false for the old half of an unchanged line (shown on both sides) */
+  main: boolean;
+}
+
+/** A row of the code table: a gap, or one cell (unified) or two (side by side; null = that side is empty). */
+interface ViewRow {
+  /** track key: index in flat() of the gap or of the row's main line */
+  f: number;
+  gap: DisplayLine | null;
+  open: boolean;
+  unfolded: boolean;
+  cells: (Cell | null)[];
+}
+
 /**
  * One review segment as an IntelliJ-like code block: gutter with ok-checkbox, old/new line numbers,
  * diff colours, syntax highlighting, inline review comments, and call-site chips linking to other blocks.
@@ -65,6 +89,7 @@ interface Thread {
   host: {
     '[class.done]': 'allOk()',
     '[class.annotated]': 'store.annotate()',
+    '[class.split-view]': 'split()',
     '[class.fe]': 'area() === "frontend"',
     '[attr.data-segment]': 'segment().id',
     '[style.--area]': 'areaColor(area())',
@@ -118,8 +143,59 @@ export class CodeBlock {
     });
     return rows;
   });
-  /** The display lines shown (the index of a row everywhere below). */
+  /** The display lines shown (the index of a line everywhere below). */
   protected readonly lines = computed(() => this.rows().map((r) => r.line));
+
+  /** What the block has to put side by side: removed and added lines, or only one of them (e.g. a new function). */
+  private readonly sides = computed(() => diffSides(this.segment().lines));
+  /** Side by side: old code left, new code right. A block with one side only stays in one column. */
+  protected readonly split = computed(() => this.store.diffMode() === 'split' && this.sides() === 'both');
+  /** Side by side is on but the block has only new ('new') or only removed ('old') lines; null otherwise. */
+  protected readonly oneSided = computed(() => {
+    const sides = this.sides();
+    return this.store.diffMode() === 'split' && (sides === 'new' || sides === 'old') ? sides : null;
+  });
+
+  /** The rows as they are drawn: one cell per row (unified) or the old and the new half (side by side). */
+  protected readonly view = computed<ViewRow[]>(() => {
+    const rows = this.rows();
+    const cell = (i: number, side: Cell['side'], main: boolean): Cell => ({ line: rows[i].line, i, f: rows[i].f, side, main });
+    const gap = (i: number): ViewRow => ({ f: rows[i].f, gap: rows[i].line, open: rows[i].open, unfolded: false, cells: [] });
+    if (!this.split()) {
+      return rows.map((r, i) => r.line.type === 'gap' ? gap(i)
+        : { f: r.f, gap: null, open: false, unfolded: r.unfolded, cells: [cell(i, 'both', true)] });
+    }
+    return pairLines(rows.map((r) => r.line)).map((p) => {
+      const i = (p.right ?? p.left)!;
+      if (rows[i].line.type === 'gap') {
+        return gap(i);
+      }
+      // an unchanged line is on both sides: its old half shows number and code only
+      const unchanged = p.left === p.right;
+      return {
+        f: rows[i].f, gap: null, open: false, unfolded: rows[i].unfolded,
+        cells: [p.left != null ? cell(p.left, 'old', !unchanged) : null, p.right != null ? cell(p.right, 'new', true) : null],
+      };
+    });
+  });
+
+  /** The line a row is annotated with (git blame): side by side the new line, the removed one when there is no new. */
+  private readonly blameLines = computed(() => this.view().map((r) => r.gap ?? (r.cells[r.cells.length - 1] ?? r.cells[0])!.line));
+
+  /**
+   * Side by side in a flow: colour of the call made on the new half of a row. The old half then carries a dotted
+   * line in that colour, leading from the connector in the left margin over to the call.
+   */
+  protected leadColor(row: ViewRow): string | null {
+    if (!this.split()) {
+      return null;
+    }
+    for (const ref of row.cells[1]?.line.refs ?? []) {
+      const color = this.refColor(ref.segmentId);
+      if (color) return color;
+    }
+    return null;
+  }
 
   protected toggleGap(f: number, event: Event): void {
     event.stopPropagation();
@@ -359,7 +435,7 @@ export class CodeBlock {
   }
 
   /**
-   * Blame per display line: added lines belong to the PR commit that wrote them, deleted lines to the one that
+   * Blame per row: added lines belong to the PR commit that wrote them, deleted lines to the one that
    * removed them, context lines to whoever changed them last (blame at the PR head).
    */
   protected readonly annotations = computed<(Annotation | null)[] | null>(() => {
@@ -372,7 +448,7 @@ export class CodeBlock {
     const known = new Map<string, Commit>(blame?.commits.map((c) => [c.sha, c]) ?? []);
     const pr = this.store.commitBySha();
     const no = this.store.commitNo();
-    const lines = this.lines();
+    const lines = this.blameLines();
     const shas = lines.map((line) => {
       if (line.type === 'gap') return null;
       const own = line.key ? this.store.commitOfLine(seg.path, line.key) : undefined;
