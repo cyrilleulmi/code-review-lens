@@ -105,15 +105,23 @@
       {{ methodCount === 1 ? t('1 Methode') : t('{n} Methoden', { n: methodCount }) }}
     }
   </span>
+  <span class="spacer"></span>
+  @if (hasMoved()) {
+    <button type="button" class="ftool" (click)="resetLayout()" [title]="t('Alle verschobenen Knoten wieder automatisch anordnen')">
+      <app-icon name="refresh" [size]="13" /> {{ t('Anordnung zurücksetzen') }}
+    </button>
+  }
+  <span class="hint">{{ t('Knoten und Klassen lassen sich ziehen') }}</span>
 </div>
 
-<div class="diagram" role="list">
+<div class="diagram" role="list" [class.dragging]="dragging()">
   @for (f of frames(); track f.key) {
     @let fp = progressOf(f.ids);
     <div class="frame" [style.left.px]="f.x" [style.top.px]="f.y" [style.width.px]="f.w" [style.height.px]="f.h" [style.--area]="areaColor(f.area)"
          [class.done]="fp.total > 0 && fp.ok === fp.total" [class.off]="isOff(f.ids)" [class.root]="focused() === f.key">
       <div class="frame-head" role="button" tabindex="0" [title]="f.hint"
-           (mouseenter)="hover(f.ids)" (mouseleave)="hover(null)" (click)="openBox(f)" (keydown.enter)="openBox(f)">
+           (mouseenter)="hover(f.ids)" (mouseleave)="hover(null)" (click)="openBox(f)" (keydown.enter)="openBox(f)"
+           (pointerdown)="dragStart($event, f.ids)" (pointermove)="dragMove($event)" (pointerup)="dragEnd($event)" (pointercancel)="dragEnd($event)">
         <app-symbol-badge kind="class" />
         <span class="name">{{ f.name }}</span>
         @if (areaLabel(f.area); as a) {
@@ -173,6 +181,7 @@
             [class.run-tested]="run === 'tested'" [class.run-mocked]="run === 'mocked'" [class.run-none]="run === 'none'"
             [title]="runTitle(b.ids)"
             (mouseenter)="hover(b.ids)" (mouseleave)="hover(null)"
+            (pointerdown)="dragStart($event, [b.key])" (pointermove)="dragMove($event)" (pointerup)="dragEnd($event)" (pointercancel)="dragEnd($event)"
             (click)="openBox(b)" (keydown.enter)="openBox(b)">
       <span class="no">{{ b.no }}</span>
       <span class="txt">

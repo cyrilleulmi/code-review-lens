@@ -6,7 +6,9 @@
   position: relative;
   margin: 0 0 20px;
   padding: 16px;
-  overflow-x: auto;
+  overflow: auto;
+  /* a big flow keeps the code below in reach: the diagram scrolls inside */
+  max-height: 78vh;
   background:
     radial-gradient(circle at 1px 1px, var(--tint-dots) 1px, transparent 0) 0 0 / 16px 16px,
     var(--bg-panel-2);
@@ -52,12 +54,14 @@
 .frame-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 4px 0 6px;
+  gap: 7px;
+  height: 34px;
+  padding: 0 6px 0 9px;
   font-size: 11.5px;
   white-space: nowrap;
-  cursor: pointer;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
 
   .name {
     flex: 1;
@@ -125,10 +129,36 @@
   }
 }
 
+/* boxes and frames can be moved with the pointer; while one is dragged nothing eases behind it */
+.node {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.diagram.dragging {
+  cursor: grabbing;
+
+  .node,
+  .frame-head {
+    cursor: grabbing;
+  }
+
+  .node,
+  .frame,
+  .edge {
+    transition: none;
+  }
+
+  .node:hover {
+    transform: none;
+  }
+}
+
 /* a method inside the frame of its class: one line */
 .node.mini {
   gap: 6px;
-  padding: 0 6px;
+  padding: 0 6px 0 7px;
   border-radius: 6px;
 
   .no {

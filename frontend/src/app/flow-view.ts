@@ -4,6 +4,7 @@ import {
   ElementRef,
   afterRenderEffect,
   computed,
+  effect,
   inject,
   input,
   linkedSignal,
@@ -15,6 +16,7 @@ import { EdgeRunStatus, Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from 
 import { CodeBlock, flashLine } from './code-block';
 import { FlowDiagramLevel, FlowLevel, classLinks, classOf, classRuns, groupByClass, inFileOrder, intersect, weakest } from './flow-classes';
 import { outsideBranch, sameSet, withoutAreas } from './flow-focus';
+import { FRAME_PADDING, Layout, Point, curvePath, frameAround, layoutFlow, routeMiddle, routePath } from './flow-layout';
 import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
@@ -63,6 +65,8 @@ interface Box {
   h: number;
   /** a step inside the frame of its class (combined level): one line, smaller */
   mini: boolean;
+  /** key of that frame; null for boxes without one */
+  frame: string | null;
 }
 
 /** A connection of the diagram between two boxes (keys), with the steps at its ends for the highlighting. */
@@ -123,11 +127,11 @@ interface Connector {
 
 const NODE_W = 236;
 const NODE_H = 46;
-/** Combined level of the diagram: frame of a class (head, padding) and the smaller boxes of its steps. */
-const FRAME_HEAD = 28;
-const FRAME_PAD = 8;
-const MINI_H = 30;
-const MINI_GAP = 6;
+/** Combined level of the diagram: the smaller boxes of the steps inside the frame of their class. */
+const MINI_H = 32;
+const MINI_GAP = 14;
+/** Width of a character of the code font in the diagram (12px), to size boxes and frames by their names. */
+const CHAR_W = 7.3;
 const COL_GAP = 56;
 const ROW_GAP = 12;
 /** Indentation of the code blocks per call level (the cards scroll horizontally when it gets deep). */
@@ -260,12 +264,14 @@ export class FlowView {
   });
 
   /**
-   * The diagram at its level. boxes: what the connections run between - a step each, or a class each; combined, the
-   * steps as smaller boxes inside the frame of their class (frames: one per class, in a column by its call depth and
-   * as high as its steps need).
+   * The diagram at its level, before the layout engine has placed it. boxes: what the connections run between - a
+   * step each, or a class each; combined, the steps as smaller boxes inside the frame of their class. The places
+   * here are a simple staircase by call depth: shown until the layout arrives, and kept if it cannot be loaded.
    */
-  private readonly layout = computed<{ frames: Box[]; boxes: Box[] }>(() => {
-    const at = (depth: number, row: number) => ({ depth, x: depth * (NODE_W + COL_GAP), y: row * (NODE_H + ROW_GAP), w: NODE_W, h: NODE_H, mini: false });
+  private readonly sketch = computed<{ frames: Box[]; boxes: Box[] }>(() => {
+    const at = (depth: number, row: number) => ({
+      depth, x: depth * (NODE_W + COL_GAP), y: row * (NODE_H + ROW_GAP), w: NODE_W, h: NODE_H, mini: false, frame: null,
+    });
     const step = (n: Node) => ({
       key: n.step.segmentId, ids: [n.step.segmentId], no: n.no, name: this.nodeName(n.segment), kind: n.segment.symbolKind,
       hint: this.nodeHint(n.segment), area: this.areaOf(n.segment), quick: n.segment.category === 'quick-wins',
@@ -284,22 +290,82 @@ export class FlowView {
     }
     const frames: Box[] = [];
     const boxes: Box[] = [];
+    const column = 280 + FRAME_PADDING.left + FRAME_PADDING.right + COL_GAP;
     let y = 0;
     for (const g of this.classes()) {
-      const x = g.depth * (NODE_W + 2 * FRAME_PAD + COL_GAP);
-      const h = FRAME_HEAD + g.members.length * (MINI_H + MINI_GAP) - MINI_GAP + FRAME_PAD;
-      frames.push({ ...cls(g), depth: g.depth, x, y, w: NODE_W + 2 * FRAME_PAD, h, mini: false });
-      g.members.forEach((n, i) => boxes.push({
-        ...step(n), depth: g.depth, x: x + FRAME_PAD, y: y + FRAME_HEAD + i * (MINI_H + MINI_GAP), w: NODE_W, h: MINI_H, mini: true,
-      }));
-      y += h + ROW_GAP;
+      const x = g.depth * column;
+      const h = FRAME_PADDING.top + g.members.length * (MINI_H + MINI_GAP) - MINI_GAP + FRAME_PADDING.bottom;
+      const minis = g.members.map((n, i) => {
+        const box = step(n);
+        // one line: number, badge, name, progress, focus button
+        const w = Math.min(300, Math.max(160, Math.round(136 + box.name.length * CHAR_W)));
+        return { ...box, depth: g.depth, x: x + FRAME_PADDING.left, y: y + FRAME_PADDING.top + i * (MINI_H + MINI_GAP), w, h: MINI_H, mini: true, frame: g.key };
+      });
+      const frame = cls(g);
+      // the head: badge, name of the class, layer, progress, focus button
+      const head = Math.min(360, Math.round(112 + frame.name.length * CHAR_W + areaLabel(frame.area).length * 6.5));
+      const w = Math.max(head, Math.max(...minis.map((m) => m.w)) + FRAME_PADDING.left + FRAME_PADDING.right);
+      frames.push({ ...frame, depth: g.depth, x, y, w, h, mini: false, frame: null });
+      boxes.push(...minis);
+      y += h + ROW_GAP + 8;
     }
     return { frames, boxes };
+  });
+
+  /** What the layout was computed for: level, boxes with their sizes and frames, connections. */
+  private readonly layoutKey = computed(() => {
+    const { frames, boxes } = this.sketch();
+    return [
+      this.flow().id, this.level(),
+      frames.map((f) => `${f.key}:${f.w}`).join(','),
+      boxes.map((b) => `${b.key}:${b.w}:${b.h}:${b.frame ?? ''}`).join(','),
+      this.links().map((l) => l.from + '>' + l.to).join(','),
+    ].join('|');
+  });
+  /** The layout of the engine (ELK) with the key it was computed for; null until the first one arrives. */
+  private readonly placed = signal<{ key: string; layout: Layout } | null>(null);
+  /** Boxes moved by hand, per diagram (layoutKey): kept while the view lives, so a flow looks the same on return. */
+  private readonly movedByKey = new Map<string, ReadonlyMap<string, Point>>();
+  /** Where the user put the boxes of this diagram (box key -> place); the others follow the layout. */
+  protected readonly moved = linkedSignal<string, ReadonlyMap<string, Point>>({
+    source: () => this.layoutKey(),
+    computation: (key) => this.movedByKey.get(key) ?? new Map(),
+  });
+  /** The box being dragged: its connections follow at once, without the usual transition. */
+  protected readonly dragging = signal(false);
+  private drag: { keys: string[]; start: Point; origin: Map<string, Point>; min: Point; moved: boolean } | null = null;
+  /** A drag just ended: the click that follows must not jump to the code. */
+  private justDragged = false;
+
+  /**
+   * The diagram as it is drawn: every box where the user put it, else where the layout engine put it, else in the
+   * sketch; a frame as the engine sized it, or - once one of its boxes was moved - around its boxes.
+   */
+  private readonly layout = computed(() => {
+    const sketch = this.sketch();
+    const placed = this.placed();
+    const auto = placed?.key === this.layoutKey() ? placed.layout : null;
+    const moved = this.moved();
+    const boxes = sketch.boxes.map((b) => {
+      const at = moved.get(b.key) ?? auto?.boxes.get(boxId(b.key));
+      return at ? { ...b, x: at.x, y: at.y } : b;
+    });
+    const frames = sketch.frames.map((f) => {
+      const inside = boxes.filter((b) => b.frame === f.key);
+      const sized = inside.some((b) => moved.has(b.key)) ? undefined : auto?.frames.get(frameId(f.key));
+      const around = frameAround(inside);
+      // a frame around moved boxes keeps the width its head needs
+      const rect = sized ?? { ...around, w: Math.max(around.w, f.w) };
+      return { ...f, x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+    });
+    return { frames, boxes, auto };
   });
 
   protected readonly boxes = computed(() => this.layout().boxes);
   /** Combined level: the frames of the classes around the boxes of their steps. */
   protected readonly frames = computed(() => this.layout().frames);
+  /** The user moved boxes of this diagram. */
+  protected readonly hasMoved = computed(() => this.moved().size > 0);
 
   /** The connections between the steps shown: the calls of the flow, and dashed ones around removed areas. */
   private readonly stepLinks = computed<Link[]>(() => {
@@ -350,30 +416,32 @@ export class FlowView {
   });
 
   protected readonly diagram = computed(() => {
-    const boxes = this.boxes();
+    const { boxes, frames, auto } = this.layout();
+    const moved = this.moved();
     const byKey = new Map(boxes.map((b) => [b.key, b]));
-    const edges = this.links()
-      .filter((l) => byKey.has(l.from) && byKey.has(l.to))
-      .map((l) => {
-        const a = byKey.get(l.from)!;
-        const b = byKey.get(l.to)!;
-        const x1 = a.x + a.w;
-        const y1 = a.y + a.h / 2;
-        const x2 = b.x;
-        const y2 = b.y + b.h / 2;
-        // to the right: into the left side; same column (a call within a class, combined) or back to the left: a
-        // bow on the right into the right side - only a call back is dashed
-        const side = b.x === a.x;
-        const back = b.x < a.x;
-        const bow = side ? Math.min(40, 16 + Math.abs(y2 - y1) / 4) : 40;
-        const d = side || back
-          ? `M ${x1} ${y1} C ${x1 + bow} ${y1}, ${x1 + bow} ${y2}, ${b.x + b.w + (side ? 4 : 0)} ${y2}`
-          : `M ${x1} ${y1} C ${x1 + COL_GAP / 2} ${y1}, ${x2 - COL_GAP / 2} ${y2}, ${x2 - 4} ${y2}`;
-        return { ...l, d, back, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 4 };
-      });
-    const all = [...boxes, ...this.frames()];
-    const width = Math.max(...all.map((b) => b.x + b.w), 0) + 48;
-    const height = Math.max(...all.map((b) => b.y + b.h), 0) + 4;
+    let right = 0;
+    let bottom = 0;
+    const edges = this.links().flatMap((l, i) => {
+      const a = byKey.get(l.from);
+      const b = byKey.get(l.to);
+      if (!a || !b) {
+        return [];
+      }
+      // the route of the layout engine, at right angles around the boxes - unless an end was moved by hand
+      const route = moved.has(l.from) || moved.has(l.to) ? undefined : auto?.routes.get(edgeId(i));
+      if (route) {
+        right = Math.max(right, ...route.map((p) => p.x));
+        bottom = Math.max(bottom, ...route.map((p) => p.y));
+        const middle = routeMiddle(route);
+        // a call back to an earlier step runs to the left: dashed
+        return [{ ...l, d: routePath(route), back: route[route.length - 1].x < route[0].x - 1, lx: middle.x, ly: middle.y - 5 }];
+      }
+      const curve = curvePath(a, b);
+      return [{ ...l, d: curve.d, back: b.x + b.w <= a.x, lx: curve.middle.x, ly: curve.middle.y - 5 }];
+    });
+    const all = [...boxes, ...frames];
+    const width = Math.max(right, ...all.map((b) => b.x + b.w), 0) + 48;
+    const height = Math.max(bottom, ...all.map((b) => b.y + b.h), 0) + 12;
     return { edges, width, height };
   });
 
@@ -439,6 +507,25 @@ export class FlowView {
   protected readonly hiddenCount = computed(() => this.nodes().length - this.visible().size);
 
   constructor() {
+    // Let the layout engine place the diagram whenever its boxes or connections change.
+    effect(() => {
+      const key = this.layoutKey();
+      const { frames, boxes } = this.sketch();
+      const links = this.links();
+      untracked(() => {
+        layoutFlow({
+          boxes: boxes.map((b) => ({ key: boxId(b.key), w: b.w, h: b.h, frame: b.frame ? frameId(b.frame) : null })),
+          frames: frames.map((f) => ({ key: frameId(f.key), minW: f.w })),
+          edges: links.map((l, i) => ({ id: edgeId(i), from: boxId(l.from), to: boxId(l.to) })),
+        }).then((layout) => {
+          if (this.layoutKey() === key) {
+            this.placed.set({ key, layout });
+          }
+        }).catch(() => {
+          // the engine could not be loaded or failed: the sketch stays
+        });
+      });
+    });
     // Lay out the connectors once the cards are rendered (and again when they change size).
     afterRenderEffect((onCleanup) => {
       this.codeCards();
@@ -573,8 +660,85 @@ export class FlowView {
     this.stepIndex.set(null);
   }
 
+  /**
+   * Starts moving boxes with the pointer: one box, or - on the head of a frame - all boxes of the class. Nothing
+   * moves before the pointer has gone a few pixels, so a click still jumps to the code.
+   */
+  protected dragStart(event: PointerEvent, keys: readonly string[]): void {
+    if (event.button !== 0 || (event.target as HTMLElement).closest('button')) {
+      return;
+    }
+    const boxes = this.boxes().filter((b) => keys.includes(b.key));
+    if (!boxes.length) {
+      return;
+    }
+    try {
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    } catch {
+      // no capture (a pointer that is gone already): the drag ends when the pointer leaves the box
+    }
+    // a box stays in the diagram, a box of a class leaves room for the head and the border of its frame
+    const framed = boxes.some((b) => b.frame);
+    this.drag = {
+      keys: boxes.map((b) => b.key),
+      start: { x: event.clientX, y: event.clientY },
+      origin: new Map(boxes.map((b) => [b.key, { x: b.x, y: b.y }])),
+      min: { x: Math.min(...boxes.map((b) => b.x)) - (framed ? FRAME_PADDING.left : 0), y: Math.min(...boxes.map((b) => b.y)) - (framed ? FRAME_PADDING.top : 0) },
+      moved: false,
+    };
+  }
+
+  protected dragMove(event: PointerEvent): void {
+    const drag = this.drag;
+    if (!drag) {
+      return;
+    }
+    let dx = event.clientX - drag.start.x;
+    let dy = event.clientY - drag.start.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 4) {
+      return;
+    }
+    drag.moved = true;
+    this.dragging.set(true);
+    dx = Math.max(dx, -drag.min.x);
+    dy = Math.max(dy, -drag.min.y);
+    const next = new Map(this.moved());
+    for (const key of drag.keys) {
+      const at = drag.origin.get(key)!;
+      next.set(key, { x: Math.round(at.x + dx), y: Math.round(at.y + dy) });
+    }
+    this.movedByKey.set(this.layoutKey(), next);
+    this.moved.set(next);
+  }
+
+  protected dragEnd(event: PointerEvent): void {
+    const drag = this.drag;
+    this.drag = null;
+    if (!drag) {
+      return;
+    }
+    const el = event.currentTarget as HTMLElement;
+    if (el.hasPointerCapture(event.pointerId)) {
+      el.releasePointerCapture(event.pointerId);
+    }
+    if (drag.moved) {
+      this.dragging.set(false);
+      this.justDragged = true;
+      setTimeout(() => (this.justDragged = false));
+    }
+  }
+
+  /** Puts all boxes back where the layout placed them. */
+  protected resetLayout(): void {
+    this.movedByKey.delete(this.layoutKey());
+    this.moved.set(new Map());
+  }
+
   /** Jumps to the code of a box: to the step, or to the class (its first step in the card or in call order). */
   protected openBox(box: Box): void {
+    if (this.justDragged) {
+      return; // the click that ends a drag
+    }
     if (box.ids.length > 1) {
       // a class: bring back all its steps, then go to the top of its card (or to its first call)
       const next = new Set(this.hidden());
@@ -847,6 +1011,19 @@ export function contentSize(host: HTMLElement): { width: number; height: number 
     height = Math.max(height, child.offsetTop + child.offsetHeight);
   }
   return { width, height };
+}
+
+/** Ids for the layout engine: boxes, frames and edges share one namespace there. */
+function boxId(key: string): string {
+  return 'b:' + key;
+}
+
+function frameId(key: string): string {
+  return 'f:' + key;
+}
+
+function edgeId(index: number): string {
+  return 'e' + index;
 }
 
 /** The block of a segment is shown side by side when that view is on (it has removed and added lines). */

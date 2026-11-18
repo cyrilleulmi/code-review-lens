@@ -128,8 +128,11 @@ export class ReviewStore {
    * code left and new code right. Stored per browser.
    */
   readonly diffMode = signal<DiffMode>(readChoice('scr.diffMode', ['unified', 'split'] as const) ?? 'unified');
-  /** Level of the flow diagrams: one box per method / function, one per class, or both nested. Stored per browser. */
-  readonly flowLevel = signal<FlowDiagramLevel>(readChoice('scr.flowLevel', FLOW_DIAGRAM_LEVELS) ?? 'method');
+  /**
+   * Level of the flow diagrams: one box per method / function, one per class, or - the default - both: classes as
+   * frames with their methods inside. Stored per browser.
+   */
+  readonly flowLevel = signal<FlowDiagramLevel>(readChoice('scr.flowLevel', FLOW_DIAGRAM_LEVELS) ?? 'combined');
   /** Own level for the code of the flows; null = the code follows the diagram (codeLevelFor, the default). Stored per browser. */
   readonly flowCodeOverride = signal<FlowLevel | null>(readChoice('scr.flowCodeLevel', FLOW_LEVELS));
   /** Level of the code of the flows: one card per method / function, or one per class. */
