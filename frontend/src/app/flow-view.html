@@ -85,12 +85,12 @@
 <div class="level-bar">
   <span class="lbl">{{ t('Diagramm') }}</span>
   <div class="seg-switch text" role="group" [attr.aria-label]="t('Ebene des Diagramms')">
-    <button type="button" [class.on]="level() === 'method'" [attr.aria-pressed]="level() === 'method'" (click)="setLevel('method')"
-            [title]="t('Ein Knoten pro Methode bzw. Funktion')">{{ t('Methoden') }}</button>
-    <button type="button" [class.on]="level() === 'combined'" [attr.aria-pressed]="level() === 'combined'" (click)="setLevel('combined')"
-            [title]="t('Klassen als Rahmen, ihre Methoden als kleinere Knoten darin; Verbindungen zwischen den Methoden')">{{ t('Klassen + Methoden') }}</button>
     <button type="button" [class.on]="level() === 'class'" [attr.aria-pressed]="level() === 'class'" (click)="setLevel('class')"
             [title]="t('Ein Knoten pro Klasse: ihre Methoden des Flows zusammengefasst, Verbindungen zwischen den Klassen')">{{ t('Klassen') }}</button>
+    <button type="button" [class.on]="level() === 'combined'" [attr.aria-pressed]="level() === 'combined'" (click)="setLevel('combined')"
+            [title]="t('Klassen als Rahmen, ihre Methoden als kleinere Knoten darin; Verbindungen zwischen den Methoden')">{{ t('Klassen + Methoden') }}</button>
+    <button type="button" [class.on]="level() === 'method'" [attr.aria-pressed]="level() === 'method'" (click)="setLevel('method')"
+            [title]="t('Ein Knoten pro Methode bzw. Funktion')">{{ t('Methoden') }}</button>
   </div>
   @let classCount = level() === 'class' ? boxes().length : frames().length;
   @let methodCount = level() === 'class' ? 0 : boxes().length;
@@ -218,10 +218,10 @@
 <div class="level-bar">
   <span class="lbl">{{ t('Code') }}</span>
   <div class="seg-switch text" role="group" [attr.aria-label]="t('Ebene des Codes')">
-    <button type="button" [class.on]="codeLevel() === 'method'" [attr.aria-pressed]="codeLevel() === 'method'" (click)="setCodeLevel('method')"
-            [title]="t('Ein Block pro Methode bzw. Funktion, in Aufrufreihenfolge; aufeinanderfolgende Methoden einer Klasse stehen unter ihrem Namen zusammen')">{{ t('Methoden') }}</button>
     <button type="button" [class.on]="codeLevel() === 'class'" [attr.aria-pressed]="codeLevel() === 'class'" (click)="setCodeLevel('class')"
             [title]="t('Eine Karte pro Klasse: ihre Methoden des Flows zusammen, in der Reihenfolge der Datei')">{{ t('Klassen') }}</button>
+    <button type="button" [class.on]="codeLevel() === 'method'" [attr.aria-pressed]="codeLevel() === 'method'" (click)="setCodeLevel('method')"
+            [title]="t('Ein Block pro Methode bzw. Funktion, in Aufrufreihenfolge; aufeinanderfolgende Methoden einer Klasse stehen unter ihrem Namen zusammen')">{{ t('Methoden') }}</button>
     <button type="button" [class.on]="codeLevel() === 'inline'" [attr.aria-pressed]="codeLevel() === 'inline'" (click)="setCodeLevel('inline')"
             [title]="t('Zeile für Zeile: der aufgerufene Block steht direkt nach der Zeile, die ihn aufruft – eine Methode wird nicht erst zu Ende gelesen. Mehrfach aufgerufene Blöcke stehen mehrfach da, die Häkchen gelten überall')">{{ t('Zeile') }}</button>
   </div>
