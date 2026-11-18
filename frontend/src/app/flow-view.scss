@@ -114,19 +114,12 @@
       }
     }
 
-    .eye {
-      display: none;
-    }
-
     .focus.on {
       color: var(--accent-fg);
       background: rgba(53, 116, 240, 0.18);
     }
   }
 
-  &:hover .acts .eye {
-    display: grid;
-  }
 }
 
 /* boxes and frames can be moved with the pointer; while one is dragged nothing eases behind it */
@@ -148,10 +141,6 @@
   .frame,
   .edge {
     transition: none;
-  }
-
-  .node:hover {
-    transform: none;
   }
 }
 
@@ -211,12 +200,12 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  /* hovering never moves the box: the buttons in it stay where they are */
+  transition: border-color 0.15s, box-shadow 0.15s;
 
   &:hover {
     border-color: var(--accent);
     box-shadow: 0 4px 14px var(--shadow-color);
-    transform: translateY(-1px);
   }
 
   &.quick {
@@ -558,17 +547,9 @@
     }
   }
 
+  /* hide and focus are always there: a button that only appears on hover would push its neighbours aside */
   .acts {
     display: inline-flex;
-  }
-
-  .acts .eye {
-    display: none;
-  }
-
-  &:hover .acts .eye,
-  &.off .acts .eye {
-    display: grid;
   }
 
   .acts .focus.on {

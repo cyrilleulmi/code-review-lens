@@ -119,11 +119,10 @@ h2 {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s;
+  transition: border-color 0.15s;
 
   &:hover {
     border-color: var(--accent);
-    transform: translateY(-1px);
   }
 
   .idx {

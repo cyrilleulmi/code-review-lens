@@ -307,13 +307,13 @@ export class FlowView {
       const h = FRAME_PADDING.top + g.members.length * (MINI_H + MINI_GAP) - MINI_GAP + FRAME_PADDING.bottom;
       const minis = g.members.map((n, i) => {
         const box = step(n);
-        // one line: number, badge, name, test icon (with the test infos), progress, focus button
-        const w = Math.min(320, Math.max(160, Math.round(136 + (runs ? 20 : 0) + box.name.length * CHAR_W)));
+        // one line: number, badge, name, test icon (with the test infos), progress, hide and focus button
+        const w = Math.min(340, Math.max(180, Math.round(158 + (runs ? 20 : 0) + box.name.length * CHAR_W)));
         return { ...box, depth: g.depth, x: x + FRAME_PADDING.left, y: y + FRAME_PADDING.top + i * (MINI_H + MINI_GAP), w, h: MINI_H, mini: true, frame: g.key };
       });
       const frame = cls(g);
-      // the head: badge, name of the class, layer, progress, focus button
-      const head = Math.min(360, Math.round(112 + frame.name.length * CHAR_W + areaLabel(frame.area).length * 6.5));
+      // the head: badge, name of the class, layer, progress, hide and focus button
+      const head = Math.min(380, Math.round(134 + frame.name.length * CHAR_W + areaLabel(frame.area).length * 6.5));
       const w = Math.max(head, Math.max(...minis.map((m) => m.w)) + FRAME_PADDING.left + FRAME_PADDING.right);
       frames.push({ ...frame, depth: g.depth, x, y, w, h, mini: false, frame: null });
       boxes.push(...minis);
