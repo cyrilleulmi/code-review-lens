@@ -33,8 +33,8 @@
   transition: border-color 0.15s, opacity 0.15s;
 
   &.done {
-    border-color: var(--ok-border);
-    border-left-color: var(--area, var(--ok-border));
+    border-color: var(--acc-border);
+    border-left-color: var(--area, var(--acc-border));
   }
 
   &.root {
@@ -89,7 +89,7 @@
   }
 
   .ok {
-    color: var(--ok);
+    color: var(--acc-fg);
   }
 
   .acts {
@@ -224,8 +224,8 @@
   }
 
   &.done {
-    border-color: var(--ok-border);
-    background: var(--ok-head);
+    border-color: var(--acc-border);
+    background: var(--acc-head);
   }
 
   .no {
@@ -273,7 +273,7 @@
   }
 
   .ok {
-    color: var(--ok);
+    color: var(--acc-fg);
   }
 }
 
@@ -457,7 +457,7 @@
     font-variant-numeric: tabular-nums;
 
     &.complete {
-      color: var(--ok);
+      color: var(--acc-fg);
     }
   }
 }
@@ -476,15 +476,29 @@
   font-size: 12px;
   cursor: pointer;
 
+  flex: none;
+
   &:hover {
-    border-color: var(--ok);
-    color: var(--ok);
+    border-color: var(--acc);
+    color: var(--acc-fg);
   }
 
   &.on {
-    background: var(--ok);
-    border-color: var(--ok);
-    color: var(--on-ok);
+    background: var(--acc);
+    border-color: var(--acc);
+    color: var(--on-acc);
+  }
+
+  /* "ok everywhere": blue on hover, filled blue once the class is accepted at all its places */
+  &.everywhere:hover {
+    border-color: var(--ok-all);
+    color: var(--ok-all-fg);
+  }
+
+  &.everywhere.on {
+    background: var(--ok-all);
+    border-color: var(--ok-all);
+    color: var(--on-ok-all);
   }
 }
 

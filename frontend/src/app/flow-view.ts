@@ -22,7 +22,8 @@ import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
 import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
-import { ReviewStore } from './review.store';
+import { Progress, ReviewStore } from './review.store';
+import { acceptLevel } from './accept-boxes';
 import { serverText, t } from './i18n';
 import { diffSides } from './split-diff';
 
@@ -208,6 +209,8 @@ export class FlowView {
   protected readonly hasBothSides = computed(() => [...this.runs().edges.values()].some(bothSides));
   protected readonly t = t;
   protected readonly serverText = serverText;
+  /** open, accepted in this flow (green) or at all places (blue) */
+  protected readonly accepted = acceptLevel;
   protected readonly bothSidesLabel = BOTH_SIDES_LABEL;
   protected readonly stepLabels = STEP_LABELS;
   protected readonly edgeLabels = EDGE_LABELS;
@@ -640,7 +643,7 @@ export class FlowView {
     return p.total > 0 && p.ok === p.total;
   }
 
-  protected progressOf(ids: readonly string[]): { ok: number; total: number } {
+  protected progressOf(ids: readonly string[]): Progress {
     return this.store.progressOf(ids.map((segmentId) => ({ segmentId, place: this.place() })));
   }
 
@@ -871,6 +874,12 @@ export class FlowView {
     this.store.toggle(this.store.linesOf(unit.ids.map((segmentId) => ({ segmentId, place: this.place() }))), `class:${unit.key}`);
   }
 
+  /** "Klasse überall ok": all steps of a class at all their places; when they all are, the other places are taken back. */
+  protected markUnitEverywhere(unit: Card, event: Event): void {
+    event.stopPropagation();
+    this.store.toggleEverywhere(this.store.linesOf(unit.ids.map((segmentId) => ({ segmentId, place: this.place() }))), `class:${unit.key}`);
+  }
+
   // ------------------------------------------------------------------ steps
 
   protected calledBy(node: Node): string | null {
@@ -918,6 +927,10 @@ export class FlowView {
 
   protected markFlow(): void {
     this.store.toggle(this.store.linesOf(this.slots()), `flow:${this.flow().id}`);
+  }
+
+  protected markFlowEverywhere(): void {
+    this.store.toggleEverywhere(this.store.linesOf(this.slots()), `flow:${this.flow().id}`);
   }
 
   /** Jumps to a step (making it visible first); segments outside this flow are shown at their own place. */

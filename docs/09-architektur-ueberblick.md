@@ -376,7 +376,8 @@ Die vollständige, belegte Liste steht in [11-verbesserungen.md](11-verbesserung
 |---|---|
 | **Bundle** | Antwort auf `GET …/{number}`: PR-Infos, Dateiliste, Analyse, Review-Status in einem. |
 | **Slot** | Ein Segment an einem Ort (UI-intern). Einheit für Fortschritt und «Block ok». |
-| **Halb akzeptiert** | Zeile ist an einem anderen ihrer Orte akzeptiert, hier noch nicht (abgeleitet, nicht gespeichert). |
+| **Halb akzeptiert** | Zeile ist an einem Teil ihrer Orte akzeptiert (abgeleitet, nicht gespeichert); im UI grün. |
+| **Überall akzeptiert** | Zeile ist an allen ihren Orten akzeptiert (Feld `ok`); im UI blau – auch eine Zeile mit nur einem Ort. |
 | **SegmentFacts** | Was ein Kategorie-Modul über ein Segment wissen darf (Pfad, Regel, Schicht, Aspekt, Querschnitt, «in einem Fluss»). |
 | **Attribution** | Zuordnung jeder geänderten Zeile zu dem Commit, der sie gemacht hat. |
 | **First-Parent-Kette** | Vom Head immer dem ersten Parent folgen; Seitenzweige laufen über ihren Merge-Commit. |

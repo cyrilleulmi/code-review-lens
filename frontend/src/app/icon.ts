@@ -12,6 +12,7 @@ const PATHS: Record<string, string> = {
   file: 'M4 1.5h5L12.5 5v9.5h-8.5zM9 1.5V5h3.5',
   folder: 'M1.5 3.5h4.5l1.5 1.5h7v8.5h-13z',
   check: 'M3 8.5 6.5 12 13 4.5',
+  checkAll: 'M1.5 8.5 4.5 12 10.5 4.5M7.5 11l1 1 6-7.5',
   comment: 'M2.5 3h11v8H7l-3 2.5V11H2.5z',
   refresh: 'M13 3v3.5H9.5M3 13V9.5h3.5M12.4 6.5A5 5 0 0 0 3.6 5M3.6 9.5a5 5 0 0 0 8.8 1.5',
   external: 'M9 2.5h4.5V7M13.5 2.5 7 9M11.5 9.5v4h-9v-9h4',

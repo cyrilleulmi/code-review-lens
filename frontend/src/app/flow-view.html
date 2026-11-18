@@ -13,9 +13,17 @@
     <span class="knob" aria-hidden="true"><span></span></span>
   </button>
   <span class="progress-text">{{ t('{ok}/{total} Zeilen ok', { ok: progress().ok, total: progress().total }) }}</span>
-  <button type="button" class="btn" [class.success]="progress().total > 0 && progress().ok === progress().total" (click)="markFlow()">
+  @let flowLevel = accepted(progress());
+  <button type="button" class="btn" [class.success]="flowLevel !== 'open'" [class.acc-all]="flowLevel === 'all'" (click)="markFlow()"
+          [title]="flowLevel !== 'open' ? t('Markierung in diesem Flow entfernen') : t('Alle Zeilen in diesem Flow als ok markieren')">
     <app-icon name="check" [size]="14" /> {{ t('Ganzen Flow als ok markieren') }}
   </button>
+  @if (progress().multi > 0) {
+    <button type="button" class="btn everywhere" [class.success]="flowLevel === 'all'" (click)="markFlowEverywhere()"
+            [title]="flowLevel === 'all' ? t('An den anderen Orten wieder zurücknehmen') : t('Alle Zeilen des Flows an allen ihren Orten als ok markieren')">
+      <app-icon name="checkAll" [size]="14" /> {{ t('Flow überall ok') }}
+    </button>
+  }
 </div>
 
 <div class="focus-bar">
@@ -117,8 +125,9 @@
 <div class="diagram" role="list" [class.dragging]="dragging()">
   @for (f of frames(); track f.key) {
     @let fp = progressOf(f.ids);
+    @let fl = accepted(fp);
     <div class="frame" [style.left.px]="f.x" [style.top.px]="f.y" [style.width.px]="f.w" [style.height.px]="f.h" [style.--area]="areaColor(f.area)"
-         [class.done]="fp.total > 0 && fp.ok === fp.total" [class.off]="isOff(f.ids)" [class.root]="focused() === f.key">
+         [class.done]="fl !== 'open'" [class.acc-all]="fl === 'all'" [class.off]="isOff(f.ids)" [class.root]="focused() === f.key">
       <div class="frame-head" role="button" tabindex="0" [title]="f.hint"
            (mouseenter)="hover(f.ids)" (mouseleave)="hover(null)" (click)="openBox(f)" (keydown.enter)="openBox(f)"
            (pointerdown)="dragStart($event, f.ids)" (pointermove)="dragMove($event)" (pointerup)="dragEnd($event)" (pointercancel)="dragEnd($event)">
@@ -127,8 +136,8 @@
         @if (areaLabel(f.area); as a) {
           <b class="area">{{ a }}</b>
         }
-        @if (fp.total > 0 && fp.ok === fp.total) {
-          <app-icon name="check" [size]="13" class="ok" />
+        @if (fl !== 'open') {
+          <app-icon name="check" [size]="13" class="ok" [title]="fl === 'all' ? t('überall akzeptiert') : t('in diesem Flow akzeptiert, noch nicht überall')" />
         } @else {
           <span class="cnt">{{ fp.ok }}/{{ fp.total }}</span>
         }
@@ -172,10 +181,11 @@
   </svg>
   @for (b of boxes(); track b.key) {
     @let p = progressOf(b.ids);
+    @let pl = accepted(p);
     @let run = runOf(b.ids);
     <div class="node" role="listitem" tabindex="0"
             [style.left.px]="b.x" [style.top.px]="b.y" [style.width.px]="b.w" [style.height.px]="b.h"
-            [class.done]="p.total > 0 && p.ok === p.total" [class.quick]="b.quick" [class.cls]="level() === 'class'" [class.mini]="b.mini"
+            [class.done]="pl !== 'open'" [class.acc-all]="pl === 'all'" [class.quick]="b.quick" [class.cls]="level() === 'class'" [class.mini]="b.mini"
             [class.off]="isOff(b.ids)" [class.other-commit]="otherCommit(b.ids)" [class.current]="isCurrent(b.ids)" [class.root]="focused() === b.key"
             [style.--area]="areaColor(b.area)"
             [class.run-tested]="run === 'tested'" [class.run-mocked]="run === 'mocked'" [class.run-none]="run === 'none'"
@@ -200,7 +210,7 @@
       @if (mockWarned(b.ids)) {
         <app-icon name="warning" [size]="13" class="mock-warn" />
       }
-      @if (p.total > 0 && p.ok === p.total) {
+      @if (pl !== 'open') {
         <app-icon name="check" [size]="14" class="ok" />
       } @else {
         <span class="cnt">{{ p.ok }}/{{ p.total }}</span>
@@ -307,7 +317,8 @@
            [attr.data-class]="u.classKey" [style.margin-left.px]="gutter() + u.depth * indent()" [style.--area]="areaColor(u.area)">
         @if (u.framed) {
           @let up = progressOf(u.ids);
-          <header class="class-head" (mouseenter)="hover(u.ids)" (mouseleave)="hover(null)">
+          @let ul = accepted(up);
+          <header class="class-head" [class.acc-all]="ul === 'all'" (mouseenter)="hover(u.ids)" (mouseleave)="hover(null)">
             <app-symbol-badge kind="class" />
             <span class="cname">{{ u.name }}</span>
             @if (areaLabel(u.area); as a) {
@@ -316,11 +327,17 @@
             <span class="files" [title]="u.files">{{ u.files }}</span>
             <span class="count-steps">{{ u.ids.length === 1 ? t('1 Methode im Flow') : t('{n} Methoden im Flow', { n: u.ids.length }) }}</span>
             <span class="spacer"></span>
-            <span class="count" [class.complete]="up.total > 0 && up.ok === up.total">{{ up.ok }}/{{ up.total }}</span>
-            <button type="button" class="ok-btn" [class.on]="up.total > 0 && up.ok === up.total" (click)="markUnit(u, $event)"
-                    [title]="up.total > 0 && up.ok === up.total ? t('Markierung entfernen') : t('Alle Methoden der Klasse in diesem Flow als ok markieren')">
-              <app-icon name="check" [size]="14" /> {{ up.total > 0 && up.ok === up.total ? t('Ok') : t('Klasse ok') }}
+            <span class="count" [class.complete]="ul !== 'open'">{{ up.ok }}/{{ up.total }}</span>
+            <button type="button" class="ok-btn" [class.on]="ul !== 'open'" (click)="markUnit(u, $event)"
+                    [title]="ul !== 'open' ? t('Markierung in diesem Flow entfernen') : t('Alle Methoden der Klasse in diesem Flow als ok markieren')">
+              <app-icon name="check" [size]="14" /> {{ ul !== 'open' ? t('Ok') : t('Klasse ok') }}
             </button>
+            @if (up.multi > 0) {
+              <button type="button" class="ok-btn everywhere" [class.on]="ul === 'all'" (click)="markUnitEverywhere(u, $event)"
+                      [title]="ul === 'all' ? t('An den anderen Orten wieder zurücknehmen') : t('Alle Methoden der Klasse an allen ihren Orten als ok markieren')">
+                <app-icon name="checkAll" [size]="14" /> {{ ul === 'all' ? t('Überall ok') : t('Klasse überall ok') }}
+              </button>
+            }
           </header>
         } @else {
           <header class="run-head" (mouseenter)="hoverClass(u)" (mouseleave)="hoverClass(null)"

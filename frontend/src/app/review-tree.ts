@@ -3,6 +3,7 @@ import { CommitList } from './commit-list';
 import { Icon, SymbolBadge } from './icon';
 import { serverText, t } from './i18n';
 import { ReviewStore, Selection, Slot } from './review.store';
+import { acceptLevel } from './accept-boxes';
 
 type Tab = 'categories' | 'flows' | 'files' | 'commits';
 
@@ -194,6 +195,8 @@ export class ReviewTree {
     next.has(n.id) ? next.delete(n.id) : next.add(n.id);
     this.collapsed.set(next);
   }
+
+  protected readonly accepted = acceptLevel;
 
   protected progress(n: TreeNode) {
     return this.store.progressOf(n.slots);

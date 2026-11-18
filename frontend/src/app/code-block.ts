@@ -13,6 +13,7 @@ import { HTTP_TAG, httpTitle } from './http-tests';
 import { Icon, SymbolBadge } from './icon';
 import { areaColor, areaLabel, areaOfSegment, langColor, langLabel } from './look';
 import { ReviewStore } from './review.store';
+import { PlaceBox, acceptLevel } from './accept-boxes';
 import { attr, locateCalls, markHtml } from './call-sites';
 import { locale, serverText, t } from './i18n';
 import { diffSides, pairLines } from './split-diff';
@@ -61,6 +62,15 @@ export interface InlineSlot {
   line: number | null;
 }
 
+/** The boxes of a line in the gutter (see accept-boxes.ts), with their tooltips. */
+interface ShownBoxes {
+  front: { on: boolean; title: string } | null;
+  rest: (PlaceBox & { title: string })[];
+  readonly: boolean;
+  all: boolean;
+  completes: boolean;
+}
+
 /** One line as it is shown in a row: in the unified view the whole row, side by side its old or its new half. */
 interface Cell {
   line: DisplayLine;
@@ -96,6 +106,9 @@ interface ViewRow {
   styleUrl: './code-block.scss',
   host: {
     '[class.done]': 'allOk()',
+    '[class.acc-all]': 'level() === "all"',
+    '[class.acc-here]': 'level() !== "all"',
+    '[style.--check-w.px]': 'checkWidth()',
     '[class.annotated]': 'store.annotate()',
     '[class.split-view]': 'split()',
     '[class.fe]': 'area() === "frontend"',
@@ -336,10 +349,11 @@ export class CodeBlock {
   });
 
   protected readonly progress = computed(() => this.store.progressOf([{ segmentId: this.segment().id, place: this.place() }]));
-  protected readonly allOk = computed(() => {
-    const p = this.progress();
-    return p.total > 0 && p.ok === p.total;
-  });
+  /** Accepted here (green) or at all places of its lines (blue). */
+  protected readonly level = computed(() => acceptLevel(this.progress()));
+  protected readonly allOk = computed(() => this.level() !== 'open');
+  /** Lines of the block are shown at several places: "here" and "everywhere" are two steps. */
+  protected readonly severalPlaces = computed(() => this.progress().multi > 0);
   protected readonly collapsed = computed(() => this.userCollapsed() ?? (this.startCollapsed() || (this.store.collapseDone() && this.allOk())));
 
   /** All places of this block with their ok state (only when there is more than one). */
@@ -635,20 +649,45 @@ export class CodeBlock {
     return !!line.key && this.store.isOkAt(this.segment().path, line.key, this.place());
   }
 
-  /** Half accepted: the line is accepted at another place (or, in the file view, at some of its places) but not here. */
-  protected isHalf(line: DisplayLine): boolean {
-    return !!line.key && line.own && this.store.lineStatus(this.segment().path, line.key, this.place()) === 'partial';
-  }
+  /** Line index -> its boxes, one per place the line is shown at, with what a click on them does. */
+  protected readonly boxes = computed(() => {
+    const result = new Map<number, ShownBoxes>();
+    const path = this.segment().path;
+    const here = this.place();
+    const names = this.store.places();
+    const state = (id: string, on: boolean) => `${names.get(id)?.label ?? id}: ${on ? t('akzeptiert') : t('offen')}\n`;
+    this.lines().forEach((line, i) => {
+      if (!line.own || !line.key) {
+        return;
+      }
+      const b = this.store.lineBoxes(path, line.key, here);
+      if (!b.rest.length) {
+        const title = b.all ? t('Akzeptiert – Klick: Markierung entfernen') : t('Als ok markieren (Shift-Klick: Bereich)');
+        result.set(i, { ...b, front: { on: b.all, title }, rest: [] });
+        return;
+      }
+      const n = b.rest.length + (b.front ? 1 : 0);
+      const action = !b.front ? (b.all ? t('Klick: Markierung an allen Orten entfernen') : t('Klick: an allen {n} Orten als ok markieren', { n }))
+        : b.readonly ? t('Zuerst hier akzeptieren – danach lässt sich die Zeile mit einem Klick überall akzeptieren')
+        : b.all ? t('Klick: an den anderen Orten wieder zurücknehmen') : t('Klick: an allen {n} Orten als ok markieren', { n });
+      result.set(i, {
+        ...b,
+        front: !b.front || !here ? null : {
+          on: b.front.on,
+          title: state(here, b.front.on) + (b.front.on ? t('Klick: Markierung hier entfernen') : t('Klick: hier als ok markieren (Shift-Klick: Bereich)')),
+        },
+        rest: b.rest.map((box) => ({ ...box, title: state(box.id, box.on) + action })),
+      });
+    });
+    return result;
+  });
 
-  /** Where else a half-accepted line is already accepted (only in a place view; the file view has the counter). */
-  protected elsewhere(line: DisplayLine): { ids: string[]; labels: string } | null {
-    if (!this.place() || !this.isHalf(line)) {
-      return null;
-    }
-    const ids = this.store.acceptedElsewhere(this.segment().path, line.key!, this.place());
-    const places = this.store.places();
-    return ids.length ? { ids, labels: ids.map((id) => places.get(id)?.label ?? id).join(', ') } : null;
-  }
+  /** Room for the boxes in the gutter: the front box, and smaller ones for the other places. */
+  protected readonly checkWidth = computed(() => {
+    let n = 1;
+    this.boxes().forEach((b) => (n = Math.max(n, (b.front ? 1 : 0) + b.rest.length)));
+    return n < 2 ? 22 : 25 + (n - 1) * 12;
+  });
 
   /**
    * Line index -> hint "already accepted elsewhere". Shown once per run of half-accepted lines with the same other
@@ -687,18 +726,10 @@ export class CodeBlock {
 
   protected goElsewhere(line: DisplayLine, event: Event): void {
     event.stopPropagation();
-    const first = this.elsewhere(line)?.ids[0];
+    const first = line.key ? this.store.acceptedElsewhere(this.segment().path, line.key, this.place())[0] : undefined;
     if (first) {
       this.store.goToPlace(first, this.segment().id);
     }
-  }
-
-  /** "1/2" for lines that need an ok at several places (shown in the file view). */
-  protected multi(line: DisplayLine): { ok: number; of: number } | null {
-    if (!line.key || !line.own || (this.segment().places?.length ?? 0) < 2) {
-      return null;
-    }
-    return this.store.okCount(this.segment().path, line.key);
   }
 
   protected goPlace(id: string, event: Event): void {
@@ -722,13 +753,18 @@ export class CodeBlock {
     return !!line.key && (line.own || line.type === 'ctx') && this.threads().has(line.key);
   }
 
-  protected toggleLine(index: number, event: MouseEvent): void {
+  /**
+   * A click on the boxes of a line. The front box accepts the line at this place (or takes that back); the other
+   * boxes (rest) - and every box in a view without a place - accept it everywhere, or take that step back.
+   * Shift-click does the same for the range since the last click.
+   */
+  protected toggleLine(index: number, event: MouseEvent, rest = false): void {
     const lines = this.lines();
     const line = lines[index];
-    if (!line.own || !line.key || this.otherCommit(line)) {
+    const boxes = this.boxes().get(index);
+    if (!line.own || !line.key || this.otherCommit(line) || !boxes || (rest && boxes.readonly)) {
       return;
     }
-    const target = !this.isOk(line);
     const place = this.place();
     let marks: LineMark[] = [{ path: this.segment().path, key: line.key, place }];
     if (event.shiftKey && this.lastClicked != null) {
@@ -736,12 +772,23 @@ export class CodeBlock {
       marks = lines.slice(from, to + 1).filter((l) => l.own && l.key && !this.otherCommit(l)).map((l) => ({ path: this.segment().path, key: l.key!, place }));
     }
     this.lastClicked = index;
-    this.store.mark(marks, target, marks.length > 1 ? `range:${this.segment().id}` : 'line');
+    const scope = marks.length > 1 ? `range:${this.segment().id}` : 'line';
+    if (rest || !boxes.front) {
+      this.store.markEverywhere(marks, !boxes.all, scope);
+    } else {
+      this.store.mark(marks, !boxes.front.on, scope);
+    }
   }
 
   protected toggleBlock(event: Event): void {
     event.stopPropagation();
     this.store.toggle(this.store.linesOf([{ segmentId: this.segment().id, place: this.place() }]), `segment:${this.segment().id}`);
+  }
+
+  /** "Block überall ok": all lines at all their places; when they all are, the other places are taken back. */
+  protected toggleBlockEverywhere(event: Event): void {
+    event.stopPropagation();
+    this.store.toggleEverywhere(this.store.linesOf([{ segmentId: this.segment().id, place: this.place() }]), `segment:${this.segment().id}`);
   }
 
   protected openEditor(line: DisplayLine): void {

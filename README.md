@@ -7,7 +7,7 @@ Code-Reviews nach **Bedeutung statt nach Dateien**. SmartCodeReview holt deine o
 3. **Architektur** (bei Ports & Adapters): *Domäne*, *Use Cases*, *Application Layer*, *Adapter*; **Frontend**: *Routing*, *Zustand*, *API-Anbindung*, *Formulare*, *Komponenten-Logik*, *Templates*.
 4. **Einzelne Änderungen**, **Tests**, **Styles & Assets**. Jeder geänderte Testfall ist mit dem Code verknüpft, den er (statisch ermittelt) aufruft: welche Komponenten er testet und welche Codestellen er direkt oder indirekt erreicht.
 
-Jede geänderte Zeile kann als **ok** markiert werden, einzeln, als Block, als Gruppe, als Flow oder als ganze Kategorie. Erscheint ein Block an **mehreren Orten** (z. B. als Quick win und in einem Flow, oder in zwei Flows), braucht er an jedem Ort ein eigenes Ok; die Dateiansicht zeigt das pro Zeile und springt zu den Orten. Die Markierungen leben **nur lokal** in JSON-Dateien, die auch Agenten lesen und schreiben können. Kommentare gehen **sofort** als Inline-Kommentare an GitHub bzw. GitLab.
+Jede geänderte Zeile kann als **ok** markiert werden, einzeln, als Block, als Gruppe, als Flow oder als ganze Kategorie. Erscheint ein Block an **mehreren Orten** (z. B. als Quick win und in einem Flow, oder in zwei Flows), braucht er an jedem Ort ein eigenes Ok: Jede Zeile zeigt ein Kästchen pro Ort, **grün** heisst am gezeigten Ort akzeptiert, **blau** an allen Orten; «Block überall ok» akzeptiert an allen Orten auf einmal. Die Markierungen leben **nur lokal** in JSON-Dateien, die auch Agenten lesen und schreiben können. Kommentare gehen **sofort** als Inline-Kommentare an GitHub bzw. GitLab.
 
 ![Fluss-Ansicht](docs/img/flow.png)
 
@@ -66,8 +66,8 @@ cd frontend && npm start              # UI auf :4200, /api wird an :8080 weiterg
 |---|---|
 | PR/MR öffnen | Tool-Fenster «Pull/Merge Requests» (Alt+1), Filter *Alle / Von mir / Review*, oder URL einfügen + Enter |
 | Navigieren | Tool-Fenster «Review» (Alt+2): Tabs *Kategorien / Flows / Dateien* |
-| Zeile ok | Häkchen im Gutter; **Shift-Klick** markiert einen Bereich |
-| Block / Gruppe / Flow ok | Button «Block ok», ✓-Button im Baum (beim Überfahren), «Ganzen Flow als ok markieren» |
+| Zeile ok | Kästchen im Gutter, eines pro Ort der Zeile: das vordere gilt für den gezeigten Ort; ist es angekreuzt, akzeptiert ein Klick auf die anderen die Zeile überall. **Shift-Klick** markiert einen Bereich. Grün = hier akzeptiert, blau = überall |
+| Block / Gruppe / Flow ok | Button «Block ok», ✓-Button im Baum (beim Überfahren), «Ganzen Flow als ok markieren»; daneben «Block überall ok» / «Flow überall ok» für alle Orte auf einmal |
 | Kommentar | Sprechblase im Gutter (nur auf Zeilen im Diff), Ctrl+Enter sendet sofort an GitHub/GitLab |
 | Aufruf folgen | Farbige Bubble direkt um den Aufruf im Code (`② saveEvent`), Klick springt zum aufgerufenen Block; «← aufgerufen von …» im Block-Kopf; jede Verbindung hat ihre Farbe (gleich im Diagramm und in der Linie links) |
 | Schichten erkennen | Farbiger Streifen + Badge an jedem Block und Knoten: Frontend (cyan), API/Adapter ein (orange), Use Case (violett), Application (blau), Domäne (grün), Daten/Adapter aus (gelb), Test (rosa); dazu die Sprache (TS, Java, …) |

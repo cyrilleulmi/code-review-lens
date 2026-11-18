@@ -59,10 +59,18 @@
     <span class="hint" [title]="t('Seite an Seite: Dieser Block hat nur neue oder nur entfernte Zeilen, es gibt nichts gegenüberzustellen – er bleibt einspaltig')">{{ one === 'new' ? t('nur neue Zeilen') : t('nur entfernte Zeilen') }}</span>
   }
   <span class="count" [class.complete]="allOk()">{{ progress().ok }}/{{ progress().total }}</span>
-  <button type="button" class="ok-btn" [class.on]="allOk()" (click)="toggleBlock($event)"
-          [title]="allOk() ? t('Markierung entfernen') : place() || places().length === 0 ? t('Ganzen Block als ok markieren') : t('Block an allen {n} Orten als ok markieren', { n: places().length })">
-    <app-icon name="check" [size]="14" /> {{ allOk() ? t('Ok') : t('Block ok') }}
-  </button>
+  @if (place() || !severalPlaces()) {
+    <button type="button" class="ok-btn" [class.on]="allOk()" (click)="toggleBlock($event)"
+            [title]="!severalPlaces() ? (allOk() ? t('Markierung entfernen') : t('Ganzen Block als ok markieren')) : allOk() ? t('Markierung an diesem Ort entfernen') : t('Ganzen Block an diesem Ort als ok markieren')">
+      <app-icon name="check" [size]="14" /> {{ allOk() ? t('Ok') : t('Block ok') }}
+    </button>
+  }
+  @if (severalPlaces()) {
+    <button type="button" class="ok-btn everywhere" [class.on]="level() === 'all'" (click)="toggleBlockEverywhere($event)"
+            [title]="level() !== 'all' ? t('Block an allen {n} Orten als ok markieren', { n: places().length }) : place() ? t('An den anderen Orten wieder zurücknehmen') : t('Markierung an allen Orten entfernen')">
+      <app-icon name="checkAll" [size]="14" /> {{ level() === 'all' ? t('Überall ok') : t('Block überall ok') }}
+    </button>
+  }
 </header>
 
 @if (places().length || covers().length || testedBy().length) {
@@ -72,7 +80,7 @@
         <app-icon name="layers" [size]="12" /> {{ t('{n} Orte:', { n: places().length }) }}</span>
       @for (p of places(); track p.id) {
         <button type="button" class="place" [class.current]="p.current" [class.done]="p.done" (click)="goPlace(p.id, $event)"
-                [title]="p.current ? t('Hier') : t('Dorthin springen')">
+                [title]="(p.current ? t('Hier') : t('Dorthin springen')) + (p.done ? ' · ' + (level() === 'all' ? t('überall akzeptiert') : t('an diesem Ort akzeptiert')) : '')">
           <app-icon [name]="p.done ? 'check' : 'circle'" [size]="11" /> {{ p.label }}
         </button>
       }
@@ -139,18 +147,24 @@
                    [class.foreign]="!line.own && line.type !== 'ctx'" [class.other-commit]="byOtherCommit" [class.has-refs]="c.main && !!line.refs?.length"
                    [class.lead]="first && !!lead" [style.--lead]="first ? lead : null">
                 <span class="g-check">
-                  @if (c.main && line.own && !byOtherCommit) {
-                    @let m = multi(line);
-                    @let other = elsewhere(line);
-                    <button type="button" class="check" [class.on]="isOk(line)" [class.part]="isHalf(line)"
-                            (click)="toggleLine(i, $event)"
-                            [title]="other ? t('Halb akzeptiert: bereits akzeptiert in {places}. Klick: auch hier akzeptieren', { places: other.labels }) : m ? (place() ? t('Hier als ok markieren ({ok}/{of} Orte ok)', { ok: m.ok, of: m.of }) : t('An allen {of} Orten als ok markieren ({ok}/{of} ok)', { ok: m.ok, of: m.of })) : t('Als ok markieren (Shift-Klick: Bereich)')">
-                      @if (isOk(line)) {
-                        <app-icon name="check" [size]="11" />
-                      }
-                    </button>
-                    @if (m && !place()) {
-                      <span class="multi" [class.done]="m.ok === m.of" [title]="t('Zeile ist {of} Orten zugewiesen, {ok} davon ok – Sprünge oben im Block', { ok: m.ok, of: m.of })">{{ m.of }}</span>
+                  @if (c.main && !byOtherCommit) {
+                    @if (boxes().get(i); as bx) {
+                      <span class="boxes" [class.acc-all]="bx.all" [class.completes]="bx.completes">
+                        @if (bx.front; as front) {
+                          <button type="button" class="check front" [class.on]="front.on" [attr.aria-pressed]="front.on"
+                                  (click)="toggleLine(i, $event)" [title]="front.title">
+                            <app-icon name="check" [size]="11" />
+                          </button>
+                        }
+                        @if (bx.rest.length) {
+                          <button type="button" class="rest" [class.ro]="bx.readonly" [attr.aria-disabled]="bx.readonly" [attr.aria-pressed]="bx.all"
+                                  [attr.aria-label]="t('Zeile an allen Orten akzeptieren')" (click)="toggleLine(i, $event, true)">
+                            @for (b of bx.rest; track b.id) {
+                              <span class="check small" [class.on]="b.on" [title]="b.title"><app-icon name="check" [size]="8" /></span>
+                            }
+                          </button>
+                        }
+                      </span>
                     }
                   }
                 </span>

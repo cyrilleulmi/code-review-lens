@@ -83,7 +83,7 @@ h1 {
 
   .fill {
     height: 100%;
-    background: var(--ok);
+    background: var(--ok-all);
     transition: width 0.3s;
   }
 
@@ -196,13 +196,15 @@ h2 {
 
 .ring {
   --p: 0;
+  --pa: 0;
   flex: none;
   width: 44px;
   height: 44px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: conic-gradient(var(--ok) calc(var(--p) * 1%), var(--bg-hover) 0);
+  /* blue: accepted everywhere, green: accepted in this category only */
+  background: conic-gradient(var(--ok-all) calc(var(--pa) * 1%), var(--ok) 0 calc(var(--p) * 1%), var(--bg-hover) 0);
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
 

@@ -26,6 +26,14 @@
   --ok: #5fb865;
   --ok-border: #3f6e45;
   --ok-head: #26332a;
+  /* accepted at all places a line is shown at (--ok: accepted at the place shown, not yet everywhere). A royal
+     blue of its own, well apart from the blues of layers, connections, languages and categories; -fg for text and
+     line icons on the editor background */
+  --ok-all: #3355ff;
+  --ok-all-fg: #6f88ff;
+  --ok-all-border: #3d4fa8;
+  --ok-all-head: #222a47;
+  --on-ok-all: #ffffff;
   /* needs attention, e.g. changed code without a test */
   --warn: #e0a84b;
 
@@ -126,6 +134,28 @@
   color-scheme: dark;
 }
 
+/*
+ * Accept colours. Whatever shows that something is accepted uses --acc*: green (the --ok tokens) while it is accepted
+ * at the place shown only, blue (--ok-all) once it is accepted at all its places. An element that is accepted
+ * everywhere carries .acc-all; .acc-here switches back to green inside such an element.
+ */
+:root,
+.acc-here {
+  --acc: var(--ok);
+  --acc-fg: var(--ok);
+  --acc-border: var(--ok-border);
+  --acc-head: var(--ok-head);
+  --on-acc: var(--on-ok);
+}
+
+.acc-all {
+  --acc: var(--ok-all);
+  --acc-fg: var(--ok-all-fg);
+  --acc-border: var(--ok-all-border);
+  --acc-head: var(--ok-all-head);
+  --on-acc: var(--on-ok-all);
+}
+
 /* IntelliJ "New UI" light: the same tokens, retuned for a white editor */
 :root[data-theme='light'] {
   --bg-editor: #ffffff;
@@ -148,6 +178,11 @@
   --ok: #208a3c;
   --ok-border: #9fd3ac;
   --ok-head: #e8f5ec;
+  --ok-all: #1740e6;
+  --ok-all-fg: #1740e6;
+  --ok-all-border: #a7b6f3;
+  --ok-all-head: #e8ecfd;
+  --on-ok-all: #ffffff;
   --warn: #b26b00;
 
   --add-bg: rgba(41, 160, 72, 0.14);
@@ -348,9 +383,21 @@ textarea:focus-visible {
   }
 
   &.success {
-    background: var(--ok);
-    border-color: var(--ok);
-    color: var(--on-ok);
+    background: var(--acc);
+    border-color: var(--acc);
+    color: var(--on-acc);
+  }
+
+  /* "ok everywhere": blue on hover, filled blue once it is */
+  &.everywhere:hover:not(:disabled) {
+    border-color: var(--ok-all);
+    color: var(--ok-all-fg);
+  }
+
+  &.everywhere.success {
+    background: var(--ok-all);
+    border-color: var(--ok-all);
+    color: var(--on-ok-all);
   }
   &.small {
     height: 22px;

@@ -25,7 +25,8 @@ import {
   prLabel,
   providerInfo,
 } from './api';
-import { AcceptStatus, Acceptance, accept, acceptedElsewhere, acceptedIn, statusOf } from './acceptance';
+import { LineBoxes, everywhereTargets, lineBoxes } from './accept-boxes';
+import { AcceptStatus, Acceptance, accept, acceptedElsewhere, statusOf } from './acceptance';
 import { laterExpectationsByTest } from './commit-findings';
 import { FlowCodeLevel, FlowDiagramLevel } from './flow-classes';
 import { groupWarnings, testNamer } from './mock-boundaries';
@@ -44,8 +45,13 @@ export type Selection =
 export type PrFilter = 'all' | 'authored' | 'review-requested' | 'involved';
 
 export interface Progress {
+  /** lines accepted at the place they are counted at (without a place: at all their places) */
   ok: number;
   total: number;
+  /** lines accepted at all their places ("everywhere"); the same as ok when counted without a place */
+  all: number;
+  /** lines shown at several places: only for these "here" and "everywhere" are different things */
+  multi: number;
 }
 
 /**
@@ -217,8 +223,7 @@ export class ReviewStore {
 
   /** Reviewable lines new or changed since the last review, with their progress. */
   readonly sinceReviewProgress = computed<Progress>(() => {
-    const lines = this.sinceReviewLines();
-    return { ok: lines.filter((l) => this.isOkAt(l.path, l.key, null)).length, total: lines.length };
+    return this.progressOfLines(this.sinceReviewLines());
   });
 
   /** Commits that came after the last review (the head reviewed before is one of the PR's commits). */
@@ -626,8 +631,13 @@ export class ReviewStore {
 
   /** Review progress of a commit's lines (a line counts when it is ok at all its places). */
   commitProgress(sha: string): Progress {
-    const lines = this.commitLines(sha);
-    return { ok: lines.filter((l) => this.isOkAt(l.path, l.key, null)).length, total: lines.length };
+    return this.progressOfLines(this.commitLines(sha));
+  }
+
+  /** Progress of lines counted without a place: a line counts when it is ok at all its places. */
+  private progressOfLines(lines: LineMark[]): Progress {
+    const ok = lines.filter((l) => this.isOkAt(l.path, l.key, null)).length;
+    return { ok, total: lines.length, all: ok, multi: 0 };
   }
 
   /** sha of the commit that made the change on a line of the PR diff, if known */
@@ -826,11 +836,11 @@ export class ReviewStore {
     return this.lineStatus(path, key, place) === 'accepted';
   }
 
-  /** How many of the line's places are ok (for lines shown at several places). */
-  okCount(path: string, key: string): { ok: number; of: number } {
+  /** The boxes of a line as seen from a place: one per place the line is shown at (switched-off categories do not count). */
+  lineBoxes(path: string, key: string, place: string | null): LineBoxes {
     const k = path + SEP + key;
     const places = this.linePlaces().get(k) ?? [];
-    return { ok: acceptedIn(this.acceptanceOf(k, places), places).length, of: places.length };
+    return lineBoxes(this.acceptanceOf(k, places), places, place);
   }
 
   /** Lines of the slots; every slot (segment at a place) counts on its own. */
@@ -838,6 +848,9 @@ export class ReviewStore {
     const segs = this.segments();
     let total = 0;
     let done = 0;
+    let all = 0;
+    let multi = 0;
+    const linePlaces = this.linePlaces();
     const seen = new Set<string>();
     const ignored = this.ignored();
     for (const slot of slots) {
@@ -852,12 +865,21 @@ export class ReviewStore {
           continue;
         }
         total++;
-        if (this.isOkAt(s.path, k, slot.place)) {
+        const line = s.path + SEP + k;
+        const places = linePlaces.get(line) ?? [];
+        const acceptance = this.acceptanceOf(line, places);
+        if (statusOf(acceptance, places, slot.place) === 'accepted') {
           done++;
+        }
+        if (statusOf(acceptance, places, null) === 'accepted') {
+          all++;
+        }
+        if (places.length > 1) {
+          multi++;
         }
       }
     }
-    return { ok: done, total };
+    return { ok: done, total, all, multi };
   }
 
   linesOf(slots: Iterable<Slot>): LineMark[] {
@@ -883,6 +905,26 @@ export class ReviewStore {
   toggle(lines: LineMark[], scope: string): void {
     const allOk = lines.length > 0 && lines.every((l) => this.isOkAt(l.path, l.key, l.place));
     this.mark(lines, !allOk, scope);
+  }
+
+  /**
+   * "Ok everywhere": accepts the lines at all their places (ok), or takes that step back: the accept at the other
+   * places goes, the place of the mark stays as it is. A mark without a place is taken back at all places.
+   */
+  markEverywhere(lines: LineMark[], ok: boolean, scope: string): void {
+    if (ok) {
+      this.mark(lines.map((l) => ({ ...l, place: null })), true, scope);
+      return;
+    }
+    const linePlaces = this.linePlaces();
+    this.mark(lines.flatMap((l) => everywhereTargets(linePlaces.get(l.path + SEP + l.key) ?? [], l.place, false)
+      .map((place): LineMark => ({ ...l, place }))), false, scope);
+  }
+
+  /** Accepts the lines everywhere, or - if all of them already are - takes that back (see markEverywhere). */
+  toggleEverywhere(lines: LineMark[], scope: string): void {
+    const allOk = lines.length > 0 && lines.every((l) => this.isOkAt(l.path, l.key, null));
+    this.markEverywhere(lines, !allOk, scope);
   }
 
   /** Optimistic version of the backend logic (ReviewService.mark): one ok per place, then "ok everywhere". */

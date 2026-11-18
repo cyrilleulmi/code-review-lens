@@ -168,7 +168,7 @@ interface Row {
       background: color-mix(in srgb, var(--warn) 8%, transparent);
     }
     .cnt { font-size: 11px; color: var(--fg-muted); font-variant-numeric: tabular-nums; flex: none; }
-    .okicon { color: var(--ok); }
+    .okicon { color: var(--ok-all-fg); }
     .mark {
       display: inline-grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 4px;
       background: none; color: var(--fg-muted); cursor: pointer; opacity: 0; flex: none;

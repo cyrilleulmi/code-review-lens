@@ -7,6 +7,7 @@ import { Icon } from './icon';
 import { serverText, t } from './i18n';
 import { MockWarnings } from './mock-warnings';
 import { ReviewStore, Slot } from './review.store';
+import { acceptLevel } from './accept-boxes';
 import { SpecLineTarget, SpecOverview } from './spec-overview';
 import { TestOverview } from './test-overview';
 
@@ -27,10 +28,17 @@ import { TestOverview } from './test-overview';
       <span class="spacer"></span>
       <span class="progress-text" [title]="fileView() ? t('Eine Zeile zählt, wenn sie an allen ihren Orten ok ist') : ''">
         {{ t('{ok}/{total} Zeilen ok', { ok: progress().ok, total: progress().total }) }}</span>
-      <button type="button" class="btn" [class.success]="done()" (click)="markAll()"
-              [title]="fileView() ? t('Markiert die Zeilen an allen Orten, an denen sie vorkommen') : ''">
-        <app-icon name="check" [size]="14" /> {{ fileView() ? t('Alles überall als ok markieren') : t('Alles als ok markieren') }}
-      </button>
+      @if (!fileView()) {
+        <button type="button" class="btn" [class.success]="level() !== 'open'" [class.acc-all]="level() === 'all'" (click)="markAll()">
+          <app-icon name="check" [size]="14" /> {{ t('Alles als ok markieren') }}
+        </button>
+      }
+      @if (fileView() || progress().multi > 0) {
+        <button type="button" class="btn everywhere" [class.success]="level() === 'all'" (click)="markAllEverywhere()"
+                [title]="level() === 'all' && !fileView() ? t('An den anderen Orten wieder zurücknehmen') : t('Markiert die Zeilen an allen Orten, an denen sie vorkommen')">
+          <app-icon name="checkAll" [size]="14" /> {{ t('Alles überall als ok markieren') }}
+        </button>
+      }
     </div>
     @if (details(); as d) {
       <details class="cat-details">
@@ -133,7 +141,8 @@ export class GroupView {
     const i = this.stepIndex();
     return i == null ? this.slots() : this.slots().slice(i, i + 1);
   });
-  protected readonly done = computed(() => this.progress().total > 0 && this.progress().ok === this.progress().total);
+  /** open, accepted at the places shown (green) or at all places of the lines (blue) */
+  protected readonly level = computed(() => acceptLevel(this.progress()));
   /** Test cases among the shown blocks (they get an overview of what they exercise). */
   protected readonly testIds = computed(() => {
     const tests = this.store.tests();
@@ -194,6 +203,10 @@ export class GroupView {
       this.stepIndex.set(null);
       this.store.notify(t('Alle Blöcke durchgearbeitet'));
     }
+  }
+
+  protected markAllEverywhere(): void {
+    this.store.toggleEverywhere(this.store.linesOf(this.slots()), this.scope());
   }
 
   protected markAll(): void {

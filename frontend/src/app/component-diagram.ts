@@ -147,14 +147,15 @@ const LOOSE_GAP = 22;
       background: color-mix(in srgb, var(--area) 7%, var(--bg-editor));
       border: 1px solid var(--node-border); border-left: 4px solid var(--area); border-radius: 8px; cursor: pointer; transition: border-color 0.15s, opacity 0.15s; }
     .node:hover { border-color: var(--accent); }
-    .node.done { border-color: var(--ok-border); background: var(--ok-head); }
+    /* counted without a place: done means accepted everywhere */
+    .node.done { border-color: var(--ok-all-border); background: var(--ok-all-head); }
     .node.root { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(53, 116, 240, 0.3); }
     .node.dim { opacity: 0.4; }
     .txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
     .name { font: 600 12px var(--font-code); color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .file { font-size: 10.5px; color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cnt { font-size: 10.5px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
-    .ok { color: var(--ok); }
+    .ok { color: var(--ok-all-fg); }
     .focus { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--fg-dim); cursor: pointer; flex: none; }
     .focus:hover { background: var(--bg-hover); color: var(--fg); }
     .focus.on { color: var(--accent-fg); background: rgba(53, 116, 240, 0.18); }
