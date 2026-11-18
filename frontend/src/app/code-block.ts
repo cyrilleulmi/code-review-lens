@@ -140,6 +140,14 @@ export class CodeBlock {
   readonly inlineTpl = input<TemplateRef<{ $implicit: InlineSlot }> | null>(null);
   /** Starts collapsed (e.g. a block that is shown further up already). */
   readonly startCollapsed = input(false);
+  /**
+   * A block that stands for several segments - a whole file of a class in a flow (whole-class.ts): the ids of these
+   * segments, the segment each line belongs to (line key -> id) and the lines they start at (new file -> id).
+   * Progress, marks and the notes of the tests then cover all of them.
+   */
+  readonly parts = input<readonly string[] | null>(null);
+  readonly owners = input<ReadonlyMap<string, string> | null>(null);
+  readonly starts = input<ReadonlyMap<number, string> | null>(null);
   readonly refClick = output<string>();
   readonly calledByClick = output<void>();
 
@@ -263,7 +271,7 @@ export class CodeBlock {
       return null;
     }
     for (const ref of row.cells[1]?.line.refs ?? []) {
-      const color = this.refColor(ref.segmentId);
+      const color = this.refColor(ref.segmentId, row.cells[1]!.line);
       if (color) return color;
     }
     return null;
@@ -282,7 +290,22 @@ export class CodeBlock {
 
   protected readonly areaColor = areaColor;
   /** Layer of the block: frontend, api, domain, ... (null when unknown) */
-  protected readonly area = computed(() => areaOfSegment(this.segment(), this.store.areaBySegment()));
+  /** A whole class: the block stands for several segments. */
+  protected readonly whole = computed(() => this.parts() != null);
+  /** The segments the block stands for. */
+  private readonly ids = computed(() => this.parts() ?? [this.segment().id]);
+  private readonly ownSlots = computed(() => this.ids().map((segmentId) => ({ segmentId, place: this.place() })));
+  protected readonly area = computed(() => {
+    const first = this.parts()?.[0];
+    return areaOfSegment((first ? this.store.segments().get(first) : undefined) ?? this.segment(), this.store.areaBySegment());
+  });
+
+  /** Whole class: the step of the flow that starts at this line. */
+  protected stepAt(line: DisplayLine): { no: number | string; name: string } | null {
+    const id = line.type !== 'del' && line.newLine != null ? this.starts()?.get(line.newLine) : undefined;
+    const seg = id ? this.store.segments().get(id) : undefined;
+    return id && seg ? { no: this.stepOf()[id] ?? '•', name: shortName(seg) } : null;
+  }
   protected readonly areaText = computed(() => areaLabel(this.area()));
   protected readonly lang = computed(() => ({ label: langLabel(this.segment().language), color: langColor(this.segment().language) }));
 
@@ -309,7 +332,7 @@ export class CodeBlock {
       return markHtml(lineHtml, marks.map((m) => {
         const ref = refs[m.ref];
         // the colour of the connection as a class: inline styles do not survive the sanitising of the code
-        const edge = /--edge-(\d+)/.exec(this.refColor(ref.segmentId) ?? '')?.[1];
+        const edge = /--edge-(\d+)/.exec(this.refColor(ref.segmentId, line) ?? '')?.[1];
         const tag = (extra: string) => `<span class="call r${m.ref}${edge ? ' call-e' + edge : ''}${extra}" role="button" tabindex="0" `
           + `title="${attr(t('Springe zu {name}', { name: serverText(ref.symbol) }))}">`;
         return { start: m.start, end: m.end, open: tag('') + `<b>${stepOf[ref.segmentId] ?? '→'}</b>`, reopen: tag(' cont'), close: '</span>' };
@@ -334,8 +357,10 @@ export class CodeBlock {
     }
   }
 
-  protected refColor(segmentId: string): string | null {
-    return this.edgeColors()[this.segment().id + '>' + segmentId] ?? null;
+  /** Colour of the connection of a call on a line: from the segment the line belongs to, to the called one. */
+  protected refColor(segmentId: string, line: DisplayLine): string | null {
+    const from = (line.key ? this.owners()?.get(line.key) : undefined) ?? this.segment().id;
+    return this.edgeColors()[from + '>' + segmentId] ?? null;
   }
 
   protected readonly fileName = computed(() => {
@@ -347,7 +372,7 @@ export class CodeBlock {
     return p.includes('/') ? p.substring(0, p.lastIndexOf('/') + 1) : '';
   });
 
-  protected readonly progress = computed(() => this.store.progressOf([{ segmentId: this.segment().id, place: this.place() }]));
+  protected readonly progress = computed(() => this.store.progressOf(this.ownSlots()));
   /** Accepted here (green) or at all places of its lines (blue). */
   protected readonly level = computed(() => acceptLevel(this.progress()));
   protected readonly allOk = computed(() => this.level() !== 'open');
@@ -410,7 +435,7 @@ export class CodeBlock {
    */
   protected readonly caseNotes = computed(() => {
     const result = new Map<number, { text: string; title: string }[]>();
-    const byLine = findingsByLine(this.store.testInfo() ? this.store.coverage().get(this.segment().id) : undefined);
+    const byLine = mergeByLine(this.ids().map((id) => findingsByLine(this.store.testInfo() ? this.store.coverage().get(id) : undefined)));
     if (!byLine.size) {
       return result;
     }
@@ -430,7 +455,7 @@ export class CodeBlock {
    */
   protected readonly ruleNotes = computed(() => {
     const result = new Map<number, { text: string; title: string }[]>();
-    const byLine = unmetByLine(this.store.testInfo() ? this.store.ruleChecks() : [], this.segment().id);
+    const byLine = mergeByLine(this.ids().map((id) => unmetByLine(this.store.testInfo() ? this.store.ruleChecks() : [], id)));
     if (!byLine.size) {
       return result;
     }
@@ -450,7 +475,7 @@ export class CodeBlock {
    */
   protected readonly laterNotes = computed(() => {
     const result = new Map<number, { text: string; title: string; sha: string; warn: boolean }[]>();
-    const byLine = laterExpectationsByLine(this.store.testInfo() ? this.store.commitFindings() : [], this.segment().id);
+    const byLine = mergeByLine(this.ids().map((id) => laterExpectationsByLine(this.store.testInfo() ? this.store.commitFindings() : [], id)));
     if (!byLine.size) {
       return result;
     }
@@ -737,13 +762,13 @@ export class CodeBlock {
 
   protected toggleBlock(event: Event): void {
     event.stopPropagation();
-    this.store.toggle(this.store.linesOf([{ segmentId: this.segment().id, place: this.place() }]), `segment:${this.segment().id}`);
+    this.store.toggle(this.store.linesOf(this.ownSlots()), `segment:${this.segment().id}`);
   }
 
   /** "Block überall ok": all lines at all their places; when they all are, the other places are taken back. */
   protected toggleBlockEverywhere(event: Event): void {
     event.stopPropagation();
-    this.store.toggleEverywhere(this.store.linesOf([{ segmentId: this.segment().id, place: this.place() }]), `segment:${this.segment().id}`);
+    this.store.toggleEverywhere(this.store.linesOf(this.ownSlots()), `segment:${this.segment().id}`);
   }
 
   protected openEditor(line: DisplayLine): void {
@@ -833,6 +858,18 @@ function shortAuthor(c: Commit | null): string {
   const name = (c?.author ?? c?.authorLogin ?? '').trim();
   const parts = name.split(/\s+/);
   return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1].charAt(0)}.` : name;
+}
+
+/** Notes by line of several segments in one map (a block that stands for several segments). */
+function mergeByLine<T>(maps: Map<number, T[]>[]): Map<number, T[]> {
+  if (maps.length === 1) {
+    return maps[0];
+  }
+  const result = new Map<number, T[]>();
+  for (const map of maps) {
+    map.forEach((list, line) => result.set(line, [...(result.get(line) ?? []), ...list]));
+  }
+  return result;
 }
 
 function shortName(s: Segment): string {

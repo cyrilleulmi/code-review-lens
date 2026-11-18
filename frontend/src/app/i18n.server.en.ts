@@ -280,6 +280,7 @@ export const SERVER_EN_PATTERNS: [RegExp, Replace][] = [
   [/^Keine bekannte Pull- oder Merge-Request-URL: ([\s\S]*)$/, (m) => `Not a known pull or merge request URL: ${m[1]}`],
   [/^Unbekannter Provider: ([\s\S]*)$/, (m) => `Unknown provider: ${m[1]}`],
   [/^Datei ist nicht Teil des Pull Requests: ([\s\S]*)$/, (m) => `File is not part of the pull request: ${m[1]}`],
+  [/^Inhalt der Datei ist nicht verfügbar: ([\s\S]*)$/, (m) => `Content of the file is not available: ${m[1]}`],
   [/^rules\.json ist ungültig: ([\s\S]*)$/, (m) => `rules.json is invalid: ${m[1]}`],
   [/^Diskussion zu Kommentar (\S+) nicht gefunden$/, (m) => `Discussion of comment ${m[1]} not found`],
   [/^Archiv des Repositorys nicht lesbar: ([\s\S]*)$/, (m) => `Archive of the repository not readable: ${m[1]}`],

@@ -20,6 +20,7 @@ import {
   SetupImpact,
   SpecEntry,
   TestInfo,
+  WholeFile,
   errorMessage,
   isTestsView,
   prLabel,
@@ -145,6 +146,8 @@ export class ReviewStore {
   readonly diffMode = signal<DiffMode>(readChoice('scr.diffMode', ['unified', 'split'] as const) ?? 'unified');
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
   readonly blames = signal<ReadonlyMap<string, Blame | 'loading' | null>>(new Map());
+  /** Whole files by path (code view "Ganze Klassen" of a flow): loaded on demand; null = could not be loaded. */
+  readonly wholeFiles = signal<ReadonlyMap<string, WholeFile | 'loading' | null>>(new Map());
   /** commit from the URL, applied once the commits are loaded */
   private pendingCommit: string | null = null;
   private blameErrorShown = false;
@@ -567,6 +570,7 @@ export class ReviewStore {
     this.commitFilter.set(null);
     this.blames.set(new Map());
     this.blameErrorShown = false;
+    this.wholeFiles.set(new Map());
   }
 
   loadCommits(): void {
@@ -714,6 +718,15 @@ export class ReviewStore {
         }
       },
     });
+  }
+
+  /** Loads a changed file as a whole (once per PR snapshot). */
+  ensureWholeFile(path: string): void {
+    const key = this.prKey();
+    if (!key || this.wholeFiles().has(path)) return;
+    const put = (value: WholeFile | 'loading' | null) => this.wholeFiles.set(new Map(this.wholeFiles()).set(path, value));
+    put('loading');
+    this.api.wholeFile(key, path).subscribe({ next: (f) => put(f), error: () => put(null) });
   }
 
   /** Shows the coverage of the changed code: in the test category if switched on, else on its own page. */

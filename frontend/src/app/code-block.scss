@@ -440,6 +440,23 @@
   cursor: pointer;
 }
 
+/* whole class: the step of the flow that starts at this line */
+.step-mark {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  margin-left: 10px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font: 600 10.5px/1 var(--font-ui);
+  vertical-align: middle;
+  cursor: default;
+}
+
 /* Fall- und Effekt-Abgleich: an open finding on this line */
 .case-note {
   display: inline-flex;

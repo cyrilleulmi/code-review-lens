@@ -159,8 +159,11 @@ export function intersect(sets: readonly ReadonlySet<string>[]): Set<string> {
   return new Set([...(first ?? [])].filter((id) => rest.every((s) => s.has(id))));
 }
 
-/** The code of a flow can also be shown by line: the called block right after the line that calls it. */
-export type FlowCodeLevel = FlowLevel | 'inline';
+/**
+ * The code of a flow can also be shown by line (the called block right after the line that calls it) and as whole
+ * classes (every file of a class in one block, unchanged code included).
+ */
+export type FlowCodeLevel = FlowLevel | 'inline' | 'whole';
 
 /** A block in the code by line: a step, placed after the line of its caller that calls it. */
 export interface InlineStep {

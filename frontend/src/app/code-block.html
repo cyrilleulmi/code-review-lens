@@ -18,7 +18,12 @@
   @if (seg.startLine) {
     <span class="lines">:{{ seg.startLine }}</span>
   }
+  @if (whole()) {
+    <span class="hint" [title]="t('Die ganze Datei in einem Block: alle Zeilen, auch die unveränderten. Die Schritte des Flows sind am Zeilenende nummeriert; Änderungen ausserhalb des Flows sind abgeblendet')">
+      {{ t('ganze Datei') }} · {{ parts()!.length === 1 ? t('1 Methode im Flow') : t('{n} Methoden im Flow', { n: parts()!.length }) }}</span>
+  } @else {
   <span class="chip" [class]="'chip cat-' + seg.category" [title]="serverText(seg.reason)">{{ seg.category === 'logic' ? t('Logik') : seg.category === 'tests' ? (seg.symbolKind === 'test' ? t('Testfall') : t('Test')) : serverText(seg.group) }}</span>
+  }
   @if (coverage(); as cv) {
     <button type="button" class="cov" [class]="'cov cov-' + cv.status" [title]="cv.title" (click)="openCoverage($event)">
       <app-icon [name]="cv.status === 'none' ? 'info' : 'test'" [size]="11" /> {{ cv.label }}
@@ -62,13 +67,13 @@
   @if (place() || !severalPlaces()) {
     <button type="button" class="ok-btn" [class.on]="allOk()" (click)="toggleBlock($event)"
             [title]="!severalPlaces() ? (allOk() ? t('Markierung entfernen') : t('Ganzen Block als ok markieren')) : allOk() ? t('Markierung an diesem Ort entfernen') : t('Ganzen Block an diesem Ort als ok markieren')">
-      <app-icon name="check" [size]="14" /> {{ allOk() ? t('Ok') : t('Block ok') }}
+      <app-icon name="check" [size]="14" /> {{ allOk() ? t('Ok') : whole() ? t('Klasse ok') : t('Block ok') }}
     </button>
   }
   @if (severalPlaces()) {
     <button type="button" class="ok-btn everywhere" [class.on]="level() === 'all'" (click)="toggleBlockEverywhere($event)"
-            [title]="level() !== 'all' ? t('Block an allen {n} Orten als ok markieren', { n: places().length }) : place() ? t('An den anderen Orten wieder zurücknehmen') : t('Markierung an allen Orten entfernen')">
-      <app-icon name="checkAll" [size]="14" /> {{ level() === 'all' ? t('Überall ok') : t('Block überall ok') }}
+            [title]="level() !== 'all' ? (whole() ? t('Alle Methoden der Klasse an allen ihren Orten als ok markieren') : t('Block an allen {n} Orten als ok markieren', { n: places().length })) : place() ? t('An den anderen Orten wieder zurücknehmen') : t('Markierung an allen Orten entfernen')">
+      <app-icon name="checkAll" [size]="14" /> {{ level() === 'all' ? t('Überall ok') : whole() ? t('Klasse überall ok') : t('Block überall ok') }}
     </button>
   }
 </header>
@@ -184,6 +189,9 @@
                 <span class="g-sign">{{ line.type === 'add' ? '+' : line.type === 'del' ? '−' : '' }}</span>
                 <span class="src"><code [innerHTML]="c.main ? marked().html[c.f] : html()[c.f]" (click)="codeClick($event, line)" (keydown.enter)="codeClick($event, line)"></code>
                   @if (c.main) {
+                    @if (stepAt(line); as st) {
+                      <span class="step-mark" [title]="t('Schritt {n} des Flows: {name}', { n: st.no, name: st.name })">{{ st.no }}</span>
+                    }
                     @for (n of caseNotes().get(i) ?? []; track $index) {
                       <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
                         <app-icon name="warning" [size]="10" /> {{ n.text }}
@@ -206,7 +214,7 @@
                     }
                     @for (ref of line.refs ?? []; track ref.segmentId; let r = $index) {
                       @if (!isPlaced(c.f, r)) {
-                        <button type="button" class="ref" [style.--c]="refColor(ref.segmentId)" (click)="openRef(ref.segmentId)" [title]="t('Springe zu {name}', { name: serverText(ref.symbol) })">
+                        <button type="button" class="ref" [style.--c]="refColor(ref.segmentId, line)" (click)="openRef(ref.segmentId)" [title]="t('Springe zu {name}', { name: serverText(ref.symbol) })">
                           <app-icon name="arrowRight" [size]="11" />
                           @if (stepOf()[ref.segmentId]; as n) {
                             <b>{{ n }}</b>

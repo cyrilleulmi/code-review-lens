@@ -608,6 +608,15 @@ export const EN: Record<string, string> = {
     "One node per class: its methods of the flow combined, connections between the classes",
   "Klassen + Methoden": "Classes + methods",
   "Zeile": "Line",
+  "Ganze Klassen": "Whole classes",
+  "Ein Block pro Klasse mit der ganzen Datei: die Methoden des Flows an ihrem Ort, dazwischen alles, was sich in der Klasse nicht geändert hat":
+    "One block per class with the whole file: the methods of the flow in their place, and between them everything in the class that has not changed",
+  "Die ganze Datei in einem Block: alle Zeilen, auch die unveränderten. Die Schritte des Flows sind am Zeilenende nummeriert; Änderungen ausserhalb des Flows sind abgeblendet":
+    "The whole file in one block: all lines, the unchanged ones too. The steps of the flow are numbered at the end of the line; changes outside the flow are dimmed",
+  "ganze Datei": "whole file",
+  "Schritt {n} des Flows: {name}": "Step {n} of the flow: {name}",
+  "Die Datei liess sich nicht laden – es stehen nur die Methoden des Flows da": "The file could not be loaded – only the methods of the flow are shown",
+  "Datei wird geladen …": "Loading file …",
   "Zeile für Zeile: der aufgerufene Block steht direkt nach der Zeile, die ihn aufruft – eine Methode wird nicht erst zu Ende gelesen. Mehrfach aufgerufene Blöcke stehen mehrfach da, die Häkchen gelten überall":
     "Line by line: the called block stands right after the line that calls it – a method is not read to its end first. Blocks called several times are there several times, check marks hold everywhere",
   "Dieser Block steht weiter oben schon – Klick springt dorthin": "This block is shown further up already – click jumps there",

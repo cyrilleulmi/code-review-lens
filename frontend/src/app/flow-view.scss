@@ -268,6 +268,37 @@
   }
 }
 
+/* whole classes: while the file of a class is loading, or when it could not be loaded */
+.whole-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--fg-muted);
+  font-size: 12px;
+
+  b {
+    font: 600 12.5px var(--font-code);
+    color: var(--fg);
+  }
+
+  .dim {
+    color: var(--fg-dim);
+  }
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  &.failed app-icon {
+    color: var(--warn);
+  }
+}
+
 /* nested calls are indented strongly; deep flows scroll sideways instead of squeezing the code */
 .cards {
   position: relative;

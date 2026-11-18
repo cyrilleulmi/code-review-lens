@@ -231,6 +231,8 @@
 <div class="level-bar">
   <span class="lbl">{{ t('Code') }}</span>
   <div class="seg-switch text" role="group" [attr.aria-label]="t('Ebene des Codes')">
+    <button type="button" [class.on]="codeLevel() === 'whole'" [attr.aria-pressed]="codeLevel() === 'whole'" (click)="setCodeLevel('whole')"
+            [title]="t('Ein Block pro Klasse mit der ganzen Datei: die Methoden des Flows an ihrem Ort, dazwischen alles, was sich in der Klasse nicht geändert hat')">{{ t('Ganze Klassen') }}</button>
     <button type="button" [class.on]="codeLevel() === 'class'" [attr.aria-pressed]="codeLevel() === 'class'" (click)="setCodeLevel('class')"
             [title]="t('Eine Karte pro Klasse: ihre Methoden des Flows zusammen, in der Reihenfolge der Datei')">{{ t('Klassen') }}</button>
     <button type="button" [class.on]="codeLevel() === 'method'" [attr.aria-pressed]="codeLevel() === 'method'" (click)="setCodeLevel('method')"
@@ -306,6 +308,45 @@
       }
     }
   </ng-template>
+  <!-- whole classes: every file of a class as one block -->
+  @for (w of wholeCards(); track w.key) {
+    @if (anyVisible(w.ids)) {
+      <div class="unit whole" [attr.data-class]="w.classKey" (mouseenter)="hover(w.ids)" (mouseleave)="hover(null)">
+        @if (w.block; as b) {
+          <app-code-block
+            [segment]="b.segment"
+            [place]="place()"
+            [parts]="b.parts"
+            [owners]="b.owners"
+            [starts]="b.starts"
+            [stepOf]="stepOf()"
+            [edgeColors]="edgeColors()"
+            (refClick)="scrollTo($event)"
+          />
+        } @else {
+          <div class="whole-note" [class.failed]="w.failed">
+            <app-symbol-badge kind="class" /> <b>{{ w.name }}</b> <span class="dim">{{ w.path }}</span>
+            @if (w.failed) {
+              <span><app-icon name="warning" [size]="12" /> {{ t('Die Datei liess sich nicht laden – es stehen nur die Methoden des Flows da') }}</span>
+            } @else {
+              <span><span class="spinner"></span> {{ t('Datei wird geladen …') }}</span>
+            }
+          </div>
+          @if (w.failed) {
+            @for (n of w.members; track n.step.segmentId) {
+              <app-code-block [segment]="n.segment" [place]="place()" [step]="n.no" [stepOf]="stepOf()" [edgeColors]="edgeColors()" (refClick)="scrollTo($event)" />
+            }
+          }
+        }
+      </div>
+    } @else if (stepIndex() === null) {
+      <button type="button" class="hidden-step" (click)="toggleHidden(w.ids, $event)" [title]="t('Einblenden')">
+        <app-symbol-badge kind="class" /> {{ w.name }}
+        <span class="dim">{{ t('ausgeblendet') }}</span>
+        <app-icon name="eye" [size]="12" />
+      </button>
+    }
+  }
   @for (root of inlineRoots(); track root.key) {
     <div class="unit inline" (mouseleave)="hover(null)">
       <ng-container [ngTemplateOutlet]="inlineStep" [ngTemplateOutletContext]="{ $implicit: root }" />

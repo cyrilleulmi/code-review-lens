@@ -158,6 +158,14 @@ public final class Model {
     public record Blame(String path, String sha, List<BlameRange> ranges, List<Commit> commits) {
     }
 
+    /**
+     * A changed file as a whole at the PR head (sha): every line of the new version, the deleted lines woven in.
+     * Keys are those of the segments' display lines.
+     */
+    @RegisterForReflection
+    public record WholeFile(String path, String sha, List<DisplayLine> lines) {
+    }
+
     // ---------------------------------------------------------------- analysis
 
     /**

@@ -15,6 +15,7 @@ import {
 import { EdgeRunStatus, Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from './api';
 import { NgTemplateOutlet } from '@angular/common';
 import { CodeBlock, flashLine } from './code-block';
+import { WholeBlock, startOf, wholeBlock, wholeId } from './whole-class';
 import { FlowCodeLevel, FlowDiagramLevel, InlineStep, classLinks, codeLevelFor, inlineTree, classOf, classRuns, groupByClass, inFileOrder, intersect, weakest } from './flow-classes';
 import { outsideBranch, sameSet, withoutAreas } from './flow-focus';
 import { FRAME_PADDING, Layout, Point, curvePath, frameAround, layoutFlow, routeMiddle, routePath } from './flow-layout';
@@ -116,6 +117,20 @@ interface Card {
   others: { id: string; no: number; name: string }[];
   /** a block of the card is shown side by side: the card needs more width */
   wide: boolean;
+}
+
+/** Whole classes: a file of a class as one block (whole-class.ts). */
+interface WholeCard {
+  key: string;
+  classKey: string;
+  name: string;
+  path: string;
+  /** the steps of the class in this file, in file order */
+  members: Node[];
+  ids: string[];
+  /** null while the file is loading, and when it could not be loaded (failed) */
+  block: WholeBlock | null;
+  failed: boolean;
 }
 
 interface Connector {
@@ -462,8 +477,8 @@ export class FlowView {
   protected readonly codeCards = computed<Card[]>(() => {
     const split = this.store.diffMode() === 'split';
     const files = (members: Node[]) => [...new Set(members.map((m) => this.fileOf(m.segment)))].join(' · ');
-    if (this.codeLevel() === 'inline') {
-      return []; // by line: see inlineRoots
+    if (this.codeLevel() === 'inline' || this.codeLevel() === 'whole') {
+      return []; // by line: see inlineRoots; whole classes: see wholeCards
     }
     if (this.codeLevel() === 'class') {
       return this.classes().map((g) => {
@@ -501,9 +516,35 @@ export class FlowView {
   ));
   private readonly nodeById = computed(() => new Map(this.nodes().map((n) => [n.step.segmentId, n])));
 
+  /**
+   * Whole classes: per class and file one block with every line of the file - the steps of the flow in place, the
+   * unchanged rest of the class around them. The files are loaded on demand (see the effect in the constructor).
+   */
+  protected readonly wholeCards = computed<WholeCard[]>(() => {
+    if (this.codeLevel() !== 'whole') {
+      return [];
+    }
+    const files = this.store.wholeFiles();
+    return this.classes().flatMap((g) => {
+      const byPath = new Map<string, Node[]>();
+      for (const m of inFileOrder(g.members)) {
+        byPath.set(m.segment.path, [...(byPath.get(m.segment.path) ?? []), m]);
+      }
+      return [...byPath].map(([path, members]): WholeCard => {
+        const file = files.get(path);
+        return {
+          key: g.key + '@' + path, classKey: g.key, name: g.name, path, members, ids: members.map((m) => m.step.segmentId),
+          block: file && file !== 'loading' ? wholeBlock(g.name, path, file.lines, members.map((m) => m.segment)) : null,
+          failed: file === null,
+        };
+      });
+    });
+  });
+
   /** What "Einzeln durchgehen" walks through: step by step, or class by class. */
   protected readonly units = computed<Unit[]>(() => this.codeLevel() === 'class'
     ? this.codeCards().map((c) => ({ key: c.key, framed: true, ids: c.ids }))
+    : this.codeLevel() === 'whole' ? this.wholeCards().map((w) => ({ key: w.key, framed: true, ids: w.ids }))
     : this.nodes().map((n) => ({ key: n.step.segmentId, framed: false, ids: [n.step.segmentId] })));
 
   protected readonly stepOf = computed(() => {
@@ -550,10 +591,19 @@ export class FlowView {
         });
       });
     });
+    // Whole classes: load the files of the steps shown.
+    effect(() => {
+      if (this.codeLevel() !== 'whole') {
+        return;
+      }
+      const paths = new Set(this.nodes().map((n) => n.segment.path));
+      untracked(() => paths.forEach((path) => this.store.ensureWholeFile(path)));
+    });
     // Lay out the connectors once the cards are rendered (and again when they change size).
     afterRenderEffect((onCleanup) => {
       this.codeCards();
       this.inlineRoots();
+      this.wholeCards();
       this.visible();
       this.gutter();
       this.indent();
@@ -580,6 +630,7 @@ export class FlowView {
       this.visible();
       this.codeCards();
       this.inlineRoots();
+      this.wholeCards();
       if (target && this.stepOf()[target] && this.scrollIntoView(target)) {
         this.store.focusSegment.set(null);
       }
@@ -962,6 +1013,20 @@ export class FlowView {
   }
 
   private scrollIntoView(segmentId: string): boolean {
+    const whole = this.wholeCards().find((w) => w.block && w.ids.includes(segmentId));
+    if (whole) {
+      // whole classes: the step is a stretch of the block of its file - go to the line it starts at
+      const block = this.cards().nativeElement.querySelector<HTMLElement>(`app-code-block[data-segment="${wholeId(whole.path)}"]`);
+      if (!block) {
+        return false;
+      }
+      const step = this.store.segments().get(segmentId);
+      const line = this.store.takeFocusLine(segmentId) ?? (step ? startOf(step) : null);
+      if (line == null || !flashLine(block, line)) {
+        block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      return true;
+    }
     const el = this.cards().nativeElement.querySelector<HTMLElement>(`app-code-block[data-segment="${segmentId}"]`);
     if (!el) {
       return false;
@@ -992,8 +1057,9 @@ export class FlowView {
    * Long lines take the outer lanes and short ones the inner lanes, so they cross as little as possible.
    */
   private layoutConnectors(): void {
-    if (this.codeLevel() === 'inline') {
-      // by line the called block stands right below its call: no lines in the margin, no margin
+    if (this.codeLevel() === 'inline' || this.codeLevel() === 'whole') {
+      // by line the called block stands right below its call, and a whole class is one block: no lines in the
+      // margin, no margin
       this.connectors.set([]);
       this.gutter.set(0);
       this.railHeight.set(0);

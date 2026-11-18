@@ -1,6 +1,7 @@
 package dev.smartcodereview.analysis;
 
 import dev.smartcodereview.model.Model.DiffLine;
+import dev.smartcodereview.model.Model.DisplayLine;
 import dev.smartcodereview.model.Model.Hunk;
 
 import java.util.ArrayList;
@@ -89,6 +90,22 @@ public final class FileView {
             }
         }
         return new FileView(entries);
+    }
+
+    /**
+     * The whole file as display lines, deleted lines at their positions: no gaps, and no line is anybody's own
+     * (the UI puts the lines of its segments in place, by key). A file without a new version (removed) consists of
+     * the lines of its hunks.
+     */
+    public static List<DisplayLine> whole(List<String> lines, List<Hunk> hunks) {
+        if (lines.isEmpty() || (lines.size() == 1 && lines.getFirst().isEmpty())) {
+            return hunks.stream().flatMap(h -> h.lines().stream())
+                    .map(l -> new DisplayLine(l.type(), l.oldLine(), l.newLine(), l.key(), l.text(), false, true, null, null))
+                    .toList();
+        }
+        return build(lines, hunks).entries.stream()
+                .map(e -> new DisplayLine(e.type(), e.oldLine(), e.newLine(), e.key(), e.text(), false, e.inDiff(), null, null))
+                .toList();
     }
 
     /** Where a changed line sits in the new file (for deleted lines: the line right after the gap). */
