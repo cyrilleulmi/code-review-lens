@@ -84,7 +84,7 @@ Angular 22, standalone Komponenten, Signals, zoneless, `OnPush`.
 | `split-diff.ts` | Seite-an-Seite-Ansicht der Code-Blöcke: welche entfernte Zeile neben welcher neuen steht und ob ein Block überhaupt zwei Seiten hat. |
 | `acceptance.ts` | Spiegel von `LineAcceptance.java`: Status einer Zeile pro Ort (offen / halb akzeptiert / akzeptiert) und wo sie sonst schon akzeptiert ist. Die beiden müssen gleich bleiben (je ein Test pro Seite). |
 | `look.ts` | Farben und Bezeichnungen für Schichten (Frontend, API, Domäne …), Sprachen und Verbindungen; die Farbwerte selbst sind Tokens in `styles.scss`. |
-| `component-diagram.ts` | Komponentendiagramm der Übersicht: Spalten nach Schicht, Aufruf- und REST-Kanten, Fokus pro Komponente, Tests/isolierte ein-/ausblenden. |
+| `component-diagram.ts` | Komponentendiagramm der Übersicht: ein Rahmen pro Schicht um ihre Komponenten, angeordnet mit `flow-layout.ts` (Schichten ohne Verbindung in Reihen darunter), Aufruf- und REST-Kanten, Fokus pro Komponente, Tests/isolierte ein-/ausblenden. |
 | `test-overview.ts` | Testübersicht: pro Testfall die Komponenten und die abgedeckten Codestellen (direkt / über …), mit Sprüngen. |
 | `code-block.*` | Ein Segment an einem Ort: Gutter mit Häkchen (ortsbezogen), alte/neue Zeilennummer, Diff-Farben, Highlighting, Inline-Kommentare, Aufruf-Chips, Leiste mit allen Orten und Test-Verknüpfungen, einklappbar. Optional Blame-Spalte (Datum/Zeit, Autor, Nummer des PR-Commits); in der Commit-Ansicht sind Änderungen anderer Commits abgeblendet. |
 | `theme.ts` | Theme des UI (Dark als Standard, Light): setzt `data-theme` auf `<html>`; die Farben selbst sind Tokens in `styles.scss`. `index.html` wendet ein gespeichertes Light Theme vor dem ersten Zeichnen an. |

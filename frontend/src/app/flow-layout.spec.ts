@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FRAME_PADDING, Rect, curvePath, frameAround, layoutFlow, routeMiddle, routePath } from './flow-layout';
+import { FRAME_PADDING, Rect, curvePath, frameAround, layoutFlow, packRows, routeMiddle, routePath } from './flow-layout';
 
 const overlap = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 const inside = (inner: Rect, outer: Rect) =>
@@ -103,5 +103,13 @@ describe('frameAround', () => {
       x: 100 - FRAME_PADDING.left, y: 100 - FRAME_PADDING.top,
       w: 150 + FRAME_PADDING.left + FRAME_PADDING.right, h: 70 + FRAME_PADDING.top + FRAME_PADDING.bottom,
     });
+  });
+});
+
+describe('packRows', () => {
+  it('fills rows from left to right and starts a new row when the width is used up', () => {
+    const at = packRows([{ w: 100, h: 50 }, { w: 100, h: 80 }, { w: 100, h: 40 }, { w: 400, h: 40 }], 250, 10);
+
+    expect(at).toEqual([{ x: 0, y: 0 }, { x: 110, y: 0 }, { x: 0, y: 90 }, { x: 0, y: 140 }]);
   });
 });

@@ -244,3 +244,26 @@ function toward(a: Point, b: Point, d: number): Point {
   const len = dist(a, b) || 1;
   return { x: a.x + ((b.x - a.x) * d) / len, y: a.y + ((b.y - a.y) * d) / len };
 }
+
+/**
+ * Packs rectangles from left to right into rows no wider than maxWidth (a rectangle wider than that gets a row of
+ * its own), with `gap` between them: for the parts of a diagram that have no connection and so no place in the
+ * layered layout. Returns the top left corner of each, in the order given.
+ */
+export function packRows(sizes: readonly { w: number; h: number }[], maxWidth: number, gap: number): Point[] {
+  const result: Point[] = [];
+  let x = 0;
+  let y = 0;
+  let rowHeight = 0;
+  for (const size of sizes) {
+    if (x > 0 && x + size.w > maxWidth) {
+      x = 0;
+      y += rowHeight + gap;
+      rowHeight = 0;
+    }
+    result.push({ x, y });
+    x += size.w + gap;
+    rowHeight = Math.max(rowHeight, size.h);
+  }
+  return result;
+}

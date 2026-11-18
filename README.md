@@ -77,7 +77,7 @@ cd frontend && npm start              # UI auf :4200, /api wird an :8080 weiterg
 | Erledigtes ausblenden | Toolbar-Knopf (Pfeile): vollständig markierte Blöcke einklappen |
 | Fokussieren | Blocktitel anklicken = ein-/ausklappen; Leiste über jeder Liste: *Einzeln durchgehen* (ein Block nach dem anderen, «Ok & weiter»), *Alle ein-/ausklappen*; im Flow zusätzlich *Erledigte ausblenden* und pro Knoten 👁 ein-/ausblenden bzw. ⌖ «nur dieser Zweig» (blendet alle übrigen Knoten aus, wie einzeln mit 👁; sie bleiben im Diagramm) |
 | Kategorien | Schalter auf jeder Kategorie-Karte der Übersicht (bzw. Auge im Review-Baum): ausgeschaltete Kategorien sind ausgeblendet und brauchen kein Ok |
-| Komponenten | Übersicht → *Komponenten*: Diagramm aller geänderten Komponenten nach Schicht; ⌖ zeigt nur eine Komponente und ihre Abhängigkeiten |
+| Komponenten | Übersicht → *Komponenten*: Diagramm aller geänderten Komponenten, jede Schicht als Rahmen um ihre Komponenten, angeordnet wie die Flow-Diagramme; ⌖ zeigt nur eine Komponente und ihre Abhängigkeiten |
 | Mehrere Orte | Leiste «n Orte» im Block-Kopf (✓ = dort ok, Klick springt hin); in der Dateiansicht kleine Zahl am Häkchen, halb gefülltes Häkchen = an einem Teil der Orte ok |
 | Tests | Kategorie *Tests*: Testübersicht mit Komponenten und abgedeckten Codestellen; im Code-Block «Getestet von …» bzw. «Testet …» |
 | Ganzes Repository | Ordner-Knopf in der Toolbar oder «Ganzes Repository analysieren» auf der Übersicht eines PRs (bzw. Repo-URL ins Suchfeld): Kategorien, Flows, Komponenten, Tests, Commits und Blame über den gesamten Code. Kommentare gibt es dort keine |
