@@ -428,6 +428,49 @@ kbd {
 
 /* ------------------------------------------------------------- syntax colours (tokens --syn-*) */
 
+/* a call into other changed code, marked right where it is written (code blocks): click jumps to the called code */
+.src .call {
+  --c: var(--accent);
+  margin: 0 1px;
+  padding: 1px 6px 1px 3px;
+  border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--c) 15%, transparent);
+  cursor: pointer;
+
+  b {
+    display: inline-grid;
+    place-items: center;
+    min-width: 13px;
+    height: 13px;
+    margin-right: 4px;
+    padding: 0 2px;
+    box-sizing: border-box;
+    border-radius: 7px;
+    background: var(--c);
+    color: var(--on-fill);
+    font: 600 9.5px/1 var(--font-ui);
+    vertical-align: 1px;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, var(--c) 32%, transparent);
+    outline: none;
+  }
+
+  /* the rest of a call that the highlighting split in two */
+  &.cont {
+    padding-left: 6px;
+  }
+}
+
+@for $i from 1 through 8 {
+  .src .call-e#{$i} {
+    --c: var(--edge-#{$i});
+  }
+}
+
 .hljs-keyword,
 .hljs-literal,
 .hljs-selector-tag,

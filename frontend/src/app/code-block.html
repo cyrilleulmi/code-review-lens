@@ -168,7 +168,7 @@
                   }
                 </span>
                 <span class="g-sign">{{ line.type === 'add' ? '+' : line.type === 'del' ? '−' : '' }}</span>
-                <span class="src"><code [innerHTML]="html()[c.f]"></code>
+                <span class="src"><code [innerHTML]="c.main ? marked().html[c.f] : html()[c.f]" (click)="codeClick($event, line)" (keydown.enter)="codeClick($event, line)"></code>
                   @if (c.main) {
                     @if (halfNotes().get(i); as other) {
                       <button type="button" class="half-note" (click)="goElsewhere(line, $event)" [title]="t('Bereits akzeptiert in: {places} – Klick springt dorthin', { places: other.labels })">
@@ -195,14 +195,16 @@
                         <app-icon name="shield" [size]="10" /> {{ n.text }}
                       </button>
                     }
-                    @for (ref of line.refs ?? []; track ref.segmentId) {
-                      <button type="button" class="ref" [style.--c]="refColor(ref.segmentId)" (click)="refClick.emit(ref.segmentId)" [title]="t('Springe zu {name}', { name: serverText(ref.symbol) })">
-                        <app-icon name="arrowRight" [size]="11" />
-                        @if (stepOf()[ref.segmentId]; as n) {
-                          <b>{{ n }}</b>
-                        }
-                        {{ serverText(ref.symbol) }}
-                      </button>
+                    @for (ref of line.refs ?? []; track ref.segmentId; let r = $index) {
+                      @if (!isPlaced(c.f, r)) {
+                        <button type="button" class="ref" [style.--c]="refColor(ref.segmentId)" (click)="refClick.emit(ref.segmentId)" [title]="t('Springe zu {name}', { name: serverText(ref.symbol) })">
+                          <app-icon name="arrowRight" [size]="11" />
+                          @if (stepOf()[ref.segmentId]; as n) {
+                            <b>{{ n }}</b>
+                          }
+                          {{ serverText(ref.symbol) }}
+                        </button>
+                      }
                     }
                   }
                 </span>

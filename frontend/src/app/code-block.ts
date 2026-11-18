@@ -12,6 +12,7 @@ import { HTTP_TAG, httpTitle } from './http-tests';
 import { Icon, SymbolBadge } from './icon';
 import { areaColor, areaLabel, areaOfSegment, langColor, langLabel } from './look';
 import { ReviewStore } from './review.store';
+import { attr, locateCalls, markHtml } from './call-sites';
 import { locale, serverText, t } from './i18n';
 import { diffSides, pairLines } from './split-diff';
 
@@ -213,6 +214,54 @@ export class CodeBlock {
   protected readonly area = computed(() => areaOfSegment(this.segment(), this.store.areaBySegment()));
   protected readonly areaText = computed(() => areaLabel(this.area()));
   protected readonly lang = computed(() => ({ label: langLabel(this.segment().language), color: langColor(this.segment().language) }));
+
+  /**
+   * The highlighted lines with their calls into other changed code marked where they are written: a bubble around
+   * the called name, with the number of the step in a flow, in the colour of the connection. placed: per line
+   * (index in flat()) the refs that got a bubble - the others stay chips at the end of the line.
+   */
+  protected readonly marked = computed(() => {
+    const flat = this.flat();
+    const stepOf = this.stepOf();
+    const placed = new Map<number, ReadonlySet<number>>();
+    const html = this.html().map((lineHtml, f) => {
+      const line = flat[f].line;
+      const refs = line.refs ?? [];
+      if (!refs.length || line.text == null || line.type === 'gap') {
+        return lineHtml;
+      }
+      const marks = locateCalls(line.text, refs.map((r) => r.symbol));
+      if (!marks.length) {
+        return lineHtml;
+      }
+      placed.set(f, new Set(marks.map((m) => m.ref)));
+      return markHtml(lineHtml, marks.map((m) => {
+        const ref = refs[m.ref];
+        // the colour of the connection as a class: inline styles do not survive the sanitising of the code
+        const edge = /--edge-(\d+)/.exec(this.refColor(ref.segmentId) ?? '')?.[1];
+        const tag = (extra: string) => `<span class="call r${m.ref}${edge ? ' call-e' + edge : ''}${extra}" role="button" tabindex="0" `
+          + `title="${attr(t('Springe zu {name}', { name: serverText(ref.symbol) }))}">`;
+        return { start: m.start, end: m.end, open: tag('') + `<b>${stepOf[ref.segmentId] ?? '→'}</b>`, reopen: tag(' cont'), close: '</span>' };
+      }));
+    });
+    return { html, placed };
+  });
+
+  /** The ref has its bubble at the call in the code (no chip at the end of the line). */
+  protected isPlaced(f: number, ref: number): boolean {
+    return this.marked().placed.get(f)?.has(ref) ?? false;
+  }
+
+  /** A click (or Enter) in the code: on the bubble of a call, jump to the called code. */
+  protected codeClick(event: Event, line: DisplayLine): void {
+    const call = (event.target as HTMLElement | null)?.closest?.('.call');
+    const ref = line.refs?.[Number(/\br(\d+)\b/.exec(call?.className ?? '')?.[1] ?? -1)];
+    if (ref) {
+      event.stopPropagation();
+      event.preventDefault();
+      this.refClick.emit(ref.segmentId);
+    }
+  }
 
   protected refColor(segmentId: string): string | null {
     return this.edgeColors()[this.segment().id + '>' + segmentId] ?? null;

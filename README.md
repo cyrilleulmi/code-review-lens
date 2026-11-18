@@ -69,7 +69,7 @@ cd frontend && npm start              # UI auf :4200, /api wird an :8080 weiterg
 | Zeile ok | Häkchen im Gutter; **Shift-Klick** markiert einen Bereich |
 | Block / Gruppe / Flow ok | Button «Block ok», ✓-Button im Baum (beim Überfahren), «Ganzen Flow als ok markieren» |
 | Kommentar | Sprechblase im Gutter (nur auf Zeilen im Diff), Ctrl+Enter sendet sofort an GitHub/GitLab |
-| Aufruf folgen | Farbige Chips `→ ② saveEvent` an der Aufrufstelle, «← aufgerufen von …» im Block-Kopf; jede Verbindung hat ihre Farbe (gleich im Diagramm und in der Linie links) |
+| Aufruf folgen | Farbige Bubble direkt um den Aufruf im Code (`② saveEvent`), Klick springt zum aufgerufenen Block; «← aufgerufen von …» im Block-Kopf; jede Verbindung hat ihre Farbe (gleich im Diagramm und in der Linie links) |
 | Schichten erkennen | Farbiger Streifen + Badge an jedem Block und Knoten: Frontend (cyan), API/Adapter ein (orange), Use Case (violett), Application (blau), Domäne (grün), Daten/Adapter aus (gelb), Test (rosa); dazu die Sprache (TS, Java, …) |
 | Methoden oder Klassen | Im Flow die Umschalter über Diagramm (*Methoden \| Klassen + Methoden \| Klassen*, Standard *Klassen + Methoden*) und Code (*Methoden \| Klassen*): ein Knoten bzw. eine Karte pro Klasse statt pro Methode, oder im Diagramm die Methoden als kleine Knoten im Rahmen ihrer Klasse; im Methoden-Code hängen Methoden derselben Klasse an einer Klammer; der Code folgt dem Diagramm, bis man ihm eine eigene Ebene gibt («wie Diagramm» folgt wieder) |
 | Diagramm ordnen | Das Flow-Diagramm ordnet sich selbst an (ELK); Knoten und – am Kopf des Rahmens – ganze Klassen lassen sich mit der Maus verschieben, «Anordnung zurücksetzen» macht es rückgängig |
