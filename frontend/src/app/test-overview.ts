@@ -191,7 +191,7 @@ const COLUMNS: { id: ProfileColumn; label: string; num?: boolean; tip: string }[
                   <span class="where">{{ fileOf(c.segment.path) }}:{{ range(c.segment) }}</span>
                   <span class="how">{{ c.how }}</span>
                   @if (c.done) {
-                    <app-icon name="check" [size]="12" class="ok" />
+                    <app-icon name="checkAll" [size]="12" class="ok" />
                   }
                 </button>
               } @empty {

@@ -16,7 +16,7 @@
   @let flowLevel = accepted(progress());
   <button type="button" class="btn" [class.success]="flowLevel !== 'open'" [class.acc-all]="flowLevel === 'all'" (click)="markFlow()"
           [title]="flowLevel !== 'open' ? t('Markierung in diesem Flow entfernen') : t('Alle Zeilen in diesem Flow als ok markieren')">
-    <app-icon name="check" [size]="14" /> {{ t('Ganzen Flow als ok markieren') }}
+    <app-icon [name]="flowLevel === 'all' ? 'checkAll' : 'check'" [size]="14" /> {{ t('Ganzen Flow als ok markieren') }}
   </button>
   @if (progress().multi > 0) {
     <button type="button" class="btn everywhere" [class.success]="flowLevel === 'all'" (click)="markFlowEverywhere()"
@@ -137,7 +137,7 @@
           <b class="area">{{ a }}</b>
         }
         @if (fl !== 'open') {
-          <app-icon name="check" [size]="13" class="ok" [title]="fl === 'all' ? t('überall akzeptiert') : t('in diesem Flow akzeptiert, noch nicht überall')" />
+          <app-icon [name]="fl === 'all' ? 'checkAll' : 'check'" [size]="13" class="ok" [title]="fl === 'all' ? t('überall akzeptiert') : t('in diesem Flow akzeptiert, noch nicht überall')" />
         } @else {
           <span class="cnt">{{ fp.ok }}/{{ fp.total }}</span>
         }
@@ -211,7 +211,7 @@
         <app-icon name="warning" [size]="13" class="mock-warn" />
       }
       @if (pl !== 'open') {
-        <app-icon name="check" [size]="14" class="ok" />
+        <app-icon [name]="pl === 'all' ? 'checkAll' : 'check'" [size]="14" class="ok" />
       } @else {
         <span class="cnt">{{ p.ok }}/{{ p.total }}</span>
       }
@@ -330,7 +330,7 @@
             <span class="count" [class.complete]="ul !== 'open'">{{ up.ok }}/{{ up.total }}</span>
             <button type="button" class="ok-btn" [class.on]="ul !== 'open'" (click)="markUnit(u, $event)"
                     [title]="ul !== 'open' ? t('Markierung in diesem Flow entfernen') : t('Alle Methoden der Klasse in diesem Flow als ok markieren')">
-              <app-icon name="check" [size]="14" /> {{ ul !== 'open' ? t('Ok') : t('Klasse ok') }}
+              <app-icon [name]="ul === 'all' ? 'checkAll' : 'check'" [size]="14" /> {{ ul !== 'open' ? t('Ok') : t('Klasse ok') }}
             </button>
             @if (up.multi > 0) {
               <button type="button" class="ok-btn everywhere" [class.on]="ul === 'all'" (click)="markUnitEverywhere(u, $event)"

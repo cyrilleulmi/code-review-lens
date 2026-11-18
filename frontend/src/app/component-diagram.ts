@@ -106,7 +106,7 @@ const LOOSE_GAP = 22;
                 <span class="file">{{ b.file }}</span>
               </span>
               @if (p.total > 0 && p.ok === p.total) {
-                <app-icon name="check" [size]="13" class="ok" />
+                <app-icon name="checkAll" [size]="13" class="ok" />
               } @else {
                 <span class="cnt">{{ p.ok }}/{{ p.total }}</span>
               }

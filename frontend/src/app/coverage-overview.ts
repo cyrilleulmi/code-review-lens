@@ -93,7 +93,7 @@ const GROUPS: { status: CoverageStatus; label: string }[] = [
                     <app-symbol-badge [kind]="r.segment.symbolKind" />
                     <span class="sym">{{ r.segment.symbol }}</span>
                     @if (r.done) {
-                      <app-icon name="check" [size]="12" class="ok" />
+                      <app-icon name="checkAll" [size]="12" class="ok" />
                     }
                     @if (r.open) {
                       <app-icon name="warning" [size]="12" class="open-mark" [title]="t(r.open === 1 ? '{n} offener Fall' : '{n} offene Fälle', { n: r.open }) + ': ' + t('kein Test prüft das')" />

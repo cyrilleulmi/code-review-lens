@@ -30,7 +30,7 @@ import { TestOverview } from './test-overview';
         {{ t('{ok}/{total} Zeilen ok', { ok: progress().ok, total: progress().total }) }}</span>
       @if (!fileView()) {
         <button type="button" class="btn" [class.success]="level() !== 'open'" [class.acc-all]="level() === 'all'" (click)="markAll()">
-          <app-icon name="check" [size]="14" /> {{ t('Alles als ok markieren') }}
+          <app-icon [name]="level() === 'all' ? 'checkAll' : 'check'" [size]="14" /> {{ t('Alles als ok markieren') }}
         </button>
       }
       @if (fileView() || progress().multi > 0) {

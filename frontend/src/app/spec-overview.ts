@@ -208,7 +208,7 @@ function noteworthy(e: SpecEntry): boolean {
               }
               <span class="where">{{ e.line ?? e.oldLine }}</span>
               @if (r.done) {
-                <app-icon name="check" [size]="12" class="ok" />
+                <app-icon name="checkAll" [size]="12" class="ok" />
               }
             </div>
             @if (r.changes.length && isExpanded(key)) {
