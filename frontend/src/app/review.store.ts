@@ -27,7 +27,7 @@ import {
 } from './api';
 import { AcceptStatus, Acceptance, accept, acceptedElsewhere, acceptedIn, statusOf } from './acceptance';
 import { laterExpectationsByTest } from './commit-findings';
-import { FlowDiagramLevel, FlowLevel } from './flow-classes';
+import { FlowCodeLevel, FlowDiagramLevel } from './flow-classes';
 import { groupWarnings, testNamer } from './mock-boundaries';
 import { reloadMessage } from './reload-message';
 import { serverText, t } from './i18n';
@@ -75,7 +75,7 @@ export interface FlowPage {
   /** level of the diagram; the default shows classes as frames with their methods inside */
   level: FlowDiagramLevel;
   /** own level of the code; null = the code follows the diagram (codeLevelFor) */
-  code: FlowLevel | null;
+  code: FlowCodeLevel | null;
   /** areas (layers: frontend, api, logic, ...; '' = none) taken out of diagram and code, the flow is bridged around them */
   hiddenAreas: ReadonlySet<string>;
 }

@@ -13,8 +13,9 @@ import {
   viewChild,
 } from '@angular/core';
 import { EdgeRunStatus, Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from './api';
+import { NgTemplateOutlet } from '@angular/common';
 import { CodeBlock, flashLine } from './code-block';
-import { FlowDiagramLevel, FlowLevel, classLinks, codeLevelFor, classOf, classRuns, groupByClass, inFileOrder, intersect, weakest } from './flow-classes';
+import { FlowCodeLevel, FlowDiagramLevel, InlineStep, classLinks, codeLevelFor, inlineTree, classOf, classRuns, groupByClass, inFileOrder, intersect, weakest } from './flow-classes';
 import { outsideBranch, sameSet, withoutAreas } from './flow-focus';
 import { FRAME_PADDING, Layout, Point, curvePath, frameAround, layoutFlow, routeMiddle, routePath } from './flow-layout';
 import { Icon, SymbolBadge } from './icon';
@@ -156,7 +157,7 @@ const EDGE_RUNS: EdgeRunStatus[] = ['none', 'partial', 'separate', 'tested'];
 @Component({
   selector: 'app-flow-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CodeBlock, Icon, SymbolBadge],
+  imports: [CodeBlock, Icon, NgTemplateOutlet, SymbolBadge],
   templateUrl: './flow-view.html',
   styleUrl: './flow-view.scss',
 })
@@ -192,8 +193,8 @@ export class FlowView {
   private readonly page = computed(() => this.store.flowPage(this.flow().id));
   /** Level of the diagram: methods, classes, or - the default - classes as frames with their methods inside. */
   protected readonly level = computed(() => this.page().level);
-  /** Level of the code: its own, else the one that goes with the diagram. */
-  protected readonly codeLevel = computed(() => this.page().code ?? codeLevelFor(this.level()));
+  /** Level of the code: its own (methods, classes, or by line), else the one that goes with the diagram. */
+  protected readonly codeLevel = computed<FlowCodeLevel>(() => this.page().code ?? codeLevelFor(this.level()));
   /** The code has no level of its own: it follows the diagram. */
   protected readonly codeFollows = computed(() => this.page().code == null);
   /** Areas taken out of this flow. */
@@ -457,6 +458,9 @@ export class FlowView {
   protected readonly codeCards = computed<Card[]>(() => {
     const split = this.store.diffMode() === 'split';
     const files = (members: Node[]) => [...new Set(members.map((m) => this.fileOf(m.segment)))].join(' · ');
+    if (this.codeLevel() === 'inline') {
+      return []; // by line: see inlineRoots
+    }
     if (this.codeLevel() === 'class') {
       return this.classes().map((g) => {
         const members = inFileOrder(g.members);
@@ -481,6 +485,17 @@ export class FlowView {
       };
     });
   });
+
+  /**
+   * The code by line: from every entry point its block, and inside each block the blocks it calls, right after the
+   * calling line (inlineTree). A step called from several lines is there several times; marks are kept per line of
+   * code, so they show in all of them alike.
+   */
+  protected readonly inlineRoots = computed<InlineStep[]>(() => this.codeLevel() !== 'inline' ? [] : inlineTree(
+    this.nodes().map((n) => ({ id: n.step.segmentId, caller: n.caller })),
+    this.flow().edges,
+  ));
+  private readonly nodeById = computed(() => new Map(this.nodes().map((n) => [n.step.segmentId, n])));
 
   /** What "Einzeln durchgehen" walks through: step by step, or class by class. */
   protected readonly units = computed<Unit[]>(() => this.codeLevel() === 'class'
@@ -534,6 +549,7 @@ export class FlowView {
     // Lay out the connectors once the cards are rendered (and again when they change size).
     afterRenderEffect((onCleanup) => {
       this.codeCards();
+      this.inlineRoots();
       this.visible();
       this.gutter();
       this.indent();
@@ -559,6 +575,7 @@ export class FlowView {
       const target = this.store.focusSegment();
       this.visible();
       this.codeCards();
+      this.inlineRoots();
       if (target && this.stepOf()[target] && this.scrollIntoView(target)) {
         this.store.focusSegment.set(null);
       }
@@ -573,7 +590,7 @@ export class FlowView {
   }
 
   /** An own level for the code, whatever the diagram shows. */
-  protected setCodeLevel(level: FlowLevel): void {
+  protected setCodeLevel(level: FlowCodeLevel): void {
     this.store.setFlowPage(this.flow().id, { code: level });
   }
 
@@ -597,6 +614,19 @@ export class FlowView {
   protected hoverClass(card: Card | null): void {
     this.hoveredClass.set(card?.classKey ?? null);
     this.hover(card ? [...card.ids, ...card.others.map((o) => o.id)] : null);
+  }
+
+  /** The step of a block of the code by line. */
+  protected nodeOf(id: string): Node | undefined {
+    return this.nodeById().get(id);
+  }
+
+  /** Pointer over a block of the code by line: the innermost block under it counts, not the ones around it. */
+  protected hoverInner(event: Event, id: string): void {
+    event.stopPropagation();
+    if (!this.hovered()?.has(id) || this.hovered()?.size !== 1) {
+      this.hover([id]);
+    }
   }
 
   /** A step of the card is shown (in step-by-step mode only the current card has one). */
@@ -948,6 +978,14 @@ export class FlowView {
    * Long lines take the outer lanes and short ones the inner lanes, so they cross as little as possible.
    */
   private layoutConnectors(): void {
+    if (this.codeLevel() === 'inline') {
+      // by line the called block stands right below its call: no lines in the margin, no margin
+      this.connectors.set([]);
+      this.gutter.set(0);
+      this.railHeight.set(0);
+      this.railWidth.set(0);
+      return;
+    }
     const host = this.cards().nativeElement;
     const box = host.getBoundingClientRect();
     const scroll = host.scrollLeft;

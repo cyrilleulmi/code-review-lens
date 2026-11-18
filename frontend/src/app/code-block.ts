@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { ChangeDetectionStrategy, Component, ElementRef, TemplateRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { Blame, Comment, Commit, DisplayLine, LineMark, Segment } from './api';
 import { smellBadgeText, smellBadgeTitle, smellDetail, smellText, smellsByLine } from './test-smells';
 import { impactBadge } from './setup-impact';
@@ -54,6 +55,12 @@ interface Thread {
   replies: Comment[];
 }
 
+/** A block shown inside another one after the line that calls it (see CodeBlock.inline). */
+export interface InlineSlot {
+  key: string;
+  line: number | null;
+}
+
 /** One line as it is shown in a row: in the unified view the whole row, side by side its old or its new half. */
 interface Cell {
   line: DisplayLine;
@@ -84,7 +91,7 @@ interface ViewRow {
 @Component({
   selector: 'app-code-block',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, SymbolBadge],
+  imports: [Icon, NgTemplateOutlet, SymbolBadge],
   templateUrl: './code-block.html',
   styleUrl: './code-block.scss',
   host: {
@@ -113,6 +120,14 @@ export class CodeBlock {
   readonly edgeColors = input<Record<string, string>>({});
   /** Colour of the connection from the caller (flow view). */
   readonly calledByColor = input<string | null>(null);
+  /**
+   * Blocks to show inside this one, each after the line (new file) that calls it (flow code by line); line null or
+   * a line that is not shown: after the code. They are drawn with inlineTpl, which gets the entry as its context.
+   */
+  readonly inline = input<readonly InlineSlot[]>([]);
+  readonly inlineTpl = input<TemplateRef<{ $implicit: InlineSlot }> | null>(null);
+  /** Starts collapsed (e.g. a block that is shown further up already). */
+  readonly startCollapsed = input(false);
   readonly refClick = output<string>();
   readonly calledByClick = output<void>();
 
@@ -123,6 +138,50 @@ export class CodeBlock {
   protected readonly draft = signal('');
   protected readonly sending = signal(false);
   private lastClicked: number | null = null;
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /**
+   * Where the inline blocks go: after the row (index in view()) of their calling line, the rest after the code. A
+   * collapsed block shows none of its lines, so all of them follow its head.
+   */
+  protected readonly slots = computed(() => {
+    const byRow = new Map<number, InlineSlot[]>();
+    const rest: InlineSlot[] = [];
+    if (!this.inlineTpl()) {
+      return { byRow, rest };
+    }
+    const rowOfLine = new Map<number, number>();
+    if (!this.collapsed()) {
+      this.view().forEach((row, v) => {
+        const line = row.cells[row.cells.length - 1]?.line.newLine;
+        if (line != null) rowOfLine.set(line, v);
+      });
+    }
+    for (const slot of this.inline()) {
+      const v = slot.line == null ? undefined : rowOfLine.get(slot.line);
+      if (v == null) {
+        rest.push(slot);
+      } else {
+        byRow.set(v, [...(byRow.get(v) ?? []), slot]);
+      }
+    }
+    return { byRow, rest };
+  });
+
+  /** Jumps to called code: to its block inside this one when it is shown here (code by line), else via the view. */
+  protected openRef(segmentId: string): void {
+    const own = [...this.host.nativeElement.querySelectorAll<HTMLElement>(`app-code-block[data-segment="${segmentId}"]`)]
+      .find((el) => el.parentElement?.closest('app-code-block') === this.host.nativeElement);
+    if (!own) {
+      this.refClick.emit(segmentId);
+      return;
+    }
+    own.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    own.classList.remove('flash');
+    void own.offsetWidth;
+    own.classList.add('flash');
+    setTimeout(() => own.classList.remove('flash'), 1400);
+  }
 
   /** Gaps (by index in flat()) the user expanded. */
   protected readonly expanded = signal<ReadonlySet<number>>(new Set());
@@ -259,7 +318,7 @@ export class CodeBlock {
     if (ref) {
       event.stopPropagation();
       event.preventDefault();
-      this.refClick.emit(ref.segmentId);
+      this.openRef(ref.segmentId);
     }
   }
 
@@ -281,7 +340,7 @@ export class CodeBlock {
     const p = this.progress();
     return p.total > 0 && p.ok === p.total;
   });
-  protected readonly collapsed = computed(() => this.userCollapsed() ?? (this.store.collapseDone() && this.allOk()));
+  protected readonly collapsed = computed(() => this.userCollapsed() ?? (this.startCollapsed() || (this.store.collapseDone() && this.allOk())));
 
   /** All places of this block with their ok state (only when there is more than one). */
   protected readonly places = computed(() => {

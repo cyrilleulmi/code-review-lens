@@ -768,6 +768,32 @@ button.gap.open {
   }
 }
 
+/* ------------------------------------------------------------- blocks inside the code (flow code by line) */
+
+/* the called block right after the calling line: indented under the call, in the fonts of the page again */
+.inline-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 10px 10px 44px;
+  font: 13px/1.4 var(--font-ui);
+  white-space: normal;
+
+  /* nothing to show in it (its blocks are hidden) */
+  &:empty {
+    display: none;
+  }
+}
+
+/* a collapsed block keeps the blocks it calls in view */
+.code.inline-only {
+  padding: 0;
+
+  .inline-slot {
+    margin-top: 8px;
+  }
+}
+
 /* ------------------------------------------------------------- comments */
 
 .thread {

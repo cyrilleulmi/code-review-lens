@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classLinks, classOf, classRuns, codeLevelFor, groupByClass, inFileOrder, intersect, weakest } from './flow-classes';
+import { InlineStep, classLinks, classOf, classRuns, codeLevelFor, groupByClass, inFileOrder, inlineTree, intersect, weakest } from './flow-classes';
 
 /** "View.save" -> class View; steps given as [id, depth, caller]. */
 const step = (id: string, depth: number, caller: string | null) => ({ step: { segmentId: id }, depth, caller });
@@ -124,5 +124,61 @@ describe('intersect', () => {
   it('keeps what is in every set', () => {
     expect([...intersect([new Set(['a', 'b', 'c']), new Set(['b', 'c']), new Set(['c', 'd'])])]).toEqual(['c']);
     expect([...intersect([])]).toEqual([]);
+  });
+});
+
+describe('inlineTree', () => {
+  const shape = (nodes: InlineStep[]): unknown[] => nodes.map((n) => [n.id, n.line, ...(n.cut ? ['cut'] : []), shape(n.children)]);
+  const steps = (...ids: [string, string | null][]) => ids.map(([id, caller]) => ({ id, caller }));
+
+  it('places every called step after the line that calls it, in line order', () => {
+    const tree = inlineTree(steps(['a', null], ['b', 'a'], ['c', 'b'], ['d', 'a']), [
+      { from: 'a', to: 'd', line: 30 },
+      { from: 'a', to: 'b', line: 12 },
+      { from: 'b', to: 'c', line: 5 },
+    ]);
+
+    expect(shape(tree)).toEqual([['a', null, [['b', 12, [['c', 5, []]]], ['d', 30, []]]]]);
+  });
+
+  it('shows a step at every line that calls it', () => {
+    const tree = inlineTree(steps(['a', null], ['b', 'a'], ['c', 'a']), [
+      { from: 'a', to: 'b', line: 3 },
+      { from: 'a', to: 'c', line: 5 },
+      { from: 'b', to: 'c', line: 9 },
+      { from: 'a', to: 'c', line: 7 },
+    ]);
+
+    expect(shape(tree)).toEqual([['a', null, [['b', 3, [['c', 9, []]]], ['c', 5, []], ['c', 7, []]]]]);
+    const keys = tree[0].children.map((c) => c.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('leaves out a call back into a step that is open further up', () => {
+    const tree = inlineTree(steps(['a', null], ['b', 'a']), [{ from: 'a', to: 'b', line: 3 }, { from: 'b', to: 'a', line: 8 }]);
+
+    expect(shape(tree)).toEqual([['a', null, [['b', 3, []]]]]);
+  });
+
+  it('puts a step without a calling line after the code of its caller', () => {
+    const tree = inlineTree(steps(['a', null], ['b', 'a'], ['c', 'a']), [{ from: 'a', to: 'b', line: 3 }]);
+
+    expect(shape(tree)).toEqual([['a', null, [['b', 3, []], ['c', null, []]]]]);
+  });
+
+  it('ignores calls to steps that are not shown and keeps several entry points', () => {
+    const tree = inlineTree(steps(['a', null], ['x', null]), [{ from: 'a', to: 'gone', line: 3 }]);
+
+    expect(shape(tree)).toEqual([['a', null, []], ['x', null, []]]);
+  });
+
+  it('does not unfold a step again once the limit is reached', () => {
+    const tree = inlineTree(steps(['a', null], ['b', 'a'], ['c', 'b']), [
+      { from: 'a', to: 'b', line: 1 },
+      { from: 'a', to: 'b', line: 2 },
+      { from: 'b', to: 'c', line: 1 },
+    ], 3);
+
+    expect(shape(tree)).toEqual([['a', null, [['b', 1, [['c', 1, []]]], ['b', 2, 'cut', []]]]]);
   });
 });

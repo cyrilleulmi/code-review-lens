@@ -158,3 +158,77 @@ export function intersect(sets: readonly ReadonlySet<string>[]): Set<string> {
   const [first, ...rest] = sets;
   return new Set([...(first ?? [])].filter((id) => rest.every((s) => s.has(id))));
 }
+
+/** The code of a flow can also be shown by line: the called block right after the line that calls it. */
+export type FlowCodeLevel = FlowLevel | 'inline';
+
+/** A block in the code by line: a step, placed after the line of its caller that calls it. */
+export interface InlineStep {
+  /** segment id of the step */
+  id: string;
+  /** unique in the tree: the way from the root to this place */
+  key: string;
+  /** line of the caller (new file) the block follows; null = no line known, it follows the caller's code */
+  line: number | null;
+  /** the blocks its own lines call */
+  children: InlineStep[];
+  /** not unfolded again: the step is shown further up already and the view would grow beyond its limit */
+  cut: boolean;
+}
+
+/**
+ * The steps of a flow as a tree by line: every block has the blocks it calls placed after the calling lines, so a
+ * method is not read to its end before the called code comes. A step called from several lines is shown at each of
+ * them. A call back into a step that is open further up the same branch is left out (it would never end), and once
+ * `limit` blocks are placed a step shown before is not unfolded again (`cut`).
+ *
+ * steps: in flow order with the caller shown (null = an entry point); a step whose caller has no call with a line to
+ * it (a caller across removed areas) follows the caller's code. edges: the calls with the calling line.
+ */
+export function inlineTree(
+  steps: readonly { id: string; caller: string | null }[],
+  edges: readonly { from: string; to: string; line: number | null }[],
+  limit = 60,
+): InlineStep[] {
+  const shown = new Set(steps.map((s) => s.id));
+  const calls = new Map<string, { to: string; line: number | null }[]>();
+  const add = (from: string, to: string, line: number | null) => {
+    const list = calls.get(from) ?? [];
+    if (!list.some((c) => c.to === to && c.line === line)) {
+      list.push({ to, line });
+    }
+    calls.set(from, list);
+  };
+  for (const e of edges) {
+    if (shown.has(e.from) && shown.has(e.to) && e.from !== e.to) {
+      add(e.from, e.to, e.line);
+    }
+  }
+  for (const s of steps) {
+    if (s.caller && !calls.get(s.caller)?.some((c) => c.to === s.id)) {
+      add(s.caller, s.id, null);
+    }
+  }
+  const placed = new Set<string>();
+  let count = 0;
+  const build = (id: string, line: number | null, path: readonly string[], prefix: string): InlineStep => {
+    const key = `${prefix}/${id}@${line ?? ''}`;
+    const cut = placed.has(id) && count >= limit;
+    placed.add(id);
+    count++;
+    const below = [...path, id];
+    const children = cut ? [] : [...(calls.get(id) ?? [])]
+      .sort((a, b) => (a.line ?? Number.MAX_SAFE_INTEGER) - (b.line ?? Number.MAX_SAFE_INTEGER))
+      .filter((c) => !below.includes(c.to))
+      .map((c) => build(c.to, c.line, below, key));
+    return { id, key, line, children, cut };
+  };
+  const roots = steps.filter((s) => !s.caller).map((s) => build(s.id, null, [], ''));
+  // a step no entry point reaches (should not happen) still gets its place, at the end
+  for (const s of steps) {
+    if (!placed.has(s.id)) {
+      roots.push(build(s.id, null, [], ''));
+    }
+  }
+  return roots;
+}

@@ -607,6 +607,11 @@ export const EN: Record<string, string> = {
   "Ein Knoten pro Klasse: ihre Methoden des Flows zusammengefasst, Verbindungen zwischen den Klassen":
     "One node per class: its methods of the flow combined, connections between the classes",
   "Klassen + Methoden": "Classes + methods",
+  "Zeile": "Line",
+  "Zeile für Zeile: der aufgerufene Block steht direkt nach der Zeile, die ihn aufruft – eine Methode wird nicht erst zu Ende gelesen. Mehrfach aufgerufene Blöcke stehen mehrfach da, die Häkchen gelten überall":
+    "Line by line: the called block stands right after the line that calls it – a method is not read to its end first. Blocks called several times are there several times, check marks hold everywhere",
+  "Dieser Block steht weiter oben schon – Klick springt dorthin": "This block is shown further up already – click jumps there",
+  "weiter oben gezeigt": "shown further up",
   "Anordnung zurücksetzen": "Reset layout",
   "Alle verschobenen Knoten wieder automatisch anordnen": "Arrange all moved nodes automatically again",
   "Knoten und Klassen lassen sich ziehen": "Nodes and classes can be dragged",

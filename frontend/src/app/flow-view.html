@@ -222,6 +222,8 @@
             [title]="t('Ein Block pro Methode bzw. Funktion, in Aufrufreihenfolge; aufeinanderfolgende Methoden einer Klasse stehen unter ihrem Namen zusammen')">{{ t('Methoden') }}</button>
     <button type="button" [class.on]="codeLevel() === 'class'" [attr.aria-pressed]="codeLevel() === 'class'" (click)="setCodeLevel('class')"
             [title]="t('Eine Karte pro Klasse: ihre Methoden des Flows zusammen, in der Reihenfolge der Datei')">{{ t('Klassen') }}</button>
+    <button type="button" [class.on]="codeLevel() === 'inline'" [attr.aria-pressed]="codeLevel() === 'inline'" (click)="setCodeLevel('inline')"
+            [title]="t('Zeile für Zeile: der aufgerufene Block steht direkt nach der Zeile, die ihn aufruft – eine Methode wird nicht erst zu Ende gelesen. Mehrfach aufgerufene Blöcke stehen mehrfach da, die Häkchen gelten überall')">{{ t('Zeile') }}</button>
   </div>
   <button type="button" class="ftool" [class.on]="codeFollows()" [attr.aria-pressed]="codeFollows()" (click)="toggleCodeFollows()"
           [title]="codeFollows() ? t('Der Code folgt dem Diagramm: Klassen bei «Klassen», sonst Methoden. Klick: die Ebene des Codes eigens festhalten') : t('Der Code hat eine eigene Ebene. Klick: wieder dem Diagramm folgen')">
@@ -255,6 +257,47 @@
             [attr.marker-start]="'url(#rail-start-' + c.c + ')'" [attr.marker-end]="'url(#rail-end-' + c.c + ')'" />
     }
   </svg>
+  <!-- code by line: a block, and inside it after each calling line the block that is called -->
+  <ng-template #inlineStep let-s>
+    @if (nodeOf(s.id); as n) {
+      @if (s.cut) {
+        <button type="button" class="hidden-step" (click)="scrollTo(s.id)" [title]="t('Dieser Block steht weiter oben schon – Klick springt dorthin')">
+          <span class="no">{{ n.no }}</span> {{ nodeName(n.segment) }}
+          <span class="dim">{{ t('weiter oben gezeigt') }}</span>
+          <app-icon name="arrowRight" [size]="12" />
+        </button>
+      } @else if (visible().has(s.id)) {
+        <app-code-block
+          [segment]="n.segment"
+          [place]="place()"
+          [step]="n.no"
+          [stepOf]="stepOf()"
+          [edgeColors]="edgeColors()"
+          [inline]="s.children"
+          [inlineTpl]="inlineStep"
+          (mouseover)="hoverInner($event, s.id)"
+          (refClick)="scrollTo($event)"
+        />
+      } @else {
+        @if (stepIndex() === null) {
+          <button type="button" class="hidden-step" (click)="toggleHidden([s.id], $event)" [title]="t('Einblenden')">
+            <span class="no">{{ n.no }}</span> {{ nodeName(n.segment) }}
+            <span class="dim">{{ isDone(s.id) && !hidden().has(s.id) ? t('erledigt') : t('ausgeblendet') }}</span>
+            <app-icon name="eye" [size]="12" />
+          </button>
+        }
+        <!-- its own code is not shown, the blocks it calls still are -->
+        @for (c of s.children; track c.key) {
+          <ng-container [ngTemplateOutlet]="inlineStep" [ngTemplateOutletContext]="{ $implicit: c }" />
+        }
+      }
+    }
+  </ng-template>
+  @for (root of inlineRoots(); track root.key) {
+    <div class="unit inline" (mouseleave)="hover(null)">
+      <ng-container [ngTemplateOutlet]="inlineStep" [ngTemplateOutletContext]="{ $implicit: root }" />
+    </div>
+  }
   @for (u of codeCards(); track u.key) {
     @if (stepIndex() === null || anyVisible(u.ids)) {
       <div class="unit" [class.class-card]="u.framed" [class.run]="!u.framed" [class.lit]="!u.framed && hoveredClass() === u.classKey" [class.wide]="u.wide"
