@@ -288,6 +288,7 @@ export class FlowView {
       quick: g.members.every((m) => m.segment.category === 'quick-wins'),
     });
     const level = this.level();
+    const runs = this.hasRuns();
     if (level === 'method') {
       return { frames: [], boxes: this.nodes().map((n, row) => ({ ...step(n), ...at(n.depth, row) })) };
     }
@@ -303,8 +304,8 @@ export class FlowView {
       const h = FRAME_PADDING.top + g.members.length * (MINI_H + MINI_GAP) - MINI_GAP + FRAME_PADDING.bottom;
       const minis = g.members.map((n, i) => {
         const box = step(n);
-        // one line: number, badge, name, progress, focus button
-        const w = Math.min(300, Math.max(160, Math.round(136 + box.name.length * CHAR_W)));
+        // one line: number, badge, name, test icon (with the test infos), progress, focus button
+        const w = Math.min(320, Math.max(160, Math.round(136 + (runs ? 20 : 0) + box.name.length * CHAR_W)));
         return { ...box, depth: g.depth, x: x + FRAME_PADDING.left, y: y + FRAME_PADDING.top + i * (MINI_H + MINI_GAP), w, h: MINI_H, mini: true, frame: g.key };
       });
       const frame = cls(g);

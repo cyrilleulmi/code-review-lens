@@ -67,7 +67,7 @@
   <div class="run-legend" [attr.aria-label]="t('Was die Tests ausführen')">
     <span class="lbl">{{ t('Tests:') }}</span>
     @for (r of runLegend; track r) {
-      <span class="run-key" [class]="'run-key run-' + r"><span class="swatch"></span>{{ t(stepLabels[r]) }}</span>
+      <span class="run-key" [class]="'run-key run-' + r"><app-icon name="test" [size]="13" />{{ t(stepLabels[r]) }}</span>
     }
     <span class="sep">·</span>
     <span class="edge-key" [title]="t('Ein Test läuft durch diesen Aufruf')"><svg width="22" height="8"><path d="M1 4 H21" class="k-solid" /></svg>{{ t(edgeLabels.tested) }}</span>
@@ -194,6 +194,9 @@
             {{ b.hint }}</span>
         }
       </span>
+      @if (run) {
+        <app-icon name="test" [size]="13" class="run-ico" />
+      }
       @if (mockWarned(b.ids)) {
         <app-icon name="warning" [size]="13" class="mock-warn" />
       }

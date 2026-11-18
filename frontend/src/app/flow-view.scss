@@ -683,12 +683,8 @@
   align-items: center;
   gap: 5px;
 
-  .swatch {
-    width: 12px;
-    height: 10px;
-    border: 1.5px solid var(--run);
-    border-radius: 3px;
-    background: color-mix(in srgb, var(--run) 14%, transparent);
+  app-icon {
+    color: var(--run);
   }
 
   &.run-tested {
@@ -701,11 +697,6 @@
 
   &.run-none {
     --run: var(--run-none);
-
-    .swatch {
-      border-style: dashed;
-      background: transparent;
-    }
   }
 }
 
@@ -730,7 +721,7 @@
   }
 }
 
-/* step box coloured by run status (the layer stripe on the left and done/current/root keep their meaning) */
+/* run status of a step: the test icon in its box, in the colour of the status - the box itself keeps its look */
 .node {
   &.run-tested {
     --run: var(--run-tested);
@@ -742,34 +733,11 @@
 
   &.run-none {
     --run: var(--run-none);
-    border-style: dashed;
   }
 
-  &.run-tested,
-  &.run-mocked,
-  &.run-none {
-    border-top-color: color-mix(in srgb, var(--run) 70%, transparent);
-    border-right-color: color-mix(in srgb, var(--run) 70%, transparent);
-    border-bottom-color: color-mix(in srgb, var(--run) 70%, transparent);
-
-    &:not(.done) {
-      background: color-mix(in srgb, var(--run) 6%, var(--bg-editor));
-    }
-
-    &:hover {
-      border-color: var(--accent);
-    }
-  }
-
-  &.run-none:not(.done) .name {
-    color: var(--fg-muted);
-  }
-
-  &.root,
-  &.current {
-    border-top-color: var(--accent);
-    border-right-color: var(--accent);
-    border-bottom-color: var(--accent);
+  .run-ico {
+    flex: none;
+    color: var(--run);
   }
 
   .mock-warn {
