@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classLinks, classOf, groupByClass, inFileOrder, intersect, weakest } from './flow-classes';
+import { classLinks, classOf, classRuns, codeLevelFor, groupByClass, inFileOrder, intersect, weakest } from './flow-classes';
 
 /** "View.save" -> class View; steps given as [id, depth, caller]. */
 const step = (id: string, depth: number, caller: string | null) => ({ step: { segmentId: id }, depth, caller });
@@ -52,6 +52,33 @@ describe('groupByClass', () => {
     const groups = groupByClass([step('A.run', 0, null), step('B.other', 0, null)], byPrefix);
 
     expect(groups.map((g) => [g.key, g.depth, g.caller])).toEqual([['A', 0, null], ['B', 0, null]]);
+  });
+});
+
+describe('classRuns', () => {
+  it('cuts the steps into runs of consecutive steps of one class, in call order', () => {
+    const runs = classRuns([
+      step('View.save', 0, null),
+      step('Resource.update', 1, 'View.save'),
+      step('Resource.validate', 2, 'Resource.update'),
+      step('Player.isTaken', 3, 'Resource.validate'),
+      step('Resource.inRange', 3, 'Resource.validate'),
+    ], byPrefix);
+
+    expect(runs.map((r) => [r.key, r.members.map((m) => m.step.segmentId), r.depth])).toEqual([
+      ['View', ['View.save'], 0],
+      ['Resource', ['Resource.update', 'Resource.validate'], 1],
+      ['Player', ['Player.isTaken'], 3],
+      ['Resource', ['Resource.inRange'], 3],
+    ]);
+  });
+});
+
+describe('codeLevelFor', () => {
+  it('lets the code follow the diagram: classes for classes, methods for methods and for the combined diagram', () => {
+    expect(codeLevelFor('class')).toBe('class');
+    expect(codeLevelFor('method')).toBe('method');
+    expect(codeLevelFor('combined')).toBe('method');
   });
 });
 

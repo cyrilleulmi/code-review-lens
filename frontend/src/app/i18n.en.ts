@@ -606,12 +606,19 @@ export const EN: Record<string, string> = {
   "Ein Knoten pro Methode bzw. Funktion": "One node per method or function",
   "Ein Knoten pro Klasse: ihre Methoden des Flows zusammengefasst, Verbindungen zwischen den Klassen":
     "One node per class: its methods of the flow combined, connections between the classes",
-  "Ein Block pro Methode bzw. Funktion, in Aufrufreihenfolge": "One block per method or function, in call order",
+  "Klassen + Methoden": "Classes + methods",
+  "Klassen als Rahmen, ihre Methoden als kleinere Knoten darin; Verbindungen zwischen den Methoden":
+    "Classes as frames, their methods as smaller nodes inside; connections between the methods",
+  "Ein Block pro Methode bzw. Funktion, in Aufrufreihenfolge; aufeinanderfolgende Methoden einer Klasse stehen unter ihrem Namen zusammen":
+    "One block per method or function, in call order; consecutive methods of a class stand together under its name",
+  "Die Blöcke an dieser Klammer gehören zur selben Klasse": "The blocks on this bracket belong to the same class",
+  "auch:": "also:",
+  "Gleiche Klasse an anderer Stelle des Flows – Klick springt dorthin": "Same class elsewhere in the flow – click jumps there",
   "Eine Karte pro Klasse: ihre Methoden des Flows zusammen, in der Reihenfolge der Datei":
     "One card per class: its methods of the flow together, in the order of the file",
   "wie Diagramm": "same as diagram",
-  "Der Code folgt der Ebene des Diagramms. Klick: die Ebene des Codes eigens festhalten":
-    "The code follows the level of the diagram. Click: pin the level of the code",
+  "Der Code folgt dem Diagramm: Klassen bei «Klassen», sonst Methoden. Klick: die Ebene des Codes eigens festhalten":
+    "The code follows the diagram: classes for “Classes”, methods otherwise. Click: pin the level of the code",
   "Der Code hat eine eigene Ebene. Klick: wieder dem Diagramm folgen":
     "The code has its own level. Click: follow the diagram again",
   "Ansicht der Änderungen": "View of the changes",

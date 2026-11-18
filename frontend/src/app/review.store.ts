@@ -27,6 +27,7 @@ import {
 } from './api';
 import { AcceptStatus, Acceptance, accept, acceptedElsewhere, acceptedIn, statusOf } from './acceptance';
 import { laterExpectationsByTest } from './commit-findings';
+import { FlowDiagramLevel, FlowLevel, codeLevelFor } from './flow-classes';
 import { groupWarnings, testNamer } from './mock-boundaries';
 import { reloadMessage } from './reload-message';
 import { serverText, t } from './i18n';
@@ -69,9 +70,8 @@ const SEP = '\u0000';
 /** How code blocks show a diff: in one column or side by side. */
 export type DiffMode = 'unified' | 'split';
 
-/** What a data flow shows as one unit: single methods / functions, or whole classes with their methods of the flow. */
-export type FlowLevel = 'method' | 'class';
 const FLOW_LEVELS = ['method', 'class'] as const;
+const FLOW_DIAGRAM_LEVELS = ['method', 'class', 'combined'] as const;
 
 /** Commit filter value for "new or changed since my last review" (also in the URL: …/c/since-review). */
 export const SINCE_REVIEW = 'since-review';
@@ -128,12 +128,12 @@ export class ReviewStore {
    * code left and new code right. Stored per browser.
    */
   readonly diffMode = signal<DiffMode>(readChoice('scr.diffMode', ['unified', 'split'] as const) ?? 'unified');
-  /** Level of the flow diagrams: one box per method / function, or one per class. Stored per browser. */
-  readonly flowLevel = signal<FlowLevel>(readChoice('scr.flowLevel', FLOW_LEVELS) ?? 'method');
-  /** Own level for the code of the flows; null = the code follows the diagram (the default). Stored per browser. */
+  /** Level of the flow diagrams: one box per method / function, one per class, or both nested. Stored per browser. */
+  readonly flowLevel = signal<FlowDiagramLevel>(readChoice('scr.flowLevel', FLOW_DIAGRAM_LEVELS) ?? 'method');
+  /** Own level for the code of the flows; null = the code follows the diagram (codeLevelFor, the default). Stored per browser. */
   readonly flowCodeOverride = signal<FlowLevel | null>(readChoice('scr.flowCodeLevel', FLOW_LEVELS));
   /** Level of the code of the flows: one card per method / function, or one per class. */
-  readonly flowCodeLevel = computed(() => this.flowCodeOverride() ?? this.flowLevel());
+  readonly flowCodeLevel = computed<FlowLevel>(() => this.flowCodeOverride() ?? codeLevelFor(this.flowLevel()));
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
   readonly blames = signal<ReadonlyMap<string, Blame | 'loading' | null>>(new Map());
   /** commit from the URL, applied once the commits are loaded */
@@ -671,7 +671,7 @@ export class ReviewStore {
     writeChoice('scr.diffMode', mode);
   }
 
-  setFlowLevel(level: FlowLevel): void {
+  setFlowLevel(level: FlowDiagramLevel): void {
     this.flowLevel.set(level);
     writeChoice('scr.flowLevel', level);
   }

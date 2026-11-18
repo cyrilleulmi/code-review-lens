@@ -3,6 +3,19 @@
  * the diagram (one box per class, calls between classes) and for the code (one card per class).
  */
 
+/** What the code of a data flow shows as one card: single methods / functions, or whole classes with their methods of the flow. */
+export type FlowLevel = 'method' | 'class';
+/** The diagram can also show both: classes as frames with their methods as smaller boxes inside. */
+export type FlowDiagramLevel = FlowLevel | 'combined';
+
+/**
+ * The level the code of a flow takes when it follows the diagram: classes for the class diagram; methods otherwise -
+ * also for the combined diagram, whose boxes are the methods.
+ */
+export function codeLevelFor(diagram: FlowDiagramLevel): FlowLevel {
+  return diagram === 'class' ? 'class' : 'method';
+}
+
 /** The class a step belongs to. */
 export interface ClassInfo {
   key: string;
@@ -65,6 +78,32 @@ export function groupByClass<T extends ClassMember>(nodes: readonly T[], classOf
     groups.set(info.key, { ...info, members: [node], depth: parent ? parent.depth + 1 : 0, caller: parent?.key ?? null });
   }
   return [...groups.values()];
+}
+
+export interface ClassRun<T> extends ClassInfo {
+  /** consecutive steps of the class, in call order */
+  members: T[];
+  /** the smallest call depth among them */
+  depth: number;
+}
+
+/**
+ * The steps of a flow in call order, cut into runs of consecutive steps of the same class: what the method level of
+ * the code shows together, so one sees which blocks belong to one class. A class called again later starts a new run.
+ */
+export function classRuns<T extends ClassMember>(nodes: readonly T[], classOfStep: (segmentId: string) => ClassInfo): ClassRun<T>[] {
+  const runs: ClassRun<T>[] = [];
+  for (const node of nodes) {
+    const info = classOfStep(node.step.segmentId);
+    const last = runs[runs.length - 1];
+    if (last && last.key === info.key) {
+      last.members.push(node);
+      last.depth = Math.min(last.depth, node.depth);
+    } else {
+      runs.push({ ...info, members: [node], depth: node.depth });
+    }
+  }
+  return runs;
 }
 
 export interface ClassLink<E> {
