@@ -14,7 +14,7 @@ import {
 } from '@angular/core';
 import { EdgeRunStatus, Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from './api';
 import { CodeBlock, flashLine } from './code-block';
-import { FlowDiagramLevel, FlowLevel, classLinks, classOf, classRuns, groupByClass, inFileOrder, intersect, weakest } from './flow-classes';
+import { FlowDiagramLevel, FlowLevel, classLinks, codeLevelFor, classOf, classRuns, groupByClass, inFileOrder, intersect, weakest } from './flow-classes';
 import { outsideBranch, sameSet, withoutAreas } from './flow-focus';
 import { FRAME_PADDING, Layout, Point, curvePath, frameAround, layoutFlow, routeMiddle, routePath } from './flow-layout';
 import { Icon, SymbolBadge } from './icon';
@@ -188,11 +188,16 @@ export class FlowView {
   protected readonly split = computed(() => this.store.diffMode() === 'split' && this.nodes().some((n) => splits(n.segment)));
   protected readonly indent = computed(() => (this.split() ? SPLIT_INDENT : INDENT));
 
-  /** Level of the diagram and of the code (see ReviewStore.flowLevel / flowCodeLevel). */
-  protected readonly level = this.store.flowLevel;
-  protected readonly codeLevel = this.store.flowCodeLevel;
+  /** What the user set on the page of this flow: levels and removed areas hold for this flow only (ReviewStore.flowPage). */
+  private readonly page = computed(() => this.store.flowPage(this.flow().id));
+  /** Level of the diagram: methods, classes, or - the default - classes as frames with their methods inside. */
+  protected readonly level = computed(() => this.page().level);
+  /** Level of the code: its own, else the one that goes with the diagram. */
+  protected readonly codeLevel = computed(() => this.page().code ?? codeLevelFor(this.level()));
   /** The code has no level of its own: it follows the diagram. */
-  protected readonly codeFollows = computed(() => this.store.flowCodeOverride() == null);
+  protected readonly codeFollows = computed(() => this.page().code == null);
+  /** Areas taken out of this flow. */
+  private readonly hiddenAreas = computed(() => this.page().hiddenAreas);
 
   /** Mock-Grenzen: what the tests really execute, per step (segment id) and per edge ("from>to"). */
   /** What the tests run in this flow; nothing while the test enrichments are switched off. */
@@ -235,7 +240,7 @@ export class FlowView {
 
   /** The areas of the flow in call order with their number of steps; the bar shows them from two on. */
   protected readonly areas = computed(() => {
-    const removed = this.store.hiddenAreas();
+    const removed = this.hiddenAreas();
     const counts = new Map<string, number>();
     for (const s of this.allSteps()) {
       counts.set(s.area, (counts.get(s.area) ?? 0) + 1);
@@ -250,7 +255,7 @@ export class FlowView {
 
   /** The steps shown in diagram and code: all but those of removed areas, bridged and moved up to fill the gaps. */
   protected readonly nodes = computed<Node[]>(() => {
-    return withoutAreas(this.allSteps(), this.store.hiddenAreas()).map((s) => ({
+    return withoutAreas(this.allSteps(), this.hiddenAreas()).map((s) => ({
       ...s,
       bridged: s.skipped.map((area) => (area ? areaLabel(area) : t('ohne Schicht'))),
     }));
@@ -564,17 +569,17 @@ export class FlowView {
 
   /** Level of the diagram; the code follows unless it has its own level. */
   protected setLevel(level: FlowDiagramLevel): void {
-    this.store.setFlowLevel(level);
+    this.store.setFlowPage(this.flow().id, { level });
   }
 
   /** An own level for the code, whatever the diagram shows. */
   protected setCodeLevel(level: FlowLevel): void {
-    this.store.setFlowCodeLevel(level);
+    this.store.setFlowPage(this.flow().id, { code: level });
   }
 
   /** Lets the code follow the diagram again, or pins the level it has now. */
   protected toggleCodeFollows(): void {
-    this.store.setFlowCodeLevel(this.codeFollows() ? this.codeLevel() : null);
+    this.store.setFlowPage(this.flow().id, { code: this.codeFollows() ? this.codeLevel() : null });
   }
 
   // ------------------------------------------------------------------ boxes of the diagram
@@ -776,20 +781,20 @@ export class FlowView {
 
   /** Takes an area out of the overview (diagram and code) or brings it back; the last area left stays. */
   protected toggleArea(id: string): void {
-    const next = new Set(this.store.hiddenAreas());
+    const next = new Set(this.hiddenAreas());
     if (next.has(id)) {
       next.delete(id);
     } else if (this.areas().some((a) => a.id !== id && !a.removed)) {
       next.add(id);
     }
-    this.store.hiddenAreas.set(next);
+    this.store.setFlowPage(this.flow().id, { hiddenAreas: next });
     this.stepIndex.set(null);
   }
 
   protected showAllAreas(): void {
-    const next = new Set(this.store.hiddenAreas());
+    const next = new Set(this.hiddenAreas());
     this.areas().forEach((a) => next.delete(a.id));
-    this.store.hiddenAreas.set(next);
+    this.store.setFlowPage(this.flow().id, { hiddenAreas: next });
   }
 
   /** The area cannot be removed: it is the only one left. */
@@ -886,12 +891,12 @@ export class FlowView {
 
   /** Jumps to a step (making it visible first); segments outside this flow are shown at their own place. */
   protected scrollTo(segmentId: string): void {
-    const removedStep = this.allSteps().find((s) => s.step.segmentId === segmentId && this.store.hiddenAreas().has(s.area));
+    const removedStep = this.allSteps().find((s) => s.step.segmentId === segmentId && this.hiddenAreas().has(s.area));
     if (removedStep) {
       // a step of a removed area: bring the area back rather than leaving the flow
-      const next = new Set(this.store.hiddenAreas());
+      const next = new Set(this.hiddenAreas());
       next.delete(removedStep.area);
-      this.store.hiddenAreas.set(next);
+      this.store.setFlowPage(this.flow().id, { hiddenAreas: next });
     }
     if (!this.nodes().some((n) => n.step.segmentId === segmentId)) {
       this.store.reveal(segmentId);

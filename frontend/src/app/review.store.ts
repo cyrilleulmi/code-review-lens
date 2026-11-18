@@ -27,7 +27,7 @@ import {
 } from './api';
 import { AcceptStatus, Acceptance, accept, acceptedElsewhere, acceptedIn, statusOf } from './acceptance';
 import { laterExpectationsByTest } from './commit-findings';
-import { FlowDiagramLevel, FlowLevel, codeLevelFor } from './flow-classes';
+import { FlowDiagramLevel, FlowLevel } from './flow-classes';
 import { groupWarnings, testNamer } from './mock-boundaries';
 import { reloadMessage } from './reload-message';
 import { serverText, t } from './i18n';
@@ -70,8 +70,17 @@ const SEP = '\u0000';
 /** How code blocks show a diff: in one column or side by side. */
 export type DiffMode = 'unified' | 'split';
 
-const FLOW_LEVELS = ['method', 'class'] as const;
-const FLOW_DIAGRAM_LEVELS = ['method', 'class', 'combined'] as const;
+/** The settings of the page of one flow (see ReviewStore.flowPage). */
+export interface FlowPage {
+  /** level of the diagram; the default shows classes as frames with their methods inside */
+  level: FlowDiagramLevel;
+  /** own level of the code; null = the code follows the diagram (codeLevelFor) */
+  code: FlowLevel | null;
+  /** areas (layers: frontend, api, logic, ...; '' = none) taken out of diagram and code, the flow is bridged around them */
+  hiddenAreas: ReadonlySet<string>;
+}
+
+const FLOW_PAGE_DEFAULT: FlowPage = { level: 'combined', code: null, hiddenAreas: new Set() };
 
 /** Commit filter value for "new or changed since my last review" (also in the URL: …/c/since-review). */
 export const SINCE_REVIEW = 'since-review';
@@ -98,10 +107,10 @@ export class ReviewStore {
   readonly selection = signal<Selection>({ kind: 'overview' });
   readonly collapseDone = signal(true);
   /**
-   * Areas (layers: frontend, api, logic, ...; '' = none) taken out of the flow views: their steps leave diagram and
-   * code, the flow is bridged around them. Applies to every flow, not stored (like the other focus tools).
+   * What the user set on the page of a flow, by flow id: the levels of diagram and code and the areas taken out. It
+   * holds for that flow only and while its PR is open; nothing of it is stored, every flow starts with the defaults.
    */
-  readonly hiddenAreas = signal<ReadonlySet<string>>(new Set());
+  private readonly flowPages = signal<ReadonlyMap<string, FlowPage>>(new Map());
   /** "Collapse all" / "expand all" of the current view; code blocks follow it. Reset on navigation. */
   readonly collapseCommand = signal<{ collapsed: boolean; seq: number } | null>(null);
   /** Segment to scroll to after the next render (e.g. clicked in a flow diagram). */
@@ -128,15 +137,6 @@ export class ReviewStore {
    * code left and new code right. Stored per browser.
    */
   readonly diffMode = signal<DiffMode>(readChoice('scr.diffMode', ['unified', 'split'] as const) ?? 'unified');
-  /**
-   * Level of the flow diagrams: one box per method / function, one per class, or - the default - both: classes as
-   * frames with their methods inside. Stored per browser.
-   */
-  readonly flowLevel = signal<FlowDiagramLevel>(readChoice('scr.flowLevel', FLOW_DIAGRAM_LEVELS) ?? 'combined');
-  /** Own level for the code of the flows; null = the code follows the diagram (codeLevelFor, the default). Stored per browser. */
-  readonly flowCodeOverride = signal<FlowLevel | null>(readChoice('scr.flowCodeLevel', FLOW_LEVELS));
-  /** Level of the code of the flows: one card per method / function, or one per class. */
-  readonly flowCodeLevel = computed<FlowLevel>(() => this.flowCodeOverride() ?? codeLevelFor(this.flowLevel()));
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
   readonly blames = signal<ReadonlyMap<string, Blame | 'loading' | null>>(new Map());
   /** commit from the URL, applied once the commits are loaded */
@@ -483,6 +483,7 @@ export class ReviewStore {
 
   close(): void {
     this.resetCommits();
+    this.flowPages.set(new Map());
     this.bundle.set(null);
     this.comments.set([]);
     this.ok.set(new Set());
@@ -494,6 +495,9 @@ export class ReviewStore {
     const previous = this.bundle()?.pr;
     if (!previous || prLabel(previous) !== prLabel(b.pr) || previous.headSha !== b.pr.headSha) {
       this.resetCommits(); // another PR, or new commits: blame and attribution are outdated
+    }
+    if (!previous || prLabel(previous) !== prLabel(b.pr)) {
+      this.flowPages.set(new Map()); // the flows of another PR
     }
     this.bundle.set(b);
     this.applyState(b.state);
@@ -674,15 +678,14 @@ export class ReviewStore {
     writeChoice('scr.diffMode', mode);
   }
 
-  setFlowLevel(level: FlowDiagramLevel): void {
-    this.flowLevel.set(level);
-    writeChoice('scr.flowLevel', level);
+  /** The settings of the page of a flow (the defaults until the user changes one there). */
+  flowPage(flowId: string): FlowPage {
+    return this.flowPages().get(flowId) ?? FLOW_PAGE_DEFAULT;
   }
 
-  /** Sets an own level for the code of the flows; null lets it follow the diagram again. */
-  setFlowCodeLevel(level: FlowLevel | null): void {
-    this.flowCodeOverride.set(level);
-    writeChoice('scr.flowCodeLevel', level);
+  /** Changes settings of the page of one flow; the pages of the other flows keep theirs. */
+  setFlowPage(flowId: string, change: Partial<FlowPage>): void {
+    this.flowPages.set(new Map(this.flowPages()).set(flowId, { ...this.flowPage(flowId), ...change }));
   }
 
   /** Fetches the blame of a file once (cached by the backend per head commit). */
