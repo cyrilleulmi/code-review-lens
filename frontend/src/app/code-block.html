@@ -184,11 +184,6 @@
                 <span class="g-sign">{{ line.type === 'add' ? '+' : line.type === 'del' ? '−' : '' }}</span>
                 <span class="src"><code [innerHTML]="c.main ? marked().html[c.f] : html()[c.f]" (click)="codeClick($event, line)" (keydown.enter)="codeClick($event, line)"></code>
                   @if (c.main) {
-                    @if (halfNotes().get(i); as other) {
-                      <button type="button" class="half-note" (click)="goElsewhere(line, $event)" [title]="t('Bereits akzeptiert in: {places} – Klick springt dorthin', { places: other.labels })">
-                        <app-icon name="check" [size]="10" /> {{ other.ids.length === 1 ? t('bereits an anderem Ort akzeptiert') : t('bereits an {n} anderen Orten akzeptiert', { n: other.ids.length }) }}
-                      </button>
-                    }
                     @for (n of caseNotes().get(i) ?? []; track $index) {
                       <button type="button" class="case-note" (click)="openCoverage($event)" [title]="n.title">
                         <app-icon name="warning" [size]="10" /> {{ n.text }}

@@ -26,7 +26,7 @@ import {
   providerInfo,
 } from './api';
 import { LineBoxes, everywhereTargets, lineBoxes } from './accept-boxes';
-import { AcceptStatus, Acceptance, accept, acceptedElsewhere, statusOf } from './acceptance';
+import { AcceptStatus, Acceptance, accept, statusOf } from './acceptance';
 import { laterExpectationsByTest } from './commit-findings';
 import { FlowCodeLevel, FlowDiagramLevel } from './flow-classes';
 import { groupWarnings, testNamer } from './mock-boundaries';
@@ -822,13 +822,6 @@ export class ReviewStore {
   lineStatus(path: string, key: string, place: string | null): AcceptStatus {
     const k = path + SEP + key;
     return statusOf(this.acceptanceOf(k, this.linePlaces().get(k) ?? []), this.linePlaces().get(k) ?? [], place);
-  }
-
-  /** The other places (group ids) at which the line is already accepted. */
-  acceptedElsewhere(path: string, key: string, place: string | null): string[] {
-    const k = path + SEP + key;
-    const places = this.linePlaces().get(k) ?? [];
-    return acceptedElsewhere(this.acceptanceOf(k, places), places, place);
   }
 
   /** Is the line ok at this place? place null: ok at all its places. */

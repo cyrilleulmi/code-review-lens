@@ -93,7 +93,7 @@ Jede Gruppe, die ein Segment zeigt, ist ein **Ort** (`segments[].places`): die G
 **Eine Zeile an mehreren Orten** (`review/LineAcceptance`, im UI gespiegelt in `acceptance.ts`):
 
 * Jeder Ort braucht sein eigenes Akzeptieren. Eine Zeile ist **akzeptiert**, sobald sie an allen ihren Orten akzeptiert ist.
-* Ist sie an einem Ort akzeptiert, gilt sie an jedem anderen Ort als **halb akzeptiert**: Das Häkchen ist halb gefüllt, daneben steht der Hinweis «bereits an anderem Ort akzeptiert» (bei mehreren: «an *n* anderen Orten»; einmal pro zusammenhängendem Lauf solcher Zeilen, nicht auf jeder Zeile), der Tooltip nennt die Orte, ein Klick darauf springt zum ersten. Halb akzeptiert zählt im Fortschritt noch **nicht**; mit einem Klick auf das Häkchen wird sie auch hier akzeptiert.
+* Ist sie an einem Teil ihrer Orte akzeptiert, ist sie **halb akzeptiert**: Die Zeile zeigt ein Kästchen pro Ort (vorne das des gezeigten Orts), das des akzeptierten Orts ist grün angehakt, der Tooltip nennt Ort und Zustand. An einem Ort, an dem sie noch fehlt, zählt sie im Fortschritt noch **nicht**; ein Klick auf das vordere Kästchen akzeptiert sie auch hier, ein Klick auf eines der anderen überall (dann blau).
 * Mehrere akzeptierte Orte werden einzeln geführt. Nimmt man an einem Ort das Akzeptieren zurück, bleiben die anderen Orte akzeptiert (auch bei einer sonst überall akzeptierten Zeile).
 * Eine Markierung ohne Ort (Dateiansicht, Agenten) oder auf einem Ort, an dem die Zeile nicht vorkommt, gilt für alle Orte auf einmal. Zeilen mit nur einem Ort kennen den Halbzustand nicht.
 * Ausgeschaltete Kategorien zählen nicht als Ort. «Halb akzeptiert» ist abgeleitet und steht nicht in `review.json`; das Dateiformat (`ok`, `okAt`) ist unverändert.
