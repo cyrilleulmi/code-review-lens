@@ -676,7 +676,6 @@ export const EN: Record<string, string> = {
   "Akzeptiert – Klick: Markierung entfernen": "Accepted – click: remove the mark",
   "Klick: Markierung an allen Orten entfernen": "Click: remove the mark at all places",
   "Klick: an allen {n} Orten als ok markieren": "Click: mark as ok at all {n} places",
-  "Zuerst hier akzeptieren – danach lässt sich die Zeile mit einem Klick überall akzeptieren": "Accept it here first – then one click accepts the line everywhere",
   "Klick: an den anderen Orten wieder zurücknehmen": "Click: take it back at the other places",
   "akzeptiert": "accepted",
   "offen": "open",

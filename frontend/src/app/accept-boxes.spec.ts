@@ -11,27 +11,31 @@ function everywhere(a: Acceptance, places: string[], place: string | null, ok: b
 }
 
 describe('accept boxes', () => {
-  it('shows one box per place, the place shown in front, the others read-only until it is ticked', () => {
+  it('shows one box per place, the place shown in front', () => {
     const boxes = lineBoxes(NOT_ACCEPTED, THREE, FLOW);
     expect(boxes.front).toEqual({ on: false });
     expect(boxes.rest).toEqual([{ id: 'quick-wins/mapper', on: false }, { id: 'security/a-ts', on: false }]);
-    expect(boxes.readonly).toBe(true);
     expect(boxes.all).toBe(false);
   });
 
-  it('unlocks the other boxes once the line is accepted here', () => {
+  it('ticks only the front box when the line is accepted here', () => {
     const boxes = lineBoxes(accept(NOT_ACCEPTED, THREE, FLOW, true), THREE, FLOW);
     expect(boxes.front).toEqual({ on: true });
-    expect(boxes.readonly).toBe(false);
+    expect(boxes.rest.map((b) => b.on)).toEqual([false, false]);
     expect(boxes.all).toBe(false);
   });
 
-  it('shows an accept at another place in its box and keeps the others read-only', () => {
+  it('shows an accept at another place in the box of that place', () => {
     const boxes = lineBoxes(accept(NOT_ACCEPTED, THREE, 'security/a-ts', true), THREE, FLOW);
     expect(boxes.front).toEqual({ on: false });
     expect(boxes.rest.map((b) => b.on)).toEqual([false, true]);
-    expect(boxes.readonly).toBe(true);
     expect(boxes.completes).toBe(false);
+  });
+
+  it('accepts everywhere with a click on the other boxes, whether or not the line is accepted here', () => {
+    expect(lineBoxes(everywhere(NOT_ACCEPTED, THREE, FLOW, true), THREE, FLOW)).toMatchObject({ front: { on: true }, all: true });
+    const elsewhere = accept(NOT_ACCEPTED, THREE, 'security/a-ts', true);
+    expect(lineBoxes(everywhere(elsewhere, THREE, FLOW, true), THREE, FLOW).all).toBe(true);
   });
 
   it('knows when the front box is the last one missing', () => {
@@ -39,10 +43,10 @@ describe('accept boxes', () => {
     expect(lineBoxes(others, THREE, FLOW).completes).toBe(true);
   });
 
-  it('accepts everywhere with a click on the other boxes and takes that step back with a second one', () => {
+  it('takes the other places back with a second click on the other boxes and keeps this one', () => {
     const here = accept(NOT_ACCEPTED, THREE, FLOW, true);
     const all = everywhere(here, THREE, FLOW, true);
-    expect(lineBoxes(all, THREE, FLOW)).toMatchObject({ front: { on: true }, all: true, readonly: false });
+    expect(lineBoxes(all, THREE, FLOW)).toMatchObject({ front: { on: true }, all: true });
     const back = everywhere(all, THREE, FLOW, false);
     expect(lineBoxes(back, THREE, FLOW)).toMatchObject({ front: { on: true }, all: false });
     expect(lineBoxes(back, THREE, FLOW).rest.map((b) => b.on)).toEqual([false, false]);
@@ -52,14 +56,13 @@ describe('accept boxes', () => {
     const boxes = lineBoxes(accept(NOT_ACCEPTED, THREE, FLOW, true), THREE, null);
     expect(boxes.front).toBeNull();
     expect(boxes.rest.map((b) => b.on)).toEqual([false, true, false]);
-    expect(boxes.readonly).toBe(false);
     expect(everywhere(NOT_ACCEPTED, THREE, null, true).full).toBe(true);
     expect(everywhere(everywhere(NOT_ACCEPTED, THREE, null, true), THREE, null, false)).toBe(NOT_ACCEPTED);
   });
 
   it('accepts a line with a single place everywhere right away', () => {
     const one = [FLOW];
-    expect(lineBoxes(NOT_ACCEPTED, one, FLOW)).toEqual({ front: { on: false }, rest: [], readonly: false, all: false, completes: true });
+    expect(lineBoxes(NOT_ACCEPTED, one, FLOW)).toEqual({ front: { on: false }, rest: [], all: false, completes: true });
     expect(lineBoxes(accept(NOT_ACCEPTED, one, FLOW, true), one, FLOW).all).toBe(true);
     expect(lineBoxes(accept(NOT_ACCEPTED, [], null, true), [], null).all).toBe(true);
   });

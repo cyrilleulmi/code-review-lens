@@ -4,8 +4,9 @@ import { Acceptance, acceptedIn, statusOf } from './acceptance';
  * How the accept state is shown and clicked in the UI (the rules themselves are in acceptance.ts):
  *
  * - a line has one box per place it is shown at; the box of the place shown stands in front;
- * - at first only the front box can be ticked ("accepted here", green); once it is, a click on the other boxes
- *   accepts the line at all its places ("accepted everywhere", blue) - and a second click takes that step back;
+ * - the front box sets or takes back the accept at this place only ("accepted here", green); a click on any of the
+ *   other boxes accepts the line at all its places at once ("accepted everywhere", blue) - and a second click takes
+ *   the other places back again;
  * - a view without a place (file) has no front box: all boxes act as one and mean "everywhere";
  * - a line with a single place is accepted everywhere as soon as it is accepted.
  */
@@ -29,10 +30,8 @@ export interface PlaceBox {
 export interface LineBoxes {
   /** the box of the place shown (the only box of a line with one place); null in a view without a place */
   front: { on: boolean } | null;
-  /** the boxes of the other places */
+  /** the boxes of the other places: a click on them accepts the line everywhere */
   rest: PlaceBox[];
-  /** the other boxes cannot be clicked yet: the line is not accepted here */
-  readonly: boolean;
   /** accepted at all places */
   all: boolean;
   /** ticking the front box accepts the line everywhere: it has one place, or all the others are accepted already */
@@ -43,16 +42,15 @@ export interface LineBoxes {
 export function lineBoxes(a: Acceptance, places: readonly string[], place: string | null): LineBoxes {
   const all = statusOf(a, places, null) === 'accepted';
   if (places.length < 2) {
-    return { front: { on: all }, rest: [], readonly: false, all, completes: true };
+    return { front: { on: all }, rest: [], all, completes: true };
   }
   const accepted = new Set(acceptedIn(a, places));
   const here = place != null && places.includes(place) ? place : null;
   const rest = places.filter((p) => p !== here).map((id) => ({ id, on: accepted.has(id) }));
   if (here == null) {
-    return { front: null, rest, readonly: false, all, completes: false };
+    return { front: null, rest, all, completes: false };
   }
-  const on = accepted.has(here);
-  return { front: { on }, rest, readonly: !on, all, completes: rest.every((b) => b.on) };
+  return { front: { on: accepted.has(here) }, rest, all, completes: rest.every((b) => b.on) };
 }
 
 /**

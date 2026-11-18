@@ -66,7 +66,7 @@ cd frontend && npm start              # UI auf :4200, /api wird an :8080 weiterg
 |---|---|
 | PR/MR öffnen | Tool-Fenster «Pull/Merge Requests» (Alt+1), Filter *Alle / Von mir / Review*, oder URL einfügen + Enter |
 | Navigieren | Tool-Fenster «Review» (Alt+2): Tabs *Kategorien / Flows / Dateien* |
-| Zeile ok | Kästchen im Gutter, eines pro Ort der Zeile: das vordere gilt für den gezeigten Ort; ist es angekreuzt, akzeptiert ein Klick auf die anderen die Zeile überall. **Shift-Klick** markiert einen Bereich. Grün = hier akzeptiert, blau = überall |
+| Zeile ok | Kästchen im Gutter, eines pro Ort der Zeile: das vordere gilt nur für den gezeigten Ort, ein Klick auf eines der anderen akzeptiert die Zeile überall. **Shift-Klick** markiert einen Bereich. Grün = hier akzeptiert, blau = überall |
 | Block / Gruppe / Flow ok | Button «Block ok», ✓-Button im Baum (beim Überfahren), «Ganzen Flow als ok markieren»; daneben «Block überall ok» / «Flow überall ok» für alle Orte auf einmal |
 | Kommentar | Sprechblase im Gutter (nur auf Zeilen im Diff), Ctrl+Enter sendet sofort an GitHub/GitLab |
 | Aufruf folgen | Farbige Bubble direkt um den Aufruf im Code (`② saveEvent`), Klick springt zum aufgerufenen Block; «← aufgerufen von …» im Block-Kopf; jede Verbindung hat ihre Farbe (gleich im Diagramm und in der Linie links) |

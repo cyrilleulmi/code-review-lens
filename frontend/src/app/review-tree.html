@@ -71,7 +71,7 @@
       <span class="spacer"></span>
       @if (p.total > 0) {
         @if (lv !== 'open') {
-          <app-icon name="check" [size]="13" class="okicon" [class.acc-all]="lv === 'all'"
+          <app-icon [name]="lv === 'all' ? 'checkAll' : 'check'" [size]="13" class="okicon" [class.acc-all]="lv === 'all'"
                     [title]="lv === 'all' ? t('überall akzeptiert') : t('hier akzeptiert, noch nicht an allen Orten')" />
         } @else {
           <span class="cnt">{{ p.ok }}/{{ p.total }}</span>

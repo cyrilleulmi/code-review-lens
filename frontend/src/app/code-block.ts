@@ -66,7 +66,6 @@ export interface InlineSlot {
 interface ShownBoxes {
   front: { on: boolean; title: string } | null;
   rest: (PlaceBox & { title: string })[];
-  readonly: boolean;
   all: boolean;
   completes: boolean;
 }
@@ -667,9 +666,8 @@ export class CodeBlock {
         return;
       }
       const n = b.rest.length + (b.front ? 1 : 0);
-      const action = !b.front ? (b.all ? t('Klick: Markierung an allen Orten entfernen') : t('Klick: an allen {n} Orten als ok markieren', { n }))
-        : b.readonly ? t('Zuerst hier akzeptieren – danach lässt sich die Zeile mit einem Klick überall akzeptieren')
-        : b.all ? t('Klick: an den anderen Orten wieder zurücknehmen') : t('Klick: an allen {n} Orten als ok markieren', { n });
+      const action = !b.all ? t('Klick: an allen {n} Orten als ok markieren', { n })
+        : b.front ? t('Klick: an den anderen Orten wieder zurücknehmen') : t('Klick: Markierung an allen Orten entfernen');
       result.set(i, {
         ...b,
         front: !b.front || !here ? null : {
@@ -754,15 +752,15 @@ export class CodeBlock {
   }
 
   /**
-   * A click on the boxes of a line. The front box accepts the line at this place (or takes that back); the other
-   * boxes (rest) - and every box in a view without a place - accept it everywhere, or take that step back.
-   * Shift-click does the same for the range since the last click.
+   * A click on the boxes of a line. The front box accepts the line at this place only (or takes that back); the
+   * other boxes (rest) - and every box in a view without a place - accept it at all places at once, or take the
+   * other places back. Shift-click does the same for the range since the last click.
    */
   protected toggleLine(index: number, event: MouseEvent, rest = false): void {
     const lines = this.lines();
     const line = lines[index];
     const boxes = this.boxes().get(index);
-    if (!line.own || !line.key || this.otherCommit(line) || !boxes || (rest && boxes.readonly)) {
+    if (!line.own || !line.key || this.otherCommit(line) || !boxes) {
       return;
     }
     const place = this.place();

@@ -441,16 +441,6 @@
   border: 0;
   background: none;
   cursor: pointer;
-
-  /* not yet: the line has to be accepted here first */
-  &.ro {
-    cursor: default;
-
-    .check:not(.on) {
-      border-style: dotted;
-      opacity: 0.7;
-    }
-  }
 }
 
 .half-note {
@@ -649,7 +639,7 @@ button.check {
   }
 
   &.completes:has(.front:not(.on):hover) .check,
-  &:has(.rest:not(.ro):hover) .check {
+  &:has(.rest:hover) .check {
     background: var(--ok-all);
     border-color: var(--ok-all);
     color: var(--on-ok-all);

@@ -157,7 +157,7 @@
                           </button>
                         }
                         @if (bx.rest.length) {
-                          <button type="button" class="rest" [class.ro]="bx.readonly" [attr.aria-disabled]="bx.readonly" [attr.aria-pressed]="bx.all"
+                          <button type="button" class="rest" [attr.aria-pressed]="bx.all"
                                   [attr.aria-label]="t('Zeile an allen Orten akzeptieren')" (click)="toggleLine(i, $event, true)">
                             @for (b of bx.rest; track b.id) {
                               <span class="check small" [class.on]="b.on" [title]="b.title"><app-icon name="check" [size]="8" /></span>
