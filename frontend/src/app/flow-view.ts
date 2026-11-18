@@ -11,14 +11,15 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from './api';
+import { EdgeRunStatus, Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from './api';
 import { CodeBlock, flashLine } from './code-block';
+import { classLinks, classOf, groupByClass, inFileOrder, intersect, weakest } from './flow-classes';
 import { outsideBranch, sameSet, withoutAreas } from './flow-focus';
 import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
 import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
-import { ReviewStore } from './review.store';
+import { FlowLevel, ReviewStore } from './review.store';
 import { serverText, t } from './i18n';
 import { diffSides } from './split-diff';
 
@@ -35,8 +36,59 @@ interface Node {
   caller: string | null;
   /** labels of the removed areas between caller and step (empty = direct call) */
   bridged: string[];
+}
+
+/** A box of the diagram: one step (method level) or a class with its steps of the flow (class level). */
+interface Box {
+  /** segment id of the step, or the key of the class */
+  key: string;
+  /** segment ids of its steps, in call order */
+  ids: string[];
+  /** number of its (first) step */
+  no: number;
+  name: string;
+  /** symbol kind for the badge */
+  kind: string | null;
+  /** second line: where the step is, or the methods of the class */
+  hint: string;
+  area: string | null;
+  quick: boolean;
+  depth: number;
   x: number;
   y: number;
+}
+
+/** A connection of the diagram between two boxes (keys), with the steps at its ends for the highlighting. */
+interface Link {
+  from: string;
+  to: string;
+  ends: string[];
+  /** colour index 1..8 */
+  c: number;
+  http: boolean;
+  run: EdgeRunStatus | null;
+  both: boolean;
+  /** around removed areas */
+  bridged: boolean;
+  title: string;
+}
+
+/** What the code shows as one card: a step, or a class with its steps in file order inside a frame. */
+interface Unit {
+  key: string;
+  /** a class: frame with a header around the blocks */
+  framed: boolean;
+  name: string;
+  /** file names of a class */
+  files: string;
+  area: string | null;
+  depth: number;
+  /** the steps as they are laid out in the card */
+  members: Node[];
+  /** their segment ids */
+  ids: string[];
+  /** a block of the card is shown side by side: the card needs more width */
+  wide: boolean;
 }
 
 interface Connector {
@@ -59,11 +111,17 @@ const SPLIT_INDENT = 14;
 /** Horizontal distance between two connector lanes in the left margin. */
 const LANE = 11;
 const MIN_GUTTER = 32;
+/** From weakest to strongest: a class / a connection between classes shows the weakest status of its parts. */
+const STEP_RUNS: StepRunStatus[] = ['none', 'mocked', 'tested'];
+const EDGE_RUNS: EdgeRunStatus[] = ['none', 'partial', 'separate', 'tested'];
 
 /**
  * A data flow: a call-tree diagram on top, below the code of each step in call order. Call sites inside
  * the code are connected to the step they call with lines in the left margin. Steps can be hidden (one by one,
  * or all outside one branch), finished steps hidden, or the steps walked through one by one.
+ *
+ * Diagram and code each have a level: methods (one box / card per step) or classes (the steps of a class combined).
+ * The code follows the level of the diagram unless it is given its own.
  */
 @Component({
   selector: 'app-flow-view',
@@ -84,6 +142,7 @@ export class FlowView {
   protected readonly gutter = signal(MIN_GUTTER);
   protected readonly markers = Array.from({ length: EDGE_COLORS }, (_, i) => i + 1);
   protected readonly areaColor = areaColor;
+  protected readonly areaLabel = areaLabel;
 
   /** Every connection of the flow keeps one colour: "from>to" -> CSS colour. */
   protected readonly edgeColors = computed(() => {
@@ -91,10 +150,17 @@ export class FlowView {
     this.flow().edges.forEach((e, i) => (map[e.from + '>' + e.to] = edgeColor(i)));
     return map;
   });
-  protected readonly hovered = signal<string | null>(null);
+  /** The steps under the pointer (a step, or all steps of a class): their connections are emphasised. */
+  protected readonly hovered = signal<ReadonlySet<string> | null>(null);
   /** Side by side (old | new) and a step has both sides: the blocks are less indented, see SPLIT_INDENT. */
-  protected readonly split = computed(() => this.store.diffMode() === 'split' && this.nodes().some((n) => diffSides(n.segment.lines) === 'both'));
+  protected readonly split = computed(() => this.store.diffMode() === 'split' && this.nodes().some((n) => splits(n.segment)));
   protected readonly indent = computed(() => (this.split() ? SPLIT_INDENT : INDENT));
+
+  /** Level of the diagram and of the code (see ReviewStore.flowLevel / flowCodeLevel). */
+  protected readonly level = this.store.flowLevel;
+  protected readonly codeLevel = this.store.flowCodeLevel;
+  /** The code has no level of its own: it follows the diagram. */
+  protected readonly codeFollows = computed(() => this.store.flowCodeOverride() == null);
 
   /** Mock-Grenzen: what the tests really execute, per step (segment id) and per edge ("from>to"). */
   /** What the tests run in this flow; nothing while the test enrichments are switched off. */
@@ -113,14 +179,14 @@ export class FlowView {
   protected readonly place = computed(() => 'flows/' + this.flow().id);
   /** Steps hidden by the user (eye / focus). Reset when another flow is shown. */
   protected readonly hidden = linkedSignal<string, ReadonlySet<string>>({ source: () => this.flow().id, computation: () => new Set() });
-  /** Step-by-step mode: index of the only step shown, null = off. */
-  protected readonly stepIndex = linkedSignal<string, number | null>({ source: () => this.flow().id, computation: () => null });
+  /** Step-by-step mode: index of the only card shown (units()), null = off. Reset with the flow and the level of the code. */
+  protected readonly stepIndex = linkedSignal<string, number | null>({ source: () => this.flow().id + '|' + this.codeLevel(), computation: () => null });
   protected readonly hideDone = signal(false);
-  /** Step whose focus button was used last; it shows as focused while the hidden steps are still exactly the rest. */
-  private readonly lastFocus = linkedSignal<string, string | null>({ source: () => this.flow().id, computation: () => null });
+  /** Box whose focus button was used last; it shows as focused while the hidden steps are still exactly the rest. */
+  private readonly lastFocus = linkedSignal<string, { key: string; ids: string[] } | null>({ source: () => this.flow().id, computation: () => null });
   protected readonly focused = computed(() => {
-    const id = this.lastFocus();
-    return id && sameSet(this.hidden(), outsideBranch(this.flow().steps, this.flow().edges, id)) ? id : null;
+    const last = this.lastFocus();
+    return last && sameSet(this.hidden(), this.outside(last.ids)) ? last.key : null;
   });
 
   /** Every step of the flow with its segment and area, in flow order (also those of removed areas). */
@@ -152,23 +218,96 @@ export class FlowView {
 
   /** The steps shown in diagram and code: all but those of removed areas, bridged and moved up to fill the gaps. */
   protected readonly nodes = computed<Node[]>(() => {
-    return withoutAreas(this.allSteps(), this.store.hiddenAreas()).map((s, row) => ({
+    return withoutAreas(this.allSteps(), this.store.hiddenAreas()).map((s) => ({
       ...s,
       bridged: s.skipped.map((area) => (area ? areaLabel(area) : t('ohne Schicht'))),
-      x: s.depth * (NODE_W + COL_GAP),
-      y: row * (NODE_H + ROW_GAP),
     }));
   });
 
-  protected readonly diagram = computed(() => {
+  /** The steps combined by class, in the order the classes are first reached. */
+  private readonly classes = computed(() => {
+    const segs = this.store.segments();
+    const components = this.store.componentBySegment();
+    return groupByClass(this.nodes(), (id) => classOf(segs.get(id)!, components.get(id)));
+  });
+
+  /** The boxes of the diagram: a step each, or a class each. */
+  protected readonly boxes = computed<Box[]>(() => {
+    const at = (depth: number, row: number) => ({ depth, x: depth * (NODE_W + COL_GAP), y: row * (NODE_H + ROW_GAP) });
+    if (this.level() === 'class') {
+      return this.classes().map((g, row) => {
+        const first = g.members[0];
+        const names = g.members.map((m) => this.nodeName(m.segment));
+        return {
+          key: g.key, ids: g.members.map((m) => m.step.segmentId), no: first.no, name: g.name, kind: 'class',
+          hint: names.join(', '), area: this.areaOf(first.segment), quick: g.members.every((m) => m.segment.category === 'quick-wins'),
+          ...at(g.depth, row),
+        };
+      });
+    }
+    return this.nodes().map((n, row) => ({
+      key: n.step.segmentId, ids: [n.step.segmentId], no: n.no, name: this.nodeName(n.segment), kind: n.segment.symbolKind,
+      hint: this.nodeHint(n.segment), area: this.areaOf(n.segment), quick: n.segment.category === 'quick-wins',
+      ...at(n.depth, row),
+    }));
+  });
+
+  /** The connections between the steps shown: the calls of the flow, and dashed ones around removed areas. */
+  private readonly stepLinks = computed<Link[]>(() => {
     const nodes = this.nodes();
-    const byId = new Map(nodes.map((n) => [n.step.segmentId, n]));
-    const edges = this.flow().edges
+    const shown = new Set(nodes.map((n) => n.step.segmentId));
+    const links: Link[] = this.flow().edges
       .map((e, i) => ({ e, c: edgeColorIndex(i) }))
-      .filter(({ e }) => byId.has(e.from) && byId.has(e.to))
+      .filter(({ e }) => shown.has(e.from) && shown.has(e.to))
       .map(({ e, c }) => {
-        const a = byId.get(e.from)!;
-        const b = byId.get(e.to)!;
+        const http = e.kind === 'http';
+        const run = this.runs().edges.get(e.from + '>' + e.to);
+        const contract = http ? contractLines(run, e.via, this.store.testName()) : [];
+        const title = [http ? 'HTTP ' + e.via : e.via, ...(run ? [edgeTitle(run, this.store.testName())] : []), ...contract].join('\n');
+        return { from: e.from, to: e.to, ends: [e.from, e.to], c, http, run: run?.status ?? null, both: http && bothSides(run), bridged: false, title };
+      });
+    // around removed areas: from the caller shown to the step, dashed, in the colour of the call into the step
+    const direct = new Set(links.map((l) => l.from + '>' + l.to));
+    for (const n of nodes) {
+      if (!n.bridged.length || !n.caller || direct.has(n.caller + '>' + n.step.segmentId)) {
+        continue;
+      }
+      const into = this.flow().edges.findIndex((e) => e.to === n.step.segmentId && e.from === n.step.parentSegmentId);
+      links.push({
+        from: n.caller, to: n.step.segmentId, ends: [n.caller, n.step.segmentId], c: edgeColorIndex(Math.max(0, into)), http: false, run: null,
+        both: false, bridged: true, title: t('Über entfernte Bereiche: {areas}', { areas: n.bridged.join(', ') }),
+      });
+    }
+    return links;
+  });
+
+  /** The connections of the diagram at its level: between steps, or combined between classes. */
+  private readonly links = computed<Link[]>(() => {
+    const links = this.stepLinks();
+    if (this.level() !== 'class') {
+      return links;
+    }
+    const keyOf = new Map(this.classes().flatMap((g) => g.members.map((m) => [m.step.segmentId, g.key] as const)));
+    const name = (id: string) => shortName(this.store.segments().get(id)?.symbol ?? id);
+    return classLinks(links, (id) => keyOf.get(id)).map((l) => {
+      const http = l.edges.filter((e) => e.http);
+      return {
+        from: l.from, to: l.to, ends: [...new Set(l.edges.flatMap((e) => e.ends))], c: l.edges[0].c, http: http.length > 0,
+        run: weakest(l.edges.map((e) => e.run), EDGE_RUNS), both: http.length > 0 && http.every((e) => e.both),
+        bridged: l.edges.every((e) => e.bridged),
+        title: l.edges.map((e) => `${name(e.from)} → ${name(e.to)}\n${e.title}`).join('\n\n'),
+      };
+    });
+  });
+
+  protected readonly diagram = computed(() => {
+    const boxes = this.boxes();
+    const byKey = new Map(boxes.map((b) => [b.key, b]));
+    const edges = this.links()
+      .filter((l) => byKey.has(l.from) && byKey.has(l.to))
+      .map((l) => {
+        const a = byKey.get(l.from)!;
+        const b = byKey.get(l.to)!;
         const x1 = a.x + NODE_W;
         const y1 = a.y + NODE_H / 2;
         const x2 = b.x;
@@ -177,40 +316,30 @@ export class FlowView {
         const d = back
           ? `M ${x1} ${y1} C ${x1 + 40} ${y1}, ${x1 + 40} ${y2}, ${b.x + NODE_W} ${y2}`
           : `M ${x1} ${y1} C ${x1 + COL_GAP / 2} ${y1}, ${x2 - COL_GAP / 2} ${y2}, ${x2 - 4} ${y2}`;
-        const http = e.kind === 'http';
-        const run = this.runs().edges.get(e.from + '>' + e.to);
-        const contract = http ? contractLines(run, e.via, this.store.testName()) : [];
-        const title = [http ? 'HTTP ' + e.via : e.via, ...(run ? [edgeTitle(run, this.store.testName())] : []), ...contract].join('\n');
+        return { ...l, d, back, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 4 };
+      });
+    const width = Math.max(...boxes.map((b) => b.x + NODE_W), 0) + 48;
+    const height = Math.max(...boxes.map((b) => b.y + NODE_H), 0) + 4;
+    return { edges, width, height, nodeW: NODE_W, nodeH: NODE_H };
+  });
+
+  /** The cards of the code: a step each, or a class each with its steps in file order. */
+  protected readonly units = computed<Unit[]>(() => {
+    const split = this.store.diffMode() === 'split';
+    if (this.codeLevel() === 'class') {
+      return this.classes().map((g) => {
+        const members = inFileOrder(g.members);
+        const files = [...new Set(members.map((m) => this.fileOf(m.segment)))];
         return {
-          d, from: e.from, to: e.to, back, http, via: e.via, c, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 4, run: run?.status ?? null,
-          both: http && bothSides(run), title, bridged: false,
+          key: g.key, framed: true, name: g.name, files: files.join(' · '), area: this.areaOf(g.members[0].segment), depth: g.depth,
+          members, ids: members.map((m) => m.step.segmentId), wide: split && members.some((m) => splits(m.segment)),
         };
       });
-    // around removed areas: from the caller shown to the step, dashed, in the colour of the call into the step
-    const direct = new Set(edges.map((e) => e.from + '>' + e.to));
-    for (const n of nodes) {
-      if (!n.bridged.length || !n.caller || direct.has(n.caller + '>' + n.step.segmentId)) {
-        continue;
-      }
-      const a = byId.get(n.caller)!;
-      const x1 = a.x + NODE_W;
-      const y1 = a.y + NODE_H / 2;
-      const x2 = n.x;
-      const y2 = n.y + NODE_H / 2;
-      const back = x2 <= x1;
-      const d = back
-        ? `M ${x1} ${y1} C ${x1 + 40} ${y1}, ${x1 + 40} ${y2}, ${n.x + NODE_W} ${y2}`
-        : `M ${x1} ${y1} C ${x1 + COL_GAP / 2} ${y1}, ${x2 - COL_GAP / 2} ${y2}, ${x2 - 4} ${y2}`;
-      const into = this.flow().edges.findIndex((e) => e.to === n.step.segmentId && e.from === n.step.parentSegmentId);
-      edges.push({
-        d, from: n.caller, to: n.step.segmentId, back, http: false, via: '', c: edgeColorIndex(Math.max(0, into)),
-        lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 4, run: null, both: false, bridged: true,
-        title: t('Über entfernte Bereiche: {areas}', { areas: n.bridged.join(', ') }),
-      });
     }
-    const width = Math.max(...nodes.map((n) => n.x + NODE_W), 0) + 48;
-    const height = Math.max(...nodes.map((n) => n.y + NODE_H), 0) + 4;
-    return { edges, width, height, nodeW: NODE_W, nodeH: NODE_H };
+    return this.nodes().map((n) => ({
+      key: n.step.segmentId, framed: false, name: '', files: '', area: null, depth: n.depth, members: [n], ids: [n.step.segmentId],
+      wide: split && splits(n.segment),
+    }));
   });
 
   protected readonly stepOf = computed(() => {
@@ -225,14 +354,13 @@ export class FlowView {
 
   /** Segment ids whose code is shown. */
   protected readonly visible = computed<ReadonlySet<string>>(() => {
-    const nodes = this.nodes();
     const i = this.stepIndex();
     if (i != null) {
-      return new Set(nodes[i] ? [nodes[i].step.segmentId] : []);
+      return new Set(this.units()[i]?.ids ?? []);
     }
     const hidden = this.hidden();
     const hideDone = this.hideDone();
-    return new Set(nodes.map((n) => n.step.segmentId)
+    return new Set(this.nodes().map((n) => n.step.segmentId)
       .filter((id) => !hidden.has(id) && !(hideDone && this.isDone(id)) && this.store.inCommitSegment(id)));
   });
 
@@ -241,9 +369,10 @@ export class FlowView {
   constructor() {
     // Lay out the connectors once the cards are rendered (and again when they change size).
     afterRenderEffect((onCleanup) => {
-      this.nodes();
+      this.units();
       this.visible();
       this.gutter();
+      this.indent();
       this.store.ok();
       this.store.okAt();
       this.store.comments();
@@ -265,10 +394,39 @@ export class FlowView {
     afterRenderEffect(() => {
       const target = this.store.focusSegment();
       this.visible();
+      this.units();
       if (target && this.stepOf()[target] && this.scrollIntoView(target)) {
         this.store.focusSegment.set(null);
       }
     });
+  }
+
+  // ------------------------------------------------------------------ levels
+
+  /** Level of the diagram; the code follows unless it has its own level. */
+  protected setLevel(level: FlowLevel): void {
+    this.store.setFlowLevel(level);
+  }
+
+  /** An own level for the code, whatever the diagram shows. */
+  protected setCodeLevel(level: FlowLevel): void {
+    this.store.setFlowCodeLevel(level);
+  }
+
+  /** Lets the code follow the diagram again, or pins the level it has now. */
+  protected toggleCodeFollows(): void {
+    this.store.setFlowCodeLevel(this.codeFollows() ? this.codeLevel() : null);
+  }
+
+  // ------------------------------------------------------------------ boxes of the diagram
+
+  protected isHot(ids: readonly string[]): boolean {
+    const hovered = this.hovered();
+    return !!hovered && ids.some((id) => hovered.has(id));
+  }
+
+  protected hover(ids: readonly string[] | null): void {
+    this.hovered.set(ids ? new Set(ids) : null);
   }
 
   protected isDone(id: string): boolean {
@@ -276,28 +434,98 @@ export class FlowView {
     return p.total > 0 && p.ok === p.total;
   }
 
-  protected toggleHidden(id: string, event: Event): void {
+  protected progressOf(ids: readonly string[]): { ok: number; total: number } {
+    return this.store.progressOf(ids.map((segmentId) => ({ segmentId, place: this.place() })));
+  }
+
+  /** None of the steps is shown in the code. */
+  protected isOff(ids: readonly string[]): boolean {
+    return !ids.some((id) => this.visible().has(id));
+  }
+
+  /** All steps are hidden by the user. */
+  protected allHidden(ids: readonly string[]): boolean {
+    return ids.every((id) => this.hidden().has(id));
+  }
+
+  /** None of the steps is changed by the selected commit. */
+  protected otherCommit(ids: readonly string[]): boolean {
+    return !ids.some((id) => this.store.inCommitSegment(id));
+  }
+
+  /** The card shown in step-by-step mode holds one of the steps. */
+  protected isCurrent(ids: readonly string[]): boolean {
+    const i = this.stepIndex();
+    const current = i == null ? null : this.units()[i];
+    return !!current && ids.some((id) => current.ids.includes(id));
+  }
+
+  /** Hides the steps of a box, or shows them again when all are hidden. */
+  protected toggleHidden(ids: readonly string[], event: Event): void {
     event.stopPropagation();
     const next = new Set(this.hidden());
-    next.has(id) ? next.delete(id) : next.add(id);
+    const show = this.allHidden(ids);
+    ids.forEach((id) => (show ? next.delete(id) : next.add(id)));
     this.hidden.set(next);
     this.stepIndex.set(null);
   }
 
+  /** The steps outside the branches of the given steps (what they call, and what those call). */
+  private outside(ids: readonly string[]): Set<string> {
+    return intersect(ids.map((id) => outsideBranch(this.flow().steps, this.flow().edges, id)));
+  }
+
   /**
-   * Hides every step outside this one's branch (what it calls, and what those call), exactly as if each had been
-   * hidden with its eye: they stay in the diagram and can be shown again one by one. Again on the focused step: all back.
+   * Hides every step outside this box's branch (what it calls, and what those call), exactly as if each had been
+   * hidden with its eye: they stay in the diagram and can be shown again one by one. Again on the focused box: all back.
    */
-  protected focusOn(id: string, event: Event): void {
+  protected focusOn(box: { key: string; ids: string[] }, event: Event): void {
     event.stopPropagation();
-    if (this.focused() === id) {
+    if (this.focused() === box.key) {
       this.hidden.set(new Set());
     } else {
-      this.hidden.set(outsideBranch(this.flow().steps, this.flow().edges, id));
-      this.lastFocus.set(id);
+      this.hidden.set(this.outside(box.ids));
+      this.lastFocus.set({ key: box.key, ids: box.ids });
     }
     this.stepIndex.set(null);
   }
+
+  /** Jumps to the code of a box: to the step, or to the class (its first step in the card or in call order). */
+  protected openBox(box: Box): void {
+    if (box.ids.length > 1) {
+      // a class: bring back all its steps, then go to the top of its card (or to its first call)
+      const next = new Set(this.hidden());
+      box.ids.forEach((id) => next.delete(id));
+      this.hidden.set(next);
+    }
+    const unit = this.units().find((u) => u.framed && u.key === box.key);
+    this.scrollTo(unit ? unit.ids[0] : box.ids[0]);
+  }
+
+  /** Run status of the steps of a box (Mock-Grenzen): the weakest; null without flow coverage (older analyses). */
+  protected runOf(ids: readonly string[]): StepRunStatus | null {
+    return weakest(ids.map((id) => this.runs().steps.get(id)?.status), STEP_RUNS);
+  }
+
+  /** Tooltip of a box: which tests run it for real, which only mock it, and the mock warnings on it. */
+  protected runTitle(ids: readonly string[]): string {
+    const title = (id: string) => stepTitle(this.runs().steps.get(id), this.store.testName(), this.store.mockWarningsBySegment().get(id) ?? []);
+    if (ids.length === 1) {
+      return title(ids[0]);
+    }
+    const segs = this.store.segments();
+    return ids.map((id) => {
+      const detail = title(id);
+      return `${this.stepOf()[id] ?? ''} ${this.nodeName(segs.get(id)!)}${detail ? '\n' + detail : ''}`;
+    }).join(this.hasRuns() ? '\n\n' : '\n');
+  }
+
+  /** A changed test stubs a function of the box (mock warning). */
+  protected mockWarned(ids: readonly string[]): boolean {
+    return this.store.testInfo() && ids.some((id) => this.store.mockWarningsBySegment().has(id));
+  }
+
+  // ------------------------------------------------------------------ areas
 
   /** Takes an area out of the overview (diagram and code) or brings it back; the last area left stays. */
   protected toggleArea(id: string): void {
@@ -322,6 +550,8 @@ export class FlowView {
     return this.areas().every((a) => a.id === id || a.removed);
   }
 
+  // ------------------------------------------------------------------ focus tools
+
   protected showAll(): void {
     this.hidden.set(new Set());
     this.hideDone.set(false);
@@ -329,23 +559,22 @@ export class FlowView {
   }
 
   protected startSteps(): void {
-    const nodes = this.nodes();
-    const firstOpen = nodes.findIndex((n) => !this.isDone(n.step.segmentId));
+    const firstOpen = this.units().findIndex((u) => u.ids.some((id) => !this.isDone(id)));
     this.stepIndex.set(Math.max(0, firstOpen));
   }
 
   protected step(delta: number): void {
     const i = this.stepIndex() ?? 0;
-    this.stepIndex.set(Math.min(this.nodes().length - 1, Math.max(0, i + delta)));
+    this.stepIndex.set(Math.min(this.units().length - 1, Math.max(0, i + delta)));
   }
 
-  /** Marks the current step as ok (here) and moves on to the next one. */
+  /** Marks the current card (a step, or all steps of a class) as ok here and moves on to the next one. */
   protected okAndNext(): void {
-    const node = this.nodes()[this.stepIndex() ?? 0];
-    if (!node) return;
-    const lines = this.store.linesOf([{ segmentId: node.step.segmentId, place: this.place() }]);
-    this.store.mark(lines, true, `segment:${node.step.segmentId}`);
-    if ((this.stepIndex() ?? 0) < this.nodes().length - 1) {
+    const unit = this.units()[this.stepIndex() ?? 0];
+    if (!unit) return;
+    const lines = this.store.linesOf(unit.ids.map((segmentId) => ({ segmentId, place: this.place() })));
+    this.store.mark(lines, true, unit.framed ? `class:${unit.key}` : `segment:${unit.key}`);
+    if ((this.stepIndex() ?? 0) < this.units().length - 1) {
       this.step(1);
     } else {
       this.stepIndex.set(null);
@@ -353,20 +582,13 @@ export class FlowView {
     }
   }
 
-  /** Run status of a step (Mock-Grenzen), null without flow coverage (older analyses). */
-  protected runOf(id: string): StepRunStatus | null {
-    return this.runs().steps.get(id)?.status ?? null;
+  /** Marks all steps of a class as ok here, or takes the marks back when all were ok. */
+  protected markUnit(unit: Unit, event: Event): void {
+    event.stopPropagation();
+    this.store.toggle(this.store.linesOf(unit.ids.map((segmentId) => ({ segmentId, place: this.place() }))), `class:${unit.key}`);
   }
 
-  /** Tooltip of a step: which tests run it for real, which only mock it, and the mock warnings on it. */
-  protected runTitle(id: string): string {
-    return stepTitle(this.runs().steps.get(id), this.store.testName(), this.store.mockWarningsBySegment().get(id) ?? []);
-  }
-
-  /** A changed test stubs this step's function (mock warning). */
-  protected mockWarned(id: string): boolean {
-    return this.store.testInfo() && this.store.mockWarningsBySegment().has(id);
-  }
+  // ------------------------------------------------------------------ steps
 
   protected calledBy(node: Node): string | null {
     const parent = node.step.parentSegmentId;
@@ -381,10 +603,6 @@ export class FlowView {
       + (edge?.line ? ' · ' + t('Zeile {line}', { line: edge.line }) : '');
   }
 
-  protected shortName(name: string | null): string {
-    return shortName(name ?? '');
-  }
-
   /** Method/function name only; the class goes into the second line. */
   protected nodeName(seg: Segment): string {
     const name = seg.symbol ?? this.fileOf(seg);
@@ -394,10 +612,6 @@ export class FlowView {
   /** Layer of a step (frontend, api, domain, ...) for the coloured stripe and tag. */
   protected areaOf(seg: Segment): string | null {
     return areaOfSegment(seg, this.store.areaBySegment());
-  }
-
-  protected areaText(seg: Segment): string {
-    return areaLabel(this.areaOf(seg));
   }
 
   protected calledByColor(node: Node): string | null {
@@ -432,14 +646,13 @@ export class FlowView {
       next.delete(removedStep.area);
       this.store.hiddenAreas.set(next);
     }
-    const index = this.nodes().findIndex((n) => n.step.segmentId === segmentId);
-    if (index < 0) {
+    if (!this.nodes().some((n) => n.step.segmentId === segmentId)) {
       this.store.reveal(segmentId);
       return;
     }
     if (!this.visible().has(segmentId)) {
       if (this.stepIndex() != null) {
-        this.stepIndex.set(index);
+        this.stepIndex.set(this.units().findIndex((u) => u.ids.includes(segmentId)));
       } else {
         const next = new Set(this.hidden());
         next.delete(segmentId);
@@ -457,7 +670,9 @@ export class FlowView {
     if (!el) {
       return false;
     }
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // the first block of a class card: show the head of the class too
+    const card = el.closest<HTMLElement>('.class-card');
+    (card && card.querySelector('app-code-block') === el ? card : el).scrollIntoView({ behavior: 'smooth', block: 'start' });
     el.classList.remove('flash');
     void el.offsetWidth;
     el.classList.add('flash');
@@ -475,7 +690,6 @@ export class FlowView {
     }
   }
 
-  /** Draws, in the left margin, one line per call: from the call-site line to the header of the called step. */
   /**
    * Draws, in the left margin, one line per call: from the call-site line to the header of the called step.
    * Every line gets its own lane (LANE px apart); lanes are reused where lines do not overlap vertically.
@@ -550,6 +764,11 @@ export function contentSize(host: HTMLElement): { width: number; height: number 
     height = Math.max(height, child.offsetTop + child.offsetHeight);
   }
   return { width, height };
+}
+
+/** The block of a segment is shown side by side when that view is on (it has removed and added lines). */
+function splits(seg: Segment): boolean {
+  return diffSides(seg.lines) === 'both';
 }
 
 function shortName(name: string): string {

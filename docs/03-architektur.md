@@ -77,7 +77,9 @@ Angular 22, standalone Komponenten, Signals, zoneless, `OnPush`.
 | `commit-list.ts` | Commits des PRs mit Fortschritt; Klick filtert alle Ansichten auf einen Commit, ✓ markiert seine Zeilen (Review-Fenster und Übersicht). |
 | `overview.*` | PR-Übersicht: Fortschritt, vorgeschlagene Reihenfolge, Beschreibung, allgemeine Kommentare, letzte Markierungen. |
 | `group-view.ts` | Liste von Code-Blöcken (Kategorie, Gruppe, Datei) mit Fokus-Leiste (einzeln durchgehen, alle ein-/ausklappen). |
-| `flow-view.*` | Aufrufbaum-Diagramm (SVG) + Code-Blöcke in Aufrufreihenfolge, eingerückt nach Tiefe, mit Verbindungslinien von der Aufrufzeile zum aufgerufenen Block. Schritte aus-/einblenden (einzeln oder alle ausserhalb eines Zweigs), Erledigte ausblenden, Schritt für Schritt. |
+| `flow-view.*` | Aufrufbaum-Diagramm (SVG) + Code-Blöcke in Aufrufreihenfolge, eingerückt nach Tiefe, mit Verbindungslinien von der Aufrufzeile zum aufgerufenen Block. Schritte aus-/einblenden (einzeln oder alle ausserhalb eines Zweigs), Erledigte ausblenden, Schritt für Schritt. Diagramm und Code je auf Methoden- oder Klassenebene (Umschalter; der Code folgt dem Diagramm, bis er eine eigene Ebene bekommt). |
+| `flow-classes.ts` | Klassenebene eines Flows: Schritte nach Klasse (Komponente, sonst Datei) gruppieren, Tiefe der Klassen, Verbindungen zwischen Klassen zusammenfassen, Reihenfolge der Methoden in der Klassenkarte. |
+| `split-diff.ts` | Seite-an-Seite-Ansicht der Code-Blöcke: welche entfernte Zeile neben welcher neuen steht und ob ein Block überhaupt zwei Seiten hat. |
 | `acceptance.ts` | Spiegel von `LineAcceptance.java`: Status einer Zeile pro Ort (offen / halb akzeptiert / akzeptiert) und wo sie sonst schon akzeptiert ist. Die beiden müssen gleich bleiben (je ein Test pro Seite). |
 | `look.ts` | Farben und Bezeichnungen für Schichten (Frontend, API, Domäne …), Sprachen und Verbindungen; die Farbwerte selbst sind Tokens in `styles.scss`. |
 | `component-diagram.ts` | Komponentendiagramm der Übersicht: Spalten nach Schicht, Aufruf- und REST-Kanten, Fokus pro Komponente, Tests/isolierte ein-/ausblenden. |

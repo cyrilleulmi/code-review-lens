@@ -188,6 +188,9 @@
   cursor: pointer;
   padding: 2px 4px;
   border-radius: 4px;
+  /* a narrow block (deep in a flow, inside a class card) cuts the caller, not the progress and the ok button */
+  min-width: 0;
+  overflow: hidden;
 
   &:hover {
     background: var(--bg-hover);
@@ -201,6 +204,12 @@
 .hint {
   color: var(--fg-dim);
   font-size: 11px;
+  flex: none;
+}
+
+.count,
+.ok-btn {
+  flex: none;
 }
 
 .count {

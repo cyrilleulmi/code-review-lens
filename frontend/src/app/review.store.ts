@@ -6,6 +6,7 @@ import {
   Comment,
   Commit,
   Commits,
+  Component,
   LineMark,
   LogEntry,
   Me,
@@ -68,6 +69,10 @@ const SEP = '\u0000';
 /** How code blocks show a diff: in one column or side by side. */
 export type DiffMode = 'unified' | 'split';
 
+/** What a data flow shows as one unit: single methods / functions, or whole classes with their methods of the flow. */
+export type FlowLevel = 'method' | 'class';
+const FLOW_LEVELS = ['method', 'class'] as const;
+
 /** Commit filter value for "new or changed since my last review" (also in the URL: …/c/since-review). */
 export const SINCE_REVIEW = 'since-review';
 
@@ -123,6 +128,12 @@ export class ReviewStore {
    * code left and new code right. Stored per browser.
    */
   readonly diffMode = signal<DiffMode>(readChoice('scr.diffMode', ['unified', 'split'] as const) ?? 'unified');
+  /** Level of the flow diagrams: one box per method / function, or one per class. Stored per browser. */
+  readonly flowLevel = signal<FlowLevel>(readChoice('scr.flowLevel', FLOW_LEVELS) ?? 'method');
+  /** Own level for the code of the flows; null = the code follows the diagram (the default). Stored per browser. */
+  readonly flowCodeOverride = signal<FlowLevel | null>(readChoice('scr.flowCodeLevel', FLOW_LEVELS));
+  /** Level of the code of the flows: one card per method / function, or one per class. */
+  readonly flowCodeLevel = computed(() => this.flowCodeOverride() ?? this.flowLevel());
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
   readonly blames = signal<ReadonlyMap<string, Blame | 'loading' | null>>(new Map());
   /** commit from the URL, applied once the commits are loaded */
@@ -295,6 +306,15 @@ export class ReviewStore {
     const map = new Map<string, string>();
     for (const c of this.bundle()?.analysis.components ?? []) {
       c.segmentIds.forEach((id) => map.set(id, c.area));
+    }
+    return map;
+  });
+
+  /** Component (class, module) of each segment. */
+  readonly componentBySegment = computed(() => {
+    const map = new Map<string, Component>();
+    for (const c of this.bundle()?.analysis.components ?? []) {
+      c.segmentIds.forEach((id) => map.set(id, c));
     }
     return map;
   });
@@ -649,6 +669,17 @@ export class ReviewStore {
   setDiffMode(mode: DiffMode): void {
     this.diffMode.set(mode);
     writeChoice('scr.diffMode', mode);
+  }
+
+  setFlowLevel(level: FlowLevel): void {
+    this.flowLevel.set(level);
+    writeChoice('scr.flowLevel', level);
+  }
+
+  /** Sets an own level for the code of the flows; null lets it follow the diagram again. */
+  setFlowCodeLevel(level: FlowLevel | null): void {
+    this.flowCodeOverride.set(level);
+    writeChoice('scr.flowCodeLevel', level);
   }
 
   /** Fetches the blame of a file once (cached by the backend per head commit). */

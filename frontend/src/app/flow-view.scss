@@ -133,15 +133,126 @@
   /* only the editor scrolls vertically: a scrolled-away inside hid the blocks of the next flow */
   overflow-y: hidden;
 
-  > app-code-block,
-  > .hidden-step {
+  /* a card: one step, or a class with its steps */
+  > .unit {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     flex: none;
     min-width: 760px;
   }
 
   /* side by side: room for the old and the new half */
-  > app-code-block.split-view {
+  > .unit.wide {
     min-width: 1040px;
+  }
+}
+
+/* ------------------------------------------------------------- levels: methods or classes, for diagram and code */
+
+.level-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 12px;
+
+  .lbl {
+    color: var(--fg-muted);
+    font-weight: 600;
+  }
+
+  .hint {
+    color: var(--fg-dim);
+    font-size: 11.5px;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+}
+
+/* class level of the diagram: a class box is a little heavier than a step */
+.node.cls .name {
+  font-weight: 600;
+}
+
+/* class level of the code: the steps of a class in one frame, in file order */
+.class-card {
+  padding: 0 8px 8px;
+  border: 1px solid var(--border-strong);
+  border-left: 4px solid var(--area, var(--border-strong));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--area, transparent) 5%, var(--bg-panel-2));
+}
+
+.class-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 2px 2px 0;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+
+  .cname {
+    font: 600 13px var(--font-code);
+    color: var(--fg);
+  }
+
+  .files {
+    color: var(--fg-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 40px;
+  }
+
+  .count-steps {
+    color: var(--fg-muted);
+    font-size: 11.5px;
+    flex: none;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .count {
+    color: var(--fg-muted);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+
+    &.complete {
+      color: var(--ok);
+    }
+  }
+}
+
+.ok-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--bg-editor);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--ok);
+    color: var(--ok);
+  }
+
+  &.on {
+    background: var(--ok);
+    border-color: var(--ok);
+    color: var(--on-ok);
   }
 }
 
