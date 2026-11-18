@@ -147,8 +147,8 @@ const LOOSE_GAP = 22;
       background: color-mix(in srgb, var(--area) 7%, var(--bg-editor));
       border: 1px solid var(--node-border); border-left: 4px solid var(--area); border-radius: 8px; cursor: pointer; transition: border-color 0.15s, opacity 0.15s; }
     .node:hover { border-color: var(--accent); }
-    /* counted without a place: done means accepted everywhere */
-    .node.done { border-color: var(--ok-all-border); background: var(--ok-all-head); }
+    /* accepted (counted without a place: everywhere): the outline in the accept colour, the left edge stays the layer's */
+    .node.done { border-color: var(--ok-all); border-left-color: var(--area); }
     .node.root { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(53, 116, 240, 0.3); }
     .node.dim { opacity: 0.4; }
     .txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }

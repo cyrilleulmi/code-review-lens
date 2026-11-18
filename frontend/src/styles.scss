@@ -25,14 +25,12 @@
   --accent-fg: #548af7;
   --ok: #5fb865;
   --ok-border: #3f6e45;
-  --ok-head: #26332a;
   /* accepted at all places a line is shown at (--ok: accepted at the place shown, not yet everywhere). A royal
      blue of its own, well apart from the blues of layers, connections, languages and categories; -fg for text and
      line icons on the editor background */
   --ok-all: #3355ff;
   --ok-all-fg: #6f88ff;
   --ok-all-border: #3d4fa8;
-  --ok-all-head: #222a47;
   --on-ok-all: #ffffff;
   /* needs attention, e.g. changed code without a test */
   --warn: #e0a84b;
@@ -143,16 +141,12 @@
 .acc-here {
   --acc: var(--ok);
   --acc-fg: var(--ok);
-  --acc-border: var(--ok-border);
-  --acc-head: var(--ok-head);
   --on-acc: var(--on-ok);
 }
 
 .acc-all {
   --acc: var(--ok-all);
   --acc-fg: var(--ok-all-fg);
-  --acc-border: var(--ok-all-border);
-  --acc-head: var(--ok-all-head);
   --on-acc: var(--on-ok-all);
 }
 
@@ -177,11 +171,9 @@
   --accent-fg: #2e63cf;
   --ok: #208a3c;
   --ok-border: #9fd3ac;
-  --ok-head: #e8f5ec;
   --ok-all: #1740e6;
   --ok-all-fg: #1740e6;
   --ok-all-border: #a7b6f3;
-  --ok-all-head: #e8ecfd;
   --on-ok-all: #ffffff;
   --warn: #b26b00;
 

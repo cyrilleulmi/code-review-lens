@@ -13,9 +13,10 @@
   background: color-mix(in srgb, var(--area-frontend) 3%, var(--bg-editor));
 }
 
+/* accepted: the outline in the accept colour - no tinted head; the left edge keeps the colour of the layer */
 :host(.done) {
-  border-color: var(--acc-border);
-  border-left-color: var(--area, var(--acc-border));
+  border-color: var(--acc);
+  border-left-color: var(--area, var(--acc));
 }
 
 :host(.flash) {
@@ -44,10 +45,6 @@
   &.clickable {
     cursor: pointer;
   }
-}
-
-:host(.done) .head {
-  background: var(--acc-head);
 }
 
 .step-no {

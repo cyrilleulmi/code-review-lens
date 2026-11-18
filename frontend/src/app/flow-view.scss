@@ -32,9 +32,10 @@
   background: color-mix(in srgb, var(--area, transparent) 7%, var(--bg-panel));
   transition: border-color 0.15s, opacity 0.15s;
 
+  /* accepted: the outline in the accept colour, the left edge keeps the colour of the layer */
   &.done {
-    border-color: var(--acc-border);
-    border-left-color: var(--area, var(--acc-border));
+    border-color: var(--acc);
+    border-left-color: var(--area, var(--acc));
   }
 
   &.root {
@@ -212,9 +213,10 @@
     border-style: dashed;
   }
 
+  /* accepted: the outline in the accept colour - no tinted box; the left edge keeps the colour of the layer */
   &.done {
-    border-color: var(--acc-border);
-    background: var(--acc-head);
+    border-color: var(--acc);
+    border-left-color: var(--area, var(--acc));
   }
 
   .no {
@@ -406,6 +408,11 @@
   border-left: 4px solid var(--area, var(--border-strong));
   border-radius: 10px;
   background: color-mix(in srgb, var(--area, transparent) 5%, var(--bg-panel-2));
+
+  &.done {
+    border-color: var(--acc);
+    border-left-color: var(--area, var(--acc));
+  }
 }
 
 .class-head {

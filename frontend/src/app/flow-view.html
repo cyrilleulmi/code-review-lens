@@ -313,7 +313,8 @@
   }
   @for (u of codeCards(); track u.key) {
     @if (stepIndex() === null || anyVisible(u.ids)) {
-      <div class="unit" [class.class-card]="u.framed" [class.run]="!u.framed" [class.lit]="!u.framed && hoveredClass() === u.classKey" [class.wide]="u.wide"
+      @let cardLevel = u.framed ? accepted(progressOf(u.ids)) : 'open';
+      <div class="unit" [class.class-card]="u.framed" [class.done]="cardLevel !== 'open'" [class.acc-all]="cardLevel === 'all'" [class.run]="!u.framed" [class.lit]="!u.framed && hoveredClass() === u.classKey" [class.wide]="u.wide"
            [attr.data-class]="u.classKey" [style.margin-left.px]="gutter() + u.depth * indent()" [style.--area]="areaColor(u.area)">
         @if (u.framed) {
           @let up = progressOf(u.ids);
