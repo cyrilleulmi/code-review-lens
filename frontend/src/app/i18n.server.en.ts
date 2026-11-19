@@ -284,6 +284,8 @@ export const SERVER_EN_PATTERNS: [RegExp, Replace][] = [
   [/^rules\.json ist ungültig: ([\s\S]*)$/, (m) => `rules.json is invalid: ${m[1]}`],
   [/^Diskussion zu Kommentar (\S+) nicht gefunden$/, (m) => `Discussion of comment ${m[1]} not found`],
   [/^Archiv des Repositorys nicht lesbar: ([\s\S]*)$/, (m) => `Archive of the repository not readable: ${m[1]}`],
+  [/^Ungültige Antwort von (\S+): HTML statt JSON\. Login-Seite eines SSO-Proxys\? Ist das Cookie abgelaufen\?$/,
+    (m) => `Invalid response from ${m[1]}: HTML instead of JSON. Login page of an SSO proxy? Has the cookie expired?`],
   [/^Ungültige Antwort von (\S+): ([\s\S]*)$/, (m) => `Invalid response from ${m[1]}: ${m[2]}`],
   [/^(\S+) nicht erreichbar: ([\s\S]*)$/, (m) => `${m[1]} not reachable: ${m[2]}`],
   [/^(\S+) (\d{3}) auf (\S+)(: [\s\S]*)?$/, (m) => `${m[1]} ${m[2]} on ${m[3]}${m[4] ?? ''}`],

@@ -98,6 +98,8 @@ describe('i18n', () => {
     expect(translateServerText('aufgerufen von PlayerResource.update')).toBe('called by PlayerResource.update');
     expect(translateServerText('Tabelle player')).toBe('Table player');
     expect(translateServerText('api.github.com 404 auf /repos/x/y: Not Found')).toBe('api.github.com 404 on /repos/x/y: Not Found');
+    expect(translateServerText('Ungültige Antwort von GitLab: HTML statt JSON. Login-Seite eines SSO-Proxys? Ist das Cookie abgelaufen?'))
+      .toBe('Invalid response from GitLab: HTML instead of JSON. Login page of an SSO proxy? Has the cookie expired?');
     expect(translateServerText('Nach Regel-Gruppe: Migrationen, Repositories & Queries. Zusätzliche Segmente nach Datei.'))
       .toBe('By rule group: Migrations, Repositories & queries. Additional segments by file.');
     expect(translateServerText('Segmente, auf die eine Regel dieser Kategorie passt. Übersetzungen: Übersetzungsdatei · '

@@ -8,6 +8,7 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ### Behoben
 - **Merge Requests auf GitLab 16.x:** Die geänderten Dateien eines Merge Requests werden in Seiten zu 30 statt 100 geladen. GitLab 16.x (geprüft mit 16.9) beantwortet mehr als 30 Einträge pro Seite mit einem Fehler 500, deshalb liess sich dort kein Merge Request öffnen. Die Obergrenze bleibt bei 3000 Dateien.
+- **Verständliche Meldung statt «Unrecognized token '<'»:** Antwortet ein Code-Host mit einer Webseite statt mit JSON – etwa mit der Login-Seite eines SSO-Proxys, wenn dessen Cookie abgelaufen ist –, heisst die Meldung jetzt «Ungültige Antwort von GitLab: HTML statt JSON. Login-Seite eines SSO-Proxys? Ist das Cookie abgelaufen?». Ist der Host gar nicht erreichbar, steht die Art des Fehlers da (z. B. «ConnectException») statt «null».
 
 ## [0.8.0] – 2026-11-18
 
