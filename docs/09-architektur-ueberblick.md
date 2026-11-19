@@ -55,7 +55,7 @@ flowchart LR
 | Reviewer:in | Browser, eingebettetes Angular-UI | ein/aus | Ein Benutzer pro Prozess (Annahme A1). |
 | Agent | REST `/api/…` oder direkt die Dateien | ein/aus | Anleitung im Datenverzeichnis: `AGENTS.md`. |
 | GitHub | REST v3 (`api.github.com` oder Enterprise `…/api/v3`), GraphQL nur für Blame | aus | Token: `GITHUB_TOKEN` / `GH_TOKEN` / `gh auth token`. |
-| GitLab | REST v4 (gitlab.com oder self-managed, eine Instanz) | aus | Token: `GITLAB_TOKEN` / `GL_TOKEN` / `glab config get token`; öffentliche MRs auch ohne. |
+| GitLab | REST v4 (gitlab.com oder self-managed, eine Instanz) | aus | Token: `GITLAB_TOKEN` / `GL_TOKEN` / `glab config get token`; öffentliche MRs auch ohne. Hinter einem SSO-Proxy zusätzlich dessen Session-Cookies (`SCR_GITLAB_COOKIE`). |
 | Dateisystem | JSON + Quelltexte unter `<data>/reviews/…` | ein/aus | Der einzige echte Zustand ist `review.json`. |
 
 Was **nicht** zum Kontext gehört: keine Datenbank, kein Message-Broker, kein Identity-Provider, keine Cloud-Dienste ausser den Code-Hosts.
@@ -320,6 +320,7 @@ Alle Records tragen `@RegisterForReflection`; fremdes JSON wird als `JsonNode` g
 | `scr.github.token` | `GITHUB_TOKEN`, `GH_TOKEN` | `gh auth token` |
 | `scr.gitlab.url` | `SCR_GITLAB_URL` | `https://gitlab.com` |
 | `scr.gitlab.token` | `GITLAB_TOKEN`, `GL_TOKEN` | `glab config get token` |
+| `scr.gitlab.cookie` | `SCR_GITLAB_COOKIE` | — (kein `Cookie`-Header) |
 | `quarkus.http.host` / `.port` | — | `127.0.0.1` / `8080` |
 
 Fachliche Konfiguration (Kategorien, Regeln, Aspekte, Querschnittsthemen) liegt in `rules.json`, nicht in Properties.

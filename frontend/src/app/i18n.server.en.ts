@@ -182,6 +182,8 @@ export const SERVER_EN: Record<string, string> = {
   'Beim ganzen Repository gibt es keinen Pull Request, an den Kommentare gehen könnten':
     'For the whole repository there is no pull request that comments could go to',
   'Kommentar ist leer': 'Comment is empty',
+  'Das Cookie enthält Zeichen, die in einem HTTP-Header nicht erlaubt sind (z. B. Zeilenumbrüche).':
+    'The cookie contains characters that are not allowed in an HTTP header (e.g. line breaks).',
   'PR zuerst öffnen': 'Open the PR first',
   'Abgebrochen': 'Cancelled',
   'Eintrag zu gross': 'Entry too large',
@@ -278,12 +280,15 @@ export const SERVER_EN_PATTERNS: [RegExp, Replace][] = [
   [/^([\s\S]+) geändert in (\w+), ohne Test im Commit\. ([\s\S]+)$/, (m, tr) => `${m[1]} changed in ${m[2]}, without a test in the commit. ${tr(m[3])}`],
   // error messages (providers, ReviewService)
   [/^Keine bekannte Pull- oder Merge-Request-URL: ([\s\S]*)$/, (m) => `Not a known pull or merge request URL: ${m[1]}`],
+  [/^(\S+) nimmt kein Cookie entgegen$/, (m) => `${m[1]} does not take a cookie`],
   [/^Unbekannter Provider: ([\s\S]*)$/, (m) => `Unknown provider: ${m[1]}`],
   [/^Datei ist nicht Teil des Pull Requests: ([\s\S]*)$/, (m) => `File is not part of the pull request: ${m[1]}`],
   [/^Inhalt der Datei ist nicht verfügbar: ([\s\S]*)$/, (m) => `Content of the file is not available: ${m[1]}`],
   [/^rules\.json ist ungültig: ([\s\S]*)$/, (m) => `rules.json is invalid: ${m[1]}`],
   [/^Diskussion zu Kommentar (\S+) nicht gefunden$/, (m) => `Discussion of comment ${m[1]} not found`],
   [/^Archiv des Repositorys nicht lesbar: ([\s\S]*)$/, (m) => `Archive of the repository not readable: ${m[1]}`],
+  [/^Ungültige Antwort von (\S+): HTML statt JSON\. Login-Seite eines SSO-Proxys\? Ist das Cookie abgelaufen\?$/,
+    (m) => `Invalid response from ${m[1]}: HTML instead of JSON. Login page of an SSO proxy? Has the cookie expired?`],
   [/^Ungültige Antwort von (\S+): ([\s\S]*)$/, (m) => `Invalid response from ${m[1]}: ${m[2]}`],
   [/^(\S+) nicht erreichbar: ([\s\S]*)$/, (m) => `${m[1]} not reachable: ${m[2]}`],
   [/^(\S+) (\d{3}) auf (\S+)(: [\s\S]*)?$/, (m) => `${m[1]} ${m[2]} on ${m[3]}${m[4] ?? ''}`],

@@ -22,6 +22,7 @@ import dev.smartcodereview.provider.ProviderException;
 import dev.smartcodereview.provider.RepoLists;
 import dev.smartcodereview.provider.ReviewProvider;
 import dev.smartcodereview.provider.Tokens;
+import io.quarkus.logging.Log;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -52,24 +53,37 @@ import java.util.regex.Pattern;
  * GitLab (gitlab.com or self-managed) via REST API v4. Merge requests are handled as "pull requests".
  * Without a token, public projects can still be opened by URL (read-only, rate-limited by GitLab).
  * Nested namespaces are encoded as group~subgroup in {@link PrRef#owner()}.
+ * A self-managed GitLab behind an SSO proxy also needs the session cookies of the proxy (scr.gitlab.cookie).
  */
 @ApplicationScoped
 public class GitLabProvider implements ReviewProvider {
 
+    private static final String GITLAB_COM = "https://gitlab.com";
     private static final int MAX_FILE_BYTES = 1_000_000;
     private static final int MAX_TREE_PAGES = 30;
+    /** GitLab 16.x answers 500 for more than 30 merge request diffs per page (newer versions accept 100). */
+    static final int MR_DIFFS_PER_PAGE = 30;
+    private static final int MAX_MR_DIFF_PAGES = 100;
 
     @Inject
     ObjectMapper mapper;
 
-    @ConfigProperty(name = "scr.gitlab.url", defaultValue = "https://gitlab.com")
+    @ConfigProperty(name = "scr.gitlab.url", defaultValue = GITLAB_COM)
     String baseUrl;
 
     @ConfigProperty(name = "scr.gitlab.token")
     Optional<String> configuredToken;
 
+    @ConfigProperty(name = "scr.gitlab.cookie")
+    Optional<String> configuredCookie = Optional.empty();
+
     private JsonHttp http;
     private Tokens.Lazy token;
+    /**
+     * Value of the Cookie header of every request (session cookies of an SSO proxy), null for none. Starts as
+     * scr.gitlab.cookie and can be replaced while running: such cookies expire regularly.
+     */
+    private volatile String cookie;
     private volatile String username;
 
     @PostConstruct
@@ -78,6 +92,24 @@ public class GitLabProvider implements ReviewProvider {
         http = new JsonHttp(mapper, label());
         token = new Tokens.Lazy(() -> Tokens.first(configuredToken, "GITLAB_TOKEN", "GL_TOKEN")
                 .or(() -> Tokens.fromCommand("glab", "config", "get", "token", "--host", URI.create(baseUrl).getHost())));
+        try {
+            cookie = cookieValue(configuredCookie.orElse(null));
+        } catch (ProviderException e) {
+            Log.warnf("Ignoring scr.gitlab.cookie: %s", e.getMessage());
+        }
+    }
+
+    /**
+     * The value of a Cookie header as the user gives it: trimmed, a leading "Cookie:" (copied along from the
+     * browser's developer tools) removed; null when blank. Characters a header cannot carry are refused.
+     */
+    static String cookieValue(String raw) {
+        String value = raw == null ? "" : raw.strip().replaceFirst("(?i)^cookie:\\s*", "");
+        if (value.chars().anyMatch(c -> c < 0x20 || c > 0x7e)) {
+            throw new ProviderException(400, "Das Cookie enthält Zeichen, die in einem HTTP-Header nicht erlaubt sind "
+                    + "(z. B. Zeilenumbrüche).");
+        }
+        return value.isEmpty() ? null : value;
     }
 
     @Override
@@ -98,6 +130,18 @@ public class GitLabProvider implements ReviewProvider {
     @Override
     public boolean hasCredentials() {
         return token.get().isPresent();
+    }
+
+    /** A proxy only stands in front of a self-managed GitLab; gitlab.com offers the cookie only when one is configured. */
+    @Override
+    public Optional<Boolean> cookieSet() {
+        boolean set = cookie != null;
+        return set || !GITLAB_COM.equals(baseUrl) ? Optional.of(set) : Optional.empty();
+    }
+
+    @Override
+    public void setCookie(String value) {
+        cookie = cookieValue(value);
     }
 
     @Override
@@ -397,10 +441,10 @@ public class GitLabProvider implements ReviewProvider {
     private JsonNode diffs(String base) {
         try {
             var all = mapper.createArrayNode();
-            for (int page = 1; page <= 30; page++) {
-                JsonNode batch = getJson(base + "/diffs?per_page=100&page=" + page);
+            for (int page = 1; page <= MAX_MR_DIFF_PAGES; page++) {
+                JsonNode batch = getJson(base + "/diffs?per_page=" + MR_DIFFS_PER_PAGE + "&page=" + page);
                 batch.forEach(all::add);
-                if (batch.size() < 100) {
+                if (batch.size() < MR_DIFFS_PER_PAGE) {
                     break;
                 }
             }
@@ -601,6 +645,10 @@ public class GitLabProvider implements ReviewProvider {
                 .header("Accept", "application/json")
                 .header("User-Agent", "SmartCodeReview");
         token.get().ifPresent(t -> b.header("PRIVATE-TOKEN", t));
+        String c = cookie;
+        if (c != null) {
+            b.header("Cookie", c);
+        }
         return b;
     }
 }

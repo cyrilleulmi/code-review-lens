@@ -199,9 +199,21 @@
     <span [title]="t('SmartCodeReview-Version')">v{{ v }}</span>
   }
   @for (a of store.me()?.accounts ?? []; track a.provider) {
-    <span [class.offline]="!a.user" [title]="a.error ? serverText(a.error) : a.host"><app-icon [name]="a.provider" [size]="12" /> {{ a.user?.login ?? t('kein Token') }}</span>
+    @if (a.cookie != null) {
+      <button type="button" class="account" [class.offline]="!a.user" [class.on]="cookieFor() === a.provider"
+              (click)="toggleCookie(a.provider)" [attr.aria-expanded]="cookieFor() === a.provider"
+              [title]="(a.error ? serverText(a.error) : a.host) + ' – ' + t('Cookie des SSO-Proxys setzen')">
+        <app-icon [name]="a.provider" [size]="12" /> {{ a.user?.login ?? t('nicht verbunden') }} <app-icon name="lock" [size]="11" />
+      </button>
+    } @else {
+      <span [class.offline]="!a.user" [title]="a.error ? serverText(a.error) : a.host"><app-icon [name]="a.provider" [size]="12" /> {{ a.user?.login ?? t('kein Token') }}</span>
+    }
   }
 </footer>
+
+@if (cookieAccount(); as a) {
+  <app-account-cookie [account]="a" (closed)="cookieFor.set(null)" />
+}
 
 @if (store.error(); as e) {
   <div class="error" role="alert">

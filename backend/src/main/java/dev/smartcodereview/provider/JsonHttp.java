@@ -29,7 +29,9 @@ public final class JsonHttp {
         try {
             return http.send(request, handler);
         } catch (IOException e) {
-            throw new ProviderException(502, host + " nicht erreichbar: " + e.getMessage());
+            // e.g. a ConnectException has no text: name the exception instead of "null"
+            throw new ProviderException(502, host + " nicht erreichbar: "
+                    + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ProviderException(503, "Abgebrochen");
@@ -38,6 +40,11 @@ public final class JsonHttp {
 
     public JsonNode json(HttpRequest request, String what) {
         HttpResponse<String> res = send(request, HttpResponse.BodyHandlers.ofString());
+        if (res.statusCode() < 400 && isHtml(res.body())) {
+            // an SSO proxy in front of the host answers 200 (or a redirect) with its login page
+            throw new ProviderException(401, "Ungültige Antwort von " + host + ": HTML statt JSON. "
+                    + "Login-Seite eines SSO-Proxys? Ist das Cookie abgelaufen?");
+        }
         if (res.statusCode() >= 300) {
             String message = res.body();
             try {
@@ -55,6 +62,11 @@ public final class JsonHttp {
         } catch (IOException e) {
             throw new ProviderException(502, "Ungültige Antwort von " + host + ": " + e.getMessage());
         }
+    }
+
+    /** True for a web page where JSON is expected (JSON never starts with "<"). */
+    static boolean isHtml(String body) {
+        return body != null && body.stripLeading().startsWith("<");
     }
 
     public HttpRequest.BodyPublisher body(JsonNode node) {

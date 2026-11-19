@@ -48,7 +48,8 @@ Alle PR-Endpunkte unter `/api/prs/{provider}/{owner}/{repo}/{number}`; `provider
 | Methode | Pfad | Zweck |
 |---|---|---|
 | GET / PUT | `/api/settings` | Ausgeschaltete Kategorien `{"disabledCategories":["fe-templates"]}` (global, `<data>/settings.json`) |
-| GET | `/api/me` | Konten pro Provider (User oder Grund, warum keiner), Datenverzeichnis |
+| GET | `/api/me` | Konten pro Provider (User oder Grund, warum keiner; `cookie`: ob Session-Cookies eines SSO-Proxys gesetzt sind, `null` = der Host nimmt keine), Datenverzeichnis |
+| PUT | `/api/accounts/{provider}/cookie` | `{"cookie":"name=wert; name2=wert2"}` ersetzt die Session-Cookies eines SSO-Proxys vor dem Host (nur im Arbeitsspeicher, bis zum nächsten Start; leer = entfernen). Antwort wie `/api/me`. Nur GitLab; sonst 400. |
 | GET | `/api/resolve?url=…` | PR-/MR-URL von GitHub oder GitLab → `{provider, owner, repo, number}`; Repository-URL → `number` 0 |
 | GET | `/api/prs?filter=all\|authored\|review-requested` | Offene PRs (mit lokalem Fortschritt, falls vorhanden) |
 | GET | `/api/local` | PRs mit lokalen Daten (offline) |
@@ -74,6 +75,7 @@ Angular 22, standalone Komponenten, Signals, zoneless, `OnPush`.
 | `review.store.ts` | Zentraler Zustand (Signals), Hash-Routing (`#/github/o/r/12/c/<sha>/flow/flow-1`), optimistische Markierungen pro Ort («Slots» = Segment an einem Ort), Commit-Filter (filtert Slots, Fortschritt und Markierungen auf die Zeilen eines Commits), Blame-Cache, Neuladen des Status beim Fokus des Fensters (damit Änderungen von Agenten sofort erscheinen). |
 | `app.*` | IntelliJ-Shell: Main-Toolbar, Tool-Window-Stripe, verschiebbares Tool-Fenster, Breadcrumbs, Statusleiste, Shortcuts Alt+1/Alt+2. |
 | `pr-list.ts` | Tool-Fenster «Pull Requests» mit Filter und Suche. |
+| `account-cookie.ts` | Dialog aus der Statusleiste: Session-Cookies eines SSO-Proxys vor dem Code-Host zur Laufzeit setzen oder entfernen. |
 | `review-tree.*` | Tool-Fenster «Review»: Kategorien / Flows / Dateien als Baum mit Fortschritt und ✓-Aktion, Tab *Commits*. |
 | `commit-list.ts` | Commits des PRs mit Fortschritt; Klick filtert alle Ansichten auf einen Commit, ✓ markiert seine Zeilen (Review-Fenster und Übersicht). |
 | `overview.*` | PR-Übersicht: Fortschritt, vorgeschlagene Reihenfolge, Beschreibung, allgemeine Kommentare, letzte Markierungen. |
