@@ -800,6 +800,37 @@ export interface Comment {
   resolved?: boolean | null;
 }
 
+/** Where a PR stands on the code host, read live (Model.PrStatus). */
+export interface PrStatus {
+  state: 'open' | 'merged' | 'closed';
+  draft: boolean;
+  /** head on the host now - may be newer than the loaded snapshot */
+  headSha: string;
+  /** logins */
+  approvedBy: string[];
+  approvedByMe: boolean;
+  /** the user may approve, or revoke the approval */
+  canApprove: boolean;
+  /** required approvals still missing */
+  approvalsLeft: number;
+  /** the user has the right to merge */
+  canMerge: boolean;
+  /** the host would merge it now */
+  mergeable: boolean;
+  /** German text why it cannot be merged now; null when it can */
+  blocker: string | null;
+  /** what the PR is set to do on merge */
+  squash: boolean;
+  removeSourceBranch: boolean;
+  /** status of the head pipeline as the host names it; null without one */
+  pipeline: string | null;
+}
+
+export interface MergeOptions {
+  squash: boolean;
+  removeSourceBranch: boolean;
+}
+
 export interface NewComment {
   path?: string | null;
   line?: number | null;
@@ -905,6 +936,21 @@ export class Api {
   /** Resolves a thread on the code host or opens it again; answers with all comments as they are now. */
   resolveThread(pr: PrKey, thread: string, resolved: boolean): Observable<Comment[]> {
     return this.http.put<Comment[]>(`${base(pr)}/threads/${encodeURIComponent(thread)}/resolved`, { resolved });
+  }
+
+  /** Approvals and mergeability; null where approving and merging is not supported (GitHub, a whole repository). */
+  status(pr: PrKey): Observable<PrStatus | null> {
+    return this.http.get<PrStatus | null>(`${base(pr)}/status`);
+  }
+
+  /** Approves the PR on the code host at once, or revokes the approval. */
+  approve(pr: PrKey, approved: boolean): Observable<PrStatus> {
+    return this.http.put<PrStatus>(`${base(pr)}/approval`, { approved });
+  }
+
+  /** Merges the PR on the code host at once. */
+  merge(pr: PrKey, options: MergeOptions): Observable<PrStatus> {
+    return this.http.post<PrStatus>(`${base(pr)}/merge`, options);
   }
 
   postComment(pr: PrKey, comment: NewComment): Observable<Comment> {

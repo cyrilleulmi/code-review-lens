@@ -1,14 +1,17 @@
 package dev.smartcodereview.api;
 
 import dev.smartcodereview.ReviewService;
+import dev.smartcodereview.model.Model.ApprovalRequest;
 import dev.smartcodereview.model.Model.Blame;
 import dev.smartcodereview.model.Model.Comment;
 import dev.smartcodereview.model.Model.Commits;
 import dev.smartcodereview.model.Model.CookieRequest;
 import dev.smartcodereview.model.Model.MarkRequest;
 import dev.smartcodereview.model.Model.Me;
+import dev.smartcodereview.model.Model.MergeOptions;
 import dev.smartcodereview.model.Model.NewComment;
 import dev.smartcodereview.model.Model.PrRef;
+import dev.smartcodereview.model.Model.PrStatus;
 import dev.smartcodereview.model.Model.PullRequestSummary;
 import dev.smartcodereview.model.Model.ResolveRequest;
 import dev.smartcodereview.model.Model.ReviewBundle;
@@ -214,6 +217,36 @@ public class ReviewResource {
             throw new IllegalArgumentException("resolved fehlt");
         }
         return service.resolveThread(new PrRef(provider, owner, repo, number), thread, request.resolved());
+    }
+
+    /**
+     * Where the PR stands on the code host (approvals, mergeable or why not), read live. 204 without content when
+     * approving and merging is not supported for it (GitHub, a whole repository).
+     */
+    @GET
+    @Path("/prs/{provider}/{owner}/{repo}/{number}/status")
+    public PrStatus status(@PathParam("provider") String provider, @PathParam("owner") String owner,
+                           @PathParam("repo") String repo, @PathParam("number") int number) {
+        return service.status(new PrRef(provider, owner, repo, number)).orElse(null);
+    }
+
+    /** Approves the PR on the code host as the user ({"approved":true}) or revokes the approval; at once. */
+    @PUT
+    @Path("/prs/{provider}/{owner}/{repo}/{number}/approval")
+    public PrStatus approve(@PathParam("provider") String provider, @PathParam("owner") String owner,
+                            @PathParam("repo") String repo, @PathParam("number") int number, ApprovalRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("approved fehlt");
+        }
+        return service.approve(new PrRef(provider, owner, repo, number), request.approved());
+    }
+
+    /** Merges the PR on the code host; at once and not reversible. Body: {} or {"squash":…,"removeSourceBranch":…}. */
+    @POST
+    @Path("/prs/{provider}/{owner}/{repo}/{number}/merge")
+    public PrStatus merge(@PathParam("provider") String provider, @PathParam("owner") String owner,
+                          @PathParam("repo") String repo, @PathParam("number") int number, MergeOptions options) {
+        return service.merge(new PrRef(provider, owner, repo, number), options);
     }
 
     @ServerExceptionMapper

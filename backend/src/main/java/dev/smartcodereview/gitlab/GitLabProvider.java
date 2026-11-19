@@ -618,6 +618,92 @@ public class GitLabProvider implements ReviewProvider {
         return notesOf(discussion, ref).get(0);
     }
 
+    // ---------------------------------------------------------------- approve & merge
+
+    @Override
+    public Optional<Model.PrStatus> status(PrRef ref) {
+        JsonNode mr = getJson(mrPath(ref));
+        JsonNode approvals = getJson(mrPath(ref) + "/approvals");
+        List<String> approvedBy = new ArrayList<>();
+        approvals.path("approved_by").forEach(a -> approvedBy.add(a.path("user").path("username").asText()));
+        String state = switch (mr.path("state").asText()) {
+            case "merged" -> "merged";
+            case "closed" -> "closed";
+            default -> "open"; // opened, locked (being merged)
+        };
+        String blocker = "open".equals(state) ? mergeBlocker(mr) : null;
+        return Optional.of(new Model.PrStatus(state, isDraft(mr),
+                mr.path("diff_refs").path("head_sha").asText(mr.path("sha").asText(null)), approvedBy,
+                approvals.path("user_has_approved").asBoolean(false),
+                approvals.path("user_has_approved").asBoolean(false) || approvals.path("user_can_approve").asBoolean(false),
+                approvals.path("approvals_left").asInt(0), mr.path("user").path("can_merge").asBoolean(false),
+                "open".equals(state) && blocker == null, blocker, mr.path("squash").asBoolean(false),
+                mr.path("force_remove_source_branch").asBoolean(false),
+                mr.path("head_pipeline").path("status").asText(null)));
+    }
+
+    /**
+     * Why GitLab would not merge the merge request now (German), null when it would: detailed_merge_status
+     * (GitLab 15.6+), before that only merge_status.
+     */
+    static String mergeBlocker(JsonNode mr) {
+        String detailed = mr.path("detailed_merge_status").asText("");
+        if (detailed.isEmpty()) {
+            String status = mr.path("merge_status").asText("");
+            return "can_be_merged".equals(status) ? null : "Lässt sich nicht mergen (GitLab: " + status + ")";
+        }
+        return switch (detailed) {
+            case "mergeable" -> null;
+            case "not_approved" -> "Es fehlen Genehmigungen";
+            case "discussions_not_resolved" -> "Es sind noch Threads offen";
+            case "draft_status" -> "Der Merge Request ist ein Entwurf";
+            case "ci_must_pass" -> "Die Pipeline muss erfolgreich sein";
+            case "ci_still_running" -> "Die Pipeline läuft noch";
+            case "conflict" -> "Es gibt Merge-Konflikte";
+            case "need_rebase" -> "Der Branch muss zuerst rebased werden";
+            case "requested_changes" -> "Es sind Änderungen verlangt";
+            case "blocked_status" -> "Ein anderer Merge Request blockiert diesen";
+            case "external_status_checks" -> "Externe Status-Checks müssen bestehen";
+            case "not_open" -> "Der Merge Request ist nicht offen";
+            case "checking", "unchecked", "preparing" -> "GitLab prüft noch, ob sich der Merge Request mergen lässt";
+            default -> "Lässt sich nicht mergen (GitLab: " + detailed + ")";
+        };
+    }
+
+    @Override
+    public void approve(PrRef ref, String sha, boolean approved) {
+        requireToken();
+        if (approved) {
+            postJson(mrPath(ref) + "/approve", mapper.createObjectNode().put("sha", sha));
+        } else {
+            postJson(mrPath(ref) + "/unapprove", mapper.createObjectNode());
+        }
+    }
+
+    @Override
+    public void merge(PrRef ref, String sha, Model.MergeOptions options) {
+        requireToken();
+        ObjectNode body = mapper.createObjectNode().put("sha", sha);
+        if (options != null && options.squash() != null) {
+            body.put("squash", options.squash());
+        }
+        if (options != null && options.removeSourceBranch() != null) {
+            body.put("should_remove_source_branch", options.removeSourceBranch());
+        }
+        String path = mrPath(ref) + "/merge";
+        try {
+            http.json(request(path).header("Content-Type", "application/json").PUT(http.body(body)).build(), path);
+        } catch (ProviderException e) {
+            if (e.status() != 405 && e.status() != 406 && e.status() != 422) {
+                throw e;
+            }
+            // GitLab only says "Method Not Allowed" / "Branch cannot be merged": ask it why
+            String blocker = mergeBlocker(getJson(mrPath(ref)));
+            throw new ProviderException(409, "GitLab lehnt den Merge ab (" + e.status() + ")"
+                    + (blocker == null ? "" : ": " + blocker));
+        }
+    }
+
     private String discussionOf(PrRef ref, long noteId) {
         for (int page = 1; page <= 10; page++) {
             JsonNode batch = getJson(mrPath(ref) + "/discussions?per_page=100&page=" + page);

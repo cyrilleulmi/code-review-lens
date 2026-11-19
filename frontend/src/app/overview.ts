@@ -9,13 +9,14 @@ import { locale, serverText, t } from './i18n';
 import { unmetWarning } from './rule-checks';
 import { countWithSmells, smellsSummary } from './test-smells';
 import { countUnchangedAffected, setupTileText } from './setup-impact';
+import { ReviewActions } from './review-actions';
 import { ReviewStore } from './review.store';
 
 /** Start page of an opened PR: description, the suggested review order, general comments. */
 @Component({
   selector: 'app-overview',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, ComponentDiagram, CommitList],
+  imports: [Icon, ComponentDiagram, CommitList, ReviewActions],
   templateUrl: './overview.html',
   styleUrl: './overview.scss',
 })

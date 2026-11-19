@@ -7,6 +7,8 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import dev.smartcodereview.github.GitHubProvider;
 import dev.smartcodereview.model.Model.Comment;
+import dev.smartcodereview.model.Model.MergeOptions;
+import dev.smartcodereview.model.Model.PrStatus;
 import dev.smartcodereview.model.Model.PrRef;
 import dev.smartcodereview.model.Model.Snapshot;
 import dev.smartcodereview.provider.ProviderException;
@@ -22,6 +24,8 @@ import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -33,6 +37,13 @@ class GitLabProviderHttpTest {
 
     private HttpServer server;
     private final List<HttpExchange> requests = new CopyOnWriteArrayList<>();
+    /** request bodies, in the order of requests */
+    private final List<String> bodies = new CopyOnWriteArrayList<>();
+    /** the merge request as GitLab returns it */
+    private final ObjectNode mr = MAPPER.createObjectNode().put("iid", 7).put("title", "Shop").put("state", "opened");
+    private final ObjectNode approvals = MAPPER.createObjectNode();
+    /** status GitLab answers a merge with */
+    private int mergeAnswer = 200;
     /** number of changed files of the merge request */
     private int diffs = 1;
     /** scr.gitlab.cookie */
@@ -42,8 +53,11 @@ class GitLabProviderHttpTest {
     void start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
+            bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             requests.add(exchange);
-            respond(exchange, 200, "application/json", body(exchange));
+            boolean merge = exchange.getRequestURI().getRawPath().endsWith("/merge");
+            respond(exchange, merge ? mergeAnswer : 200, "application/json",
+                    merge && mergeAnswer != 200 ? "{\"message\":\"405 Method Not Allowed\"}" : body(exchange));
         });
         server.start();
     }
@@ -172,6 +186,112 @@ class GitLabProviderHttpTest {
         assertEquals("GitHub kann hier keine Threads auflösen", e.getMessage());
     }
 
+    @Test
+    void readsApprovalsAndWhetherItCanBeMerged() {
+        mr.put("detailed_merge_status", "discussions_not_resolved").put("squash", true).put("force_remove_source_branch", true);
+        mr.putObject("diff_refs").put("head_sha", "abc1234");
+        mr.putObject("user").put("can_merge", true);
+        mr.putObject("head_pipeline").put("status", "success");
+        approvals.put("approvals_left", 1).put("user_has_approved", false).put("user_can_approve", true)
+                .putArray("approved_by").addObject().putObject("user").put("username", "ben");
+
+        PrStatus status = provider().status(MR).orElseThrow();
+
+        assertEquals(new PrStatus("open", false, "abc1234", List.of("ben"), false, true, 1, true, false,
+                "Es sind noch Threads offen", true, true, "success"), status);
+    }
+
+    @Test
+    void aMergeableMergeRequestHasNoBlocker() {
+        mr.put("detailed_merge_status", "mergeable");
+        approvals.put("user_has_approved", true).put("user_can_approve", false);
+
+        PrStatus status = provider().status(MR).orElseThrow();
+
+        assertTrue(status.mergeable());
+        assertNull(status.blocker());
+        assertTrue(status.approvedByMe());
+        assertTrue(status.canApprove(), "who has approved can revoke");
+        assertFalse(status.canMerge());
+        assertNull(status.pipeline());
+    }
+
+    @Test
+    void aMergedMergeRequestIsNeitherMergeableNorBlocked() {
+        mr.put("state", "merged").put("detailed_merge_status", "not_open");
+
+        PrStatus status = provider().status(MR).orElseThrow();
+
+        assertEquals("merged", status.state());
+        assertFalse(status.mergeable());
+        assertNull(status.blocker());
+    }
+
+    @Test
+    void saysWhyAMergeRequestCannotBeMerged() {
+        assertEquals("Es gibt Merge-Konflikte", blocker("detailed_merge_status", "conflict"));
+        assertEquals("Der Merge Request ist ein Entwurf", blocker("detailed_merge_status", "draft_status"));
+        assertEquals("Die Pipeline läuft noch", blocker("detailed_merge_status", "ci_still_running"));
+        assertEquals("Es fehlen Genehmigungen", blocker("detailed_merge_status", "not_approved"));
+        assertEquals("Lässt sich nicht mergen (GitLab: something_new)", blocker("detailed_merge_status", "something_new"));
+        // before GitLab 15.6 there is only merge_status
+        assertNull(blocker("merge_status", "can_be_merged"));
+        assertEquals("Lässt sich nicht mergen (GitLab: cannot_be_merged)", blocker("merge_status", "cannot_be_merged"));
+    }
+
+    private static String blocker(String field, String value) {
+        return GitLabProvider.mergeBlocker(MAPPER.createObjectNode().put(field, value));
+    }
+
+    @Test
+    void approvesTheReviewedHeadAndRevokes() throws IOException {
+        GitLabProvider gitlab = provider();
+
+        gitlab.approve(MR, "abc1234", true);
+        gitlab.approve(MR, null, false);
+
+        assertEquals(List.of("POST /approve", "POST /unapprove"), calls());
+        assertEquals("abc1234", MAPPER.readTree(bodies.get(0)).path("sha").asText());
+    }
+
+    @Test
+    void mergesTheReviewedHead() throws IOException {
+        provider().merge(MR, "abc1234", new MergeOptions(true, false));
+
+        assertEquals(List.of("PUT /merge"), calls());
+        assertEquals(MAPPER.readTree("{\"sha\":\"abc1234\",\"squash\":true,\"should_remove_source_branch\":false}"),
+                MAPPER.readTree(bodies.get(0)));
+    }
+
+    @Test
+    void mergesAsTheMergeRequestIsSetWithoutOptions() throws IOException {
+        provider().merge(MR, "abc1234", new MergeOptions(null, null));
+
+        assertEquals(MAPPER.readTree("{\"sha\":\"abc1234\"}"), MAPPER.readTree(bodies.get(0)));
+    }
+
+    @Test
+    void saysWhyGitLabRefusesAMerge() {
+        mergeAnswer = 405;
+        mr.put("detailed_merge_status", "ci_must_pass");
+
+        ProviderException e = assertThrows(ProviderException.class, () -> provider().merge(MR, "abc1234", null));
+
+        assertEquals(409, e.status());
+        assertEquals("GitLab lehnt den Merge ab (405): Die Pipeline muss erfolgreich sein", e.getMessage());
+    }
+
+    @Test
+    void onlyGitLabApprovesAndMerges() {
+        GitHubProvider github = new GitHubProvider();
+
+        assertEquals(Optional.empty(), github.status(MR));
+        assertEquals("GitHub kann hier nicht genehmigen",
+                assertThrows(ProviderException.class, () -> github.approve(MR, "abc1234", true)).getMessage());
+        assertEquals("GitHub kann hier nicht mergen",
+                assertThrows(ProviderException.class, () -> github.merge(MR, "abc1234", null)).getMessage());
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private GitLabProvider provider() {
@@ -197,7 +317,12 @@ class GitLabProviderHttpTest {
         if (path.endsWith("/discussions")) {
             return discussions().toString();
         }
-        return MAPPER.createObjectNode().put("iid", 7).put("title", "Shop").put("state", "opened").toString();
+        return path.endsWith("/approvals") ? approvals.toString() : mr.toString();
+    }
+
+    private List<String> calls() {
+        return requests.stream().map(r -> r.getRequestMethod() + " " + r.getRequestURI().getRawPath()
+                .replace("/api/v4/projects/acme%2Fshop/merge_requests/7", "")).toList();
     }
 
     /** One page of the diff list, sized by the per_page and page parameters like GitLab does. */

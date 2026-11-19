@@ -33,6 +33,9 @@
         <app-icon name="folder" [size]="13" /> {{ t('Ganzes Repository analysieren') }}</button>
     }
   </div>
+  @if (store.status()) {
+    <app-review-actions />
+  }
   <div class="total">
     <div class="bar"><div class="fill" [style.width.%]="percent(total)"></div></div>
     <span><b>{{ percent(total) }}%</b> · {{ t(store.isRepo() ? '{ok} von {total} Zeilen als ok markiert' : '{ok} von {total} geänderten Zeilen als ok markiert', { ok: total.ok, total: total.total }) }}</span>

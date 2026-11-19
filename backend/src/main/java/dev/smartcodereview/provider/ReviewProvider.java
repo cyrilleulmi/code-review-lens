@@ -98,4 +98,22 @@ public interface ReviewProvider {
     default void resolveThread(PrRef ref, String thread, boolean resolved) {
         throw new ProviderException(400, label() + " kann hier keine Threads auflösen");
     }
+
+    /** Approvals and mergeability, read live; empty when approving and merging this host's PRs is not supported. */
+    default Optional<Model.PrStatus> status(PrRef ref) {
+        return Optional.empty();
+    }
+
+    /**
+     * Approves the PR as the user, or revokes the approval. sha: the head that was reviewed - the host refuses when
+     * the PR has moved on.
+     */
+    default void approve(PrRef ref, String sha, boolean approved) {
+        throw new ProviderException(400, label() + " kann hier nicht genehmigen");
+    }
+
+    /** Merges the PR now. sha: the head that was reviewed - the host refuses when the PR has moved on. */
+    default void merge(PrRef ref, String sha, Model.MergeOptions options) {
+        throw new ProviderException(400, label() + " kann hier nicht mergen");
+    }
 }
