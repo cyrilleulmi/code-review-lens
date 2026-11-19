@@ -6,6 +6,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import dev.smartcodereview.model.Model.PrRef;
 import dev.smartcodereview.model.Model.Snapshot;
+import dev.smartcodereview.provider.ProviderException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,8 @@ import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** The GitLab provider against a local HTTP server that answers like GitLab. */
 class GitLabProviderHttpTest {
@@ -29,6 +32,8 @@ class GitLabProviderHttpTest {
     private final List<HttpExchange> requests = new CopyOnWriteArrayList<>();
     /** number of changed files of the merge request */
     private int diffs = 1;
+    /** scr.gitlab.cookie */
+    private String cookie;
 
     @BeforeEach
     void start() throws IOException {
@@ -64,6 +69,37 @@ class GitLabProviderHttpTest {
         assertEquals(List.of("per_page=30&page=1", "per_page=30&page=2"), diffQueries());
     }
 
+    @Test
+    void sendsTheConfiguredCookieWithTheToken() {
+        cookie = "Cookie: sso-session=abc; sso-csrf=def";
+
+        provider().fetchSnapshot(MR);
+
+        assertEquals(2, requests.size()); // the merge request and one page of diffs
+        for (HttpExchange r : requests) {
+            assertEquals("sso-session=abc; sso-csrf=def", r.getRequestHeaders().getFirst("Cookie"));
+            assertEquals("glpat-test", r.getRequestHeaders().getFirst("PRIVATE-TOKEN"));
+        }
+    }
+
+    @Test
+    void sendsNoCookieHeaderWithoutACookie() {
+        provider().fetchSnapshot(MR);
+
+        assertNull(requests.get(0).getRequestHeaders().getFirst("Cookie"));
+    }
+
+    @Test
+    void readsACookieAsItIsCopiedFromTheBrowser() {
+        assertEquals("a=1; b=2", GitLabProvider.cookieValue("  a=1; b=2 \n"));
+        assertEquals("a=1; b=2", GitLabProvider.cookieValue("cookie:a=1; b=2"));
+        assertEquals("a=1; b=2", GitLabProvider.cookieValue("Cookie: a=1; b=2"));
+        assertNull(GitLabProvider.cookieValue(" "));
+        assertNull(GitLabProvider.cookieValue(null));
+        ProviderException e = assertThrows(ProviderException.class, () -> GitLabProvider.cookieValue("a=1\r\nX-Injected: 1"));
+        assertEquals(400, e.status());
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private GitLabProvider provider() {
@@ -71,6 +107,7 @@ class GitLabProviderHttpTest {
         gitlab.mapper = MAPPER;
         gitlab.baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
         gitlab.configuredToken = Optional.of("glpat-test");
+        gitlab.configuredCookie = Optional.ofNullable(cookie);
         gitlab.init();
         return gitlab;
     }

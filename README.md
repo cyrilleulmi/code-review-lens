@@ -18,7 +18,7 @@ Voraussetzungen: JDK 21+ (getestet mit 25), Node 22+ und mindestens ein Code-Hos
 | Host | Zugang | Ohne Token |
 |---|---|---|
 | GitHub | `GITHUB_TOKEN` / `GH_TOKEN`, sonst `gh auth token` | – |
-| GitLab | `GITLAB_TOKEN` / `GL_TOKEN` (Scope `api`), sonst `glab config get token`; self-managed: `SCR_GITLAB_URL=https://gitlab.example.com` | Öffentliche Merge Requests lassen sich per URL öffnen (nur lesen) |
+| GitLab | `GITLAB_TOKEN` / `GL_TOKEN` (Scope `api`), sonst `glab config get token`; self-managed: `SCR_GITLAB_URL=https://gitlab.example.com`; hinter einem SSO-Proxy zusätzlich dessen Session-Cookies: `SCR_GITLAB_COOKIE="name=wert; name2=wert2"` | Öffentliche Merge Requests lassen sich per URL öffnen (nur lesen) |
 
 ```powershell
 # Windows

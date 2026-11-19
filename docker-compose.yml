@@ -1,7 +1,8 @@
 # Native build + run in Docker. Tokens come from the environment (each one is optional):
 #   PowerShell: $env:GITHUB_TOKEN = gh auth token; $env:GITLAB_TOKEN = "glpat-..."; docker compose up --build
 #   bash:       GITHUB_TOKEN=$(gh auth token) GITLAB_TOKEN=glpat-... docker compose up --build
-# Self-managed GitLab: also set SCR_GITLAB_URL (default https://gitlab.com).
+# Self-managed GitLab: also set SCR_GITLAB_URL (default https://gitlab.com); behind an SSO proxy also
+# SCR_GITLAB_COOKIE (the proxy's session cookies, "name=value; name2=value2").
 services:
   smart-code-review:
     build: .
@@ -12,6 +13,7 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GITLAB_TOKEN: ${GITLAB_TOKEN:-}
       SCR_GITLAB_URL: ${SCR_GITLAB_URL:-https://gitlab.com}
+      SCR_GITLAB_COOKIE: ${SCR_GITLAB_COOKIE:-}
     volumes:
       # Same layout as ~/.smart-code-review when running locally; agents can read/write it here.
       - ./data:/data

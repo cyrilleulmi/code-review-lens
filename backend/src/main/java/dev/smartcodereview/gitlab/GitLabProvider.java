@@ -22,6 +22,7 @@ import dev.smartcodereview.provider.ProviderException;
 import dev.smartcodereview.provider.RepoLists;
 import dev.smartcodereview.provider.ReviewProvider;
 import dev.smartcodereview.provider.Tokens;
+import io.quarkus.logging.Log;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -52,6 +53,7 @@ import java.util.regex.Pattern;
  * GitLab (gitlab.com or self-managed) via REST API v4. Merge requests are handled as "pull requests".
  * Without a token, public projects can still be opened by URL (read-only, rate-limited by GitLab).
  * Nested namespaces are encoded as group~subgroup in {@link PrRef#owner()}.
+ * A self-managed GitLab behind an SSO proxy also needs the session cookies of the proxy (scr.gitlab.cookie).
  */
 @ApplicationScoped
 public class GitLabProvider implements ReviewProvider {
@@ -71,8 +73,13 @@ public class GitLabProvider implements ReviewProvider {
     @ConfigProperty(name = "scr.gitlab.token")
     Optional<String> configuredToken;
 
+    @ConfigProperty(name = "scr.gitlab.cookie")
+    Optional<String> configuredCookie = Optional.empty();
+
     private JsonHttp http;
     private Tokens.Lazy token;
+    /** Value of the Cookie header of every request (session cookies of an SSO proxy), null for none. */
+    private volatile String cookie;
     private volatile String username;
 
     @PostConstruct
@@ -81,6 +88,24 @@ public class GitLabProvider implements ReviewProvider {
         http = new JsonHttp(mapper, label());
         token = new Tokens.Lazy(() -> Tokens.first(configuredToken, "GITLAB_TOKEN", "GL_TOKEN")
                 .or(() -> Tokens.fromCommand("glab", "config", "get", "token", "--host", URI.create(baseUrl).getHost())));
+        try {
+            cookie = cookieValue(configuredCookie.orElse(null));
+        } catch (ProviderException e) {
+            Log.warnf("Ignoring scr.gitlab.cookie: %s", e.getMessage());
+        }
+    }
+
+    /**
+     * The value of a Cookie header as the user gives it: trimmed, a leading "Cookie:" (copied along from the
+     * browser's developer tools) removed; null when blank. Characters a header cannot carry are refused.
+     */
+    static String cookieValue(String raw) {
+        String value = raw == null ? "" : raw.strip().replaceFirst("(?i)^cookie:\\s*", "");
+        if (value.chars().anyMatch(c -> c < 0x20 || c > 0x7e)) {
+            throw new ProviderException(400, "Das Cookie enthält Zeichen, die in einem HTTP-Header nicht erlaubt sind "
+                    + "(z. B. Zeilenumbrüche).");
+        }
+        return value.isEmpty() ? null : value;
     }
 
     @Override
@@ -604,6 +629,10 @@ public class GitLabProvider implements ReviewProvider {
                 .header("Accept", "application/json")
                 .header("User-Agent", "SmartCodeReview");
         token.get().ifPresent(t -> b.header("PRIVATE-TOKEN", t));
+        String c = cookie;
+        if (c != null) {
+            b.header("Cookie", c);
+        }
         return b;
     }
 }
