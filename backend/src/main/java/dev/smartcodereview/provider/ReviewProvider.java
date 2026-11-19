@@ -90,4 +90,12 @@ public interface ReviewProvider {
 
     /** Posts immediately (no pending review). The snapshot provides commit SHAs and old file paths. */
     Comment postComment(PrRef ref, Snapshot snapshot, NewComment comment);
+
+    /**
+     * Resolves a thread of comments or opens it again ({@link Comment#thread()}, only where
+     * {@link Comment#resolved()} is not null). Hosts without resolvable threads refuse.
+     */
+    default void resolveThread(PrRef ref, String thread, boolean resolved) {
+        throw new ProviderException(400, label() + " kann hier keine Threads auflösen");
+    }
 }

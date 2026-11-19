@@ -2,9 +2,11 @@ package dev.smartcodereview.gitlab;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import dev.smartcodereview.github.GitHubProvider;
+import dev.smartcodereview.model.Model.Comment;
 import dev.smartcodereview.model.Model.PrRef;
 import dev.smartcodereview.model.Model.Snapshot;
 import dev.smartcodereview.provider.ProviderException;
@@ -130,6 +132,46 @@ class GitLabProviderHttpTest {
         assertEquals(400, e.status());
     }
 
+    @Test
+    void readsWhetherAThreadIsResolved() {
+        List<Comment> comments = provider().comments(MR);
+
+        assertEquals(List.of("open", "open", "done", "plain"), comments.stream().map(Comment::body).toList());
+        Comment root = comments.get(0);
+        assertEquals("t-open", root.thread());
+        assertEquals(Boolean.FALSE, root.resolved());
+        assertEquals("N12", root.key());
+        // a reply carries the thread and its state too
+        assertEquals("t-open", comments.get(1).thread());
+        assertEquals(Boolean.FALSE, comments.get(1).resolved());
+        assertEquals(root.id(), comments.get(1).inReplyTo());
+        assertEquals(Boolean.TRUE, comments.get(2).resolved());
+        // a plain comment cannot be resolved
+        assertEquals("t-plain", comments.get(3).thread());
+        assertNull(comments.get(3).resolved());
+    }
+
+    @Test
+    void resolvesAndReopensAThread() {
+        GitLabProvider gitlab = provider();
+
+        gitlab.resolveThread(MR, "t-open", true);
+        gitlab.resolveThread(MR, "t-done", false);
+
+        assertEquals(List.of("PUT /api/v4/projects/acme%2Fshop/merge_requests/7/discussions/t-open?resolved=true",
+                "PUT /api/v4/projects/acme%2Fshop/merge_requests/7/discussions/t-done?resolved=false"),
+                requests.stream().map(r -> r.getRequestMethod() + " " + r.getRequestURI()).toList());
+        assertEquals("glpat-test", requests.get(0).getRequestHeaders().getFirst("PRIVATE-TOKEN"));
+    }
+
+    @Test
+    void onlyGitLabResolvesThreads() {
+        ProviderException e = assertThrows(ProviderException.class, () -> new GitHubProvider().resolveThread(MR, "t", true));
+
+        assertEquals(400, e.status());
+        assertEquals("GitHub kann hier keine Threads auflösen", e.getMessage());
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private GitLabProvider provider() {
@@ -152,6 +194,9 @@ class GitLabProviderHttpTest {
         if (path.endsWith("/diffs")) {
             return diffPage(exchange.getRequestURI().getRawQuery()).toString();
         }
+        if (path.endsWith("/discussions")) {
+            return discussions().toString();
+        }
         return MAPPER.createObjectNode().put("iid", 7).put("title", "Shop").put("state", "opened").toString();
     }
 
@@ -165,6 +210,27 @@ class GitLabProviderHttpTest {
                     .put("diff", "@@ -1 +1 @@\n-a\n+b\n");
         }
         return result;
+    }
+
+    /** An open thread with a reply, a resolved thread and a plain comment. */
+    private static ArrayNode discussions() {
+        ArrayNode result = MAPPER.createArrayNode();
+        ArrayNode open = result.addObject().put("id", "t-open").putArray("notes");
+        note(open, 1, "open", "2026-11-19T10:00:00Z").put("resolvable", true).put("resolved", false)
+                .putObject("position").put("position_type", "text").put("new_path", "f1.txt").put("new_line", 12);
+        note(open, 2, "open", "2026-11-19T10:01:00Z").put("resolvable", true).put("resolved", false);
+        ArrayNode done = result.addObject().put("id", "t-done").putArray("notes");
+        note(done, 3, "done", "2026-11-19T10:02:00Z").put("resolvable", true).put("resolved", true)
+                .putObject("position").put("position_type", "text").put("new_path", "f1.txt").put("new_line", 20);
+        ArrayNode plain = result.addObject().put("id", "t-plain").put("individual_note", true).putArray("notes");
+        note(plain, 4, "plain", "2026-11-19T10:03:00Z").put("resolvable", false);
+        return result;
+    }
+
+    private static ObjectNode note(ArrayNode notes, long id, String body, String createdAt) {
+        ObjectNode note = notes.addObject().put("id", id).put("body", body).put("created_at", createdAt);
+        note.putObject("author").put("username", "anna");
+        return note;
     }
 
     private static void respond(HttpExchange exchange, int status, String contentType, String body) throws IOException {

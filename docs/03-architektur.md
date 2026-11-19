@@ -61,7 +61,8 @@ Alle PR-Endpunkte unter `/api/prs/{provider}/{owner}/{repo}/{number}`; `provider
 | GET | `…/{number}/commits` | Commits des PRs (älteste zuerst) und welcher Commit welche geänderte Zeile gemacht hat (`commits.json`) |
 | GET | `…/{number}/file?path=…` | Eine geänderte Datei als Ganzes am PR-Stand: jede Zeile der neuen Version, gelöschte Zeilen eingewoben, gleiche Zeilenschlüssel wie die Segmente (Code-Ansicht «Ganze Klassen»; aus `sources/`, fehlende Datei wird einmal geholt) |
 | GET | `…/{number}/blame?path=…` | Git-Blame einer geänderten Datei am PR-Stand (Cache unter `blame/`) |
-| GET | `…/{number}/comments` | Kommentare von GitHub (Inline + allgemein) |
+| GET | `…/{number}/comments` | Kommentare von GitHub oder GitLab (Inline + allgemein). `thread`: Id des Threads beim Host (GitLab: Discussion), `resolved`: Zustand des Threads, auf allen seinen Kommentaren gleich – `null`, wenn er sich nicht auflösen lässt (einfacher Kommentar, GitHub). |
+| PUT | `…/{number}/threads/{thread}/resolved` | `{"resolved":true}` löst einen Thread sofort auf dem Host auf, `false` öffnet ihn wieder. Antwort: alle Kommentare im neuen Stand. Nur GitLab; sonst 400. |
 | POST | `…/{number}/comments` | Kommentar sofort veröffentlichen: inline `{path,line,side,body}` (+ `oldLine`/`newLine` für Kontextzeilen, von GitLab benötigt), Antwort `{inReplyTo,body}`, allgemein `{body}` |
 
 Fehler kommen als `{"message": "…"}` mit passendem HTTP-Status.

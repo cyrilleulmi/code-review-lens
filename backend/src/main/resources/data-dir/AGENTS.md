@@ -208,6 +208,8 @@ Leave `reload` as it is when you edit the file; to review only what is new, mark
   `commitChecks` (`fixTitles`, `testAdjustTitles`, `notCode`). A warn finding is worth a look: was the test bent to
   the code, does the fix need a test?
 * `GET  …/blame?path=<changed file>` – git blame at the PR head
+* `PUT  …/threads/{thread}/resolved` with `{"resolved":true}` – resolves a GitLab thread IMMEDIATELY (`false` opens it
+  again); `thread` and `resolved` are fields of each comment (`resolved` null: the thread cannot be resolved)
 * `GET  …/comments`, `POST …/comments` – comments; POST publishes IMMEDIATELY on GitHub/GitLab:
   inline `{"path":"src/a.ts","line":12,"side":"RIGHT","body":"…"}`, reply `{"inReplyTo":123,"body":"…"}`,
   general `{"body":"…"}`. For unchanged context lines also send `oldLine` and `newLine` (GitLab needs both).

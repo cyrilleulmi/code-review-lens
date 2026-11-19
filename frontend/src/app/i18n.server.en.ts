@@ -188,6 +188,7 @@ export const SERVER_EN: Record<string, string> = {
   'Abgebrochen': 'Cancelled',
   'Eintrag zu gross': 'Entry too large',
   'path fehlt': 'path missing',
+  'resolved fehlt': 'resolved missing',
   'Kein GitHub-Token gefunden. Setze GITHUB_TOKEN oder melde dich mit `gh auth login` an.':
     'No GitHub token found. Set GITHUB_TOKEN or sign in with `gh auth login`.',
   'Kein GitLab-Token gefunden. Setze GITLAB_TOKEN (Scope: api) – ohne Token lassen sich nur öffentliche Merge Requests per URL öffnen.':
@@ -280,6 +281,7 @@ export const SERVER_EN_PATTERNS: [RegExp, Replace][] = [
   [/^([\s\S]+) geändert in (\w+), ohne Test im Commit\. ([\s\S]+)$/, (m, tr) => `${m[1]} changed in ${m[2]}, without a test in the commit. ${tr(m[3])}`],
   // error messages (providers, ReviewService)
   [/^Keine bekannte Pull- oder Merge-Request-URL: ([\s\S]*)$/, (m) => `Not a known pull or merge request URL: ${m[1]}`],
+  [/^(\S+) kann hier keine Threads auflösen$/, (m) => `${m[1]} cannot resolve threads here`],
   [/^(\S+) nimmt kein Cookie entgegen$/, (m) => `${m[1]} does not take a cookie`],
   [/^Unbekannter Provider: ([\s\S]*)$/, (m) => `Unknown provider: ${m[1]}`],
   [/^Datei ist nicht Teil des Pull Requests: ([\s\S]*)$/, (m) => `File is not part of the pull request: ${m[1]}`],

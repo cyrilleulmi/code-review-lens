@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { isFlowView, isTestsView, ownerLabel } from './api';
+import { Comment, isFlowView, isTestsView, ownerLabel } from './api';
 import { CommitList } from './commit-list';
 import { findingSummary, findingTotals } from './commit-findings';
 import { expectationTotals, expectationWarning } from './expectations';
@@ -71,6 +71,11 @@ export class Overview {
   );
   protected readonly generalComments = computed(() => this.store.comments().filter((c) => c.kind === 'issue'));
   protected readonly inlineCount = computed(() => this.store.comments().filter((c) => c.kind === 'review').length);
+  /** Threads (inline and general) that can be resolved and are not yet. */
+  protected readonly openThreads = computed(
+    () => this.store.comments().filter((c) => c.inReplyTo == null && c.resolved === false).length);
+  /** Thread whose state is being changed on the code host. */
+  protected readonly resolving = signal<string | null>(null);
   /** Switched-on categories in review order; switched-off ones are listed separately. */
   protected readonly categories = computed(() => this.allCategories().filter((c) => c.enabled));
   protected readonly disabled = computed(() => this.allCategories().filter((c) => !c.enabled));
@@ -113,6 +118,15 @@ export class Overview {
 
   protected input(event: Event): void {
     this.draft.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  /** Resolves the thread a general comment starts, or opens it again. */
+  protected resolve(c: Comment): void {
+    if (!c.thread || c.resolved == null || this.resolving()) {
+      return;
+    }
+    this.resolving.set(c.thread);
+    this.store.resolveThread(c.thread, !c.resolved, () => this.resolving.set(null));
   }
 
   protected send(): void {

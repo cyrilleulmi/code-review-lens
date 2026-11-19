@@ -509,11 +509,13 @@ public class GitLabProvider implements ReviewProvider {
     private List<Comment> notesOf(JsonNode discussion, PrRef ref) {
         List<Comment> result = new ArrayList<>();
         Comment root = null;
+        String thread = discussion.path("id").asText(null);
+        Boolean resolved = resolved(discussion.path("notes"));
         for (JsonNode note : discussion.path("notes")) {
             if (note.path("system").asBoolean(false)) {
                 continue;
             }
-            Comment c = toComment(note, root, ref);
+            Comment c = toComment(note, root, ref, thread, resolved);
             if (root == null) {
                 root = c;
             }
@@ -522,8 +524,26 @@ public class GitLabProvider implements ReviewProvider {
         return result;
     }
 
-    /** root: first note of the discussion (null for the root itself); replies inherit its kind and line. */
-    private Comment toComment(JsonNode note, Comment root, PrRef ref) {
+    /**
+     * State of a thread: null when none of its notes can be resolved (a plain comment), else whether all that can
+     * be are resolved - GitLab resolves and reopens the notes of a thread together.
+     */
+    private static Boolean resolved(Iterable<JsonNode> notes) {
+        boolean resolvable = false, open = false;
+        for (JsonNode note : notes) {
+            if (note.path("resolvable").asBoolean(false)) {
+                resolvable = true;
+                open |= !note.path("resolved").asBoolean(false);
+            }
+        }
+        return resolvable ? !open : null;
+    }
+
+    /**
+     * root: first note of the discussion (null for the root itself); replies inherit its kind and line.
+     * thread, resolved: id and state of the discussion.
+     */
+    private Comment toComment(JsonNode note, Comment root, PrRef ref, String thread, Boolean resolved) {
         JsonNode pos = note.path("position");
         boolean inline = pos.isObject() && "text".equals(pos.path("position_type").asText());
         String path = null, side = null, key = null;
@@ -547,7 +567,15 @@ public class GitLabProvider implements ReviewProvider {
         String kind = inline || (root != null && "review".equals(root.kind())) ? "review" : "issue";
         return new Comment(note.path("id").asLong(), kind, path, line, side, key, note.path("body").asText(),
                 note.path("author").path("username").asText(), note.path("author").path("avatar_url").asText(null),
-                note.path("created_at").asText(), url, root == null ? null : root.id());
+                note.path("created_at").asText(), url, root == null ? null : root.id(), thread, resolved);
+    }
+
+    /** PUT /discussions/:id?resolved= resolves or reopens all resolvable notes of the thread. */
+    @Override
+    public void resolveThread(PrRef ref, String thread, boolean resolved) {
+        requireToken();
+        String path = mrPath(ref) + "/discussions/" + enc(thread) + "?resolved=" + resolved;
+        http.json(request(path).PUT(HttpRequest.BodyPublishers.noBody()).build(), path);
     }
 
     @Override
@@ -559,12 +587,13 @@ public class GitLabProvider implements ReviewProvider {
         if (c.inReplyTo() != null) {
             String discussionId = discussionOf(ref, c.inReplyTo());
             JsonNode note = postJson(base + "/discussions/" + discussionId + "/notes", body);
-            Comment reply = toComment(note, null, ref);
+            Comment reply = toComment(note, null, ref, discussionId, resolved(List.of(note)));
             return new Comment(reply.id(), "review", reply.path(), reply.line(), reply.side(), reply.key(), reply.body(),
-                    reply.author(), reply.avatarUrl(), reply.createdAt(), reply.url(), c.inReplyTo());
+                    reply.author(), reply.avatarUrl(), reply.createdAt(), reply.url(), c.inReplyTo(), reply.thread(),
+                    reply.resolved());
         }
         if (c.path() == null || c.line() == null) {
-            return toComment(postJson(base + "/notes", body), null, ref);
+            return toComment(postJson(base + "/notes", body), null, ref, null, null); // a plain comment, no thread
         }
 
         PullRequestInfo pr = snapshot.pr();
@@ -586,7 +615,7 @@ public class GitLabProvider implements ReviewProvider {
             }
         }
         JsonNode discussion = postJson(base + "/discussions", body);
-        return toComment(discussion.path("notes").get(0), null, ref);
+        return notesOf(discussion, ref).get(0);
     }
 
     private String discussionOf(PrRef ref, long noteId) {

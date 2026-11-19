@@ -6,6 +6,9 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+### Neu
+- **GitLab-Threads auflösen:** Kommentar-Threads eines Merge Requests lassen sich im Tool auflösen und wieder öffnen, so wie «Resolve thread» in GitLab. Unter einem Thread steht neben «Antworten» der Knopf «Thread auflösen» bzw. «Thread wieder öffnen»; die Änderung geht sofort an GitLab. Ein aufgelöster Thread klappt im Code auf eine Zeile zusammen (Häkchen, «Aufgelöst», Autor und Anfang des Kommentars) und öffnet sich mit einem Klick. Die Übersicht zeigt, wie viele Threads noch offen sind, und bietet dasselbe für allgemeine Threads. Einfache Kommentare ohne Thread und Pull Requests auf GitHub bleiben unverändert. `comments.json` und die API tragen pro Kommentar neu `thread` und `resolved`; API: `PUT …/threads/{thread}/resolved`.
+
 ## [0.9.0] – 2026-11-19
 
 ### Neu

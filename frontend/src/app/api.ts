@@ -794,6 +794,10 @@ export interface Comment {
   createdAt: string;
   url: string;
   inReplyTo: number | null;
+  /** the host's id of the thread (GitLab: discussion id); null where the host has none */
+  thread?: string | null;
+  /** state of the thread, the same on all its comments; null: it cannot be resolved (plain comment, or the host has no such thing) */
+  resolved?: boolean | null;
 }
 
 export interface NewComment {
@@ -896,6 +900,11 @@ export class Api {
 
   blame(pr: PrKey, path: string): Observable<Blame> {
     return this.http.get<Blame>(`${base(pr)}/blame`, { params: { path } });
+  }
+
+  /** Resolves a thread on the code host or opens it again; answers with all comments as they are now. */
+  resolveThread(pr: PrKey, thread: string, resolved: boolean): Observable<Comment[]> {
+    return this.http.put<Comment[]>(`${base(pr)}/threads/${encodeURIComponent(thread)}/resolved`, { resolved });
   }
 
   postComment(pr: PrKey, comment: NewComment): Observable<Comment> {

@@ -10,6 +10,7 @@ import dev.smartcodereview.model.Model.Me;
 import dev.smartcodereview.model.Model.NewComment;
 import dev.smartcodereview.model.Model.PrRef;
 import dev.smartcodereview.model.Model.PullRequestSummary;
+import dev.smartcodereview.model.Model.ResolveRequest;
 import dev.smartcodereview.model.Model.ReviewBundle;
 import dev.smartcodereview.model.Model.ReviewState;
 import dev.smartcodereview.model.Model.Settings;
@@ -198,6 +199,21 @@ public class ReviewResource {
     public Comment comment(@PathParam("provider") String provider, @PathParam("owner") String owner,
                            @PathParam("repo") String repo, @PathParam("number") int number, NewComment comment) {
         return service.postComment(new PrRef(provider, owner, repo, number), comment);
+    }
+
+    /**
+     * Resolves a thread of comments on the code host or opens it again; thread is {@code Comment.thread}. Answers
+     * with all comments of the PR as they are now.
+     */
+    @PUT
+    @Path("/prs/{provider}/{owner}/{repo}/{number}/threads/{thread}/resolved")
+    public List<Comment> resolveThread(@PathParam("provider") String provider, @PathParam("owner") String owner,
+                                       @PathParam("repo") String repo, @PathParam("number") int number,
+                                       @PathParam("thread") String thread, ResolveRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("resolved fehlt");
+        }
+        return service.resolveThread(new PrRef(provider, owner, repo, number), thread, request.resolved());
     }
 
     @ServerExceptionMapper

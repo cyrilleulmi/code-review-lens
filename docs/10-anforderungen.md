@@ -132,6 +132,7 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | FR-KOM-03 | Das System muss auf bestehende Inline-Kommentare antworten lassen. | Antwort landet im selben Thread. | M |
 | FR-KOM-04 | Das System muss einen allgemeinen Kommentar zum PR schreiben lassen. | Editor auf der Übersicht. | M |
 | FR-KOM-05 | Im Repository-Modus darf es keine Kommentare geben. | Keine Kommentar-Knöpfe; `POST …/0/comments` → 400 mit Meldung; `GET` → leere Liste. | M |
+| FR-KOM-06 | Das System muss zeigen, ob ein Kommentar-Thread aufgelöst ist, und ihn auflösen und wieder öffnen lassen. | Jeder Kommentar trägt `thread` (Id beim Host) und `resolved` (Zustand des Threads; `null` = nicht auflösbar). GitLab: Discussion-Id; ein Thread gilt als aufgelöst, wenn alle seine auflösbaren Notes es sind. Unter einem auflösbaren Thread steht «Thread auflösen» bzw. «Thread wieder öffnen» (`PUT …/threads/{thread}/resolved`, sofort auf dem Host, kein Pending Review – A5). Ein aufgelöster Thread ist im Code auf eine Zeile eingeklappt (Häkchen, «Aufgelöst», Autor, Anfang des Kommentars, Anzahl Antworten) und öffnet sich per Klick; nach dem Auflösen klappt er ein. Die Übersicht zeigt die Anzahl offener Threads und bietet den Knopf auch für allgemeine Threads. Einfache Kommentare (GitLab `individual_note`) und GitHub haben keinen Knopf; die API antwortet dort mit 400, im Repository-Modus ebenso. | T: GitLabProviderHttpTest (Zustand lesen, auflösen und wieder öffnen, nur GitLab); manuell gegen einen nachgebauten GitLab-Server (auflösen, wieder öffnen, allgemeiner Thread). Nicht gegen ein echtes GitLab geprüft. |
 
 ## 8. Commits (FR-COM)
 
@@ -259,7 +260,7 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | `github/GitHubSearchTest` | 3 | FR-ZUG-08 (Suche auf eigenes Konto und Organisationen, eigene Qualifier, Länge) |
 | `provider/JsonHttpTest` | 4 | FR-ZUG-06 (JSON lesen, Login-Seite statt JSON, Fehlerseite behält ihren Status, nicht erreichbarer Host) |
 | `gitlab/ProviderUrlTest` | 3 | FR-ZUG-03, FR-REP-01 |
-| `gitlab/GitLabProviderHttpTest` | 7 | FR-SNP-04 (GitLab-MR-Diffs in Seiten zu 30, gegen einen lokalen HTTP-Server), FR-ZUG-09, -10 (Cookie des SSO-Proxys: mitschicken, im Betrieb ersetzen) |
+| `gitlab/GitLabProviderHttpTest` | 10 | FR-SNP-04 (GitLab-MR-Diffs in Seiten zu 30, gegen einen lokalen HTTP-Server), FR-ZUG-09, -10 (Cookie des SSO-Proxys: mitschicken, im Betrieb ersetzen), FR-KOM-06 (Threads: Zustand, auflösen, wieder öffnen) |
 | `repo/RepositorySnapshotTest` | 1 | FR-REP-02, -03 |
 
 **Anforderungen ohne automatischen Test** (nur manuell oder gar nicht geprüft). Sie sind die Grundlage für V-02 bis V-04 in [11-verbesserungen.md](11-verbesserungen.md):

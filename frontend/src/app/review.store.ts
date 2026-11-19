@@ -1020,6 +1020,25 @@ export class ReviewStore {
     });
   }
 
+  /** Resolves a thread of comments on the code host or opens it again. */
+  resolveThread(thread: string, resolved: boolean, done: (ok: boolean) => void): void {
+    const key = this.prKey();
+    if (!key) {
+      return done(false);
+    }
+    this.api.resolveThread(key, thread, resolved).subscribe({
+      next: (comments) => {
+        this.comments.set(comments);
+        this.notify(resolved ? t('Thread aufgelöst') : t('Thread wieder geöffnet'));
+        done(true);
+      },
+      error: (e) => {
+        this.error.set(t('Thread nicht geändert: {error}', { error: errorMessage(e) }));
+        done(false);
+      },
+    });
+  }
+
   notify(message: string): void {
     this.toast.set(message);
     clearTimeout(this.toastTimer);

@@ -696,6 +696,18 @@ public class ReviewService {
         return provider(ref.provider()).postComment(ref, snapshot, comment);
     }
 
+    /** Resolves a thread of comments on the code host or opens it again; answers with the comments as they are now. */
+    public List<Comment> resolveThread(PrRef ref, String thread, boolean resolved) {
+        if (ref.number() == 0) {
+            throw new ProviderException(400, "Beim ganzen Repository gibt es keinen Pull Request, an den Kommentare gehen könnten");
+        }
+        ReviewProvider provider = provider(ref.provider());
+        provider.resolveThread(ref, thread, resolved);
+        List<Comment> comments = provider.comments(ref);
+        store.write(prDirFile(ref, "comments.json"), comments);
+        return comments;
+    }
+
     // ------------------------------------------------------------------ commits & blame
 
     /**

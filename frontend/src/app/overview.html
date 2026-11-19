@@ -25,6 +25,9 @@
       <span class="add">+{{ p.additions }}</span><span class="del">−{{ p.deletions }}</span>
       <span>{{ t('{n} Dateien', { n: p.changedFiles }) }}</span>
       <span>{{ t('{n} Inline-Kommentare', { n: inlineCount() }) }}</span>
+      @if (openThreads(); as n) {
+        <span class="open-threads">{{ n === 1 ? t('1 offener Thread') : t('{n} offene Threads', { n }) }}</span>
+      }
       <button type="button" class="btn small" (click)="store.openRepository()"
               [title]="t('Alle Dateien des Default-Branches wie einen Pull Request analysieren')">
         <app-icon name="folder" [size]="13" /> {{ t('Ganzes Repository analysieren') }}</button>
@@ -141,7 +144,16 @@
           <img [src]="c.avatarUrl" alt="" />
         }
         <div>
-          <div class="cmeta"><b>{{ c.author }}</b> · {{ time(c.createdAt) }}</div>
+          <div class="cmeta"><b>{{ c.author }}</b> · {{ time(c.createdAt) }}
+            @if (c.resolved != null && c.inReplyTo == null && c.thread) {
+              @if (c.resolved) {
+                <span class="resolved"><app-icon name="check" [size]="12" /> {{ t('Aufgelöst') }}</span>
+              }
+              <button type="button" class="resolve" [disabled]="resolving() === c.thread" (click)="resolve(c)">
+                {{ c.resolved ? t('Thread wieder öffnen') : t('Thread auflösen') }}
+              </button>
+            }
+          </div>
           <div class="cbody">{{ c.body }}</div>
         </div>
       </div>

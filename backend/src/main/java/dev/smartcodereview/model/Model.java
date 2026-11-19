@@ -686,11 +686,20 @@ public final class Model {
 
     // ---------------------------------------------------------------- comments
 
-    /** kind: review (inline) | issue (general). side: RIGHT (new) | LEFT (old). */
+    /**
+     * kind: review (inline) | issue (general). side: RIGHT (new) | LEFT (old). thread: the host's id of the thread the
+     * comment belongs to (GitLab: discussion id), null where the host has none. resolved: state of that thread, the
+     * same on all its comments - null when it cannot be resolved (a plain comment, or a host without this), else
+     * whether it is resolved.
+     */
     @RegisterForReflection
     public record Comment(long id, String kind, String path, Integer line, String side, String key,
                           String body, String author, String avatarUrl, String createdAt, String url,
-                          Long inReplyTo) {
+                          Long inReplyTo, String thread, Boolean resolved) {
+    }
+
+    @RegisterForReflection
+    public record ResolveRequest(boolean resolved) {
     }
 
     /**
