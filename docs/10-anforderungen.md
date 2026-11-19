@@ -44,7 +44,7 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | FR-SNP-05 | Bringt das Neuladen neue Commits (oder einen Rebase), muss das System die Markierungen auf die neuen Zeilenschlüssel übertragen: unveränderte Zeilen behalten sie, geänderte und neue sind offen; nie darf neuer Code als geprüft erscheinen. | Paarung nach Inhalt und Reihenfolge pro Datei (A4); Orte in `okAt` folgen der Gruppe bzw. dem Flow (Einstiegspunkt); umbenannte Dateien über `previousPath`; `reload` in `review.json` mit `kept`, `dropped`, `newLines`; Log-Eintrag `carry`. | T: MarkCarryTest; LineMatchTest; manuell spongecoach#13 (`1cc0359`) |
 | FR-SNP-06 | Das UI muss nach dem Neuladen melden, was mit den Markierungen geschah, und zeigen lassen, was seit dem letzten Review neu ist. | Meldung «Neue Commits: n Markierungen übernommen, m verworfen · k Zeilen neu oder geändert»; Eintrag «Neu seit letztem Review» in der Commit-Liste filtert alle Ansichten (URL `…/c/since-review`), ✓ markiert alle diese Zeilen; neue Commits tragen «neu». | T: reload-message.spec.ts; Rest M |
 | FR-SNP-03 | Das System muss fehlende Quelltexte nachladen, wenn neue Regeln sie brauchen. | Analyse nach Regeländerung holt fehlende `sources/` einmal nach (B9). | M |
-| FR-SNP-04 | Das System muss Grenzen des Hosts einhalten und sauber melden. | Max. 3000 Dateien pro PR, Dateien > 1 MB ohne Inhalt (A10). | M |
+| FR-SNP-04 | Das System muss Grenzen des Hosts einhalten und sauber melden. | Max. 3000 Dateien pro PR, Dateien > 1 MB ohne Inhalt (A10). GitLab-MR-Diffs in Seiten zu 30: GitLab 16.x antwortet auf grössere Seiten mit 500. | T: GitLabProviderHttpTest (Seiten zu 30, Abbruch nach der ersten nicht vollen Seite); Rest M |
 
 ## 4. Analyse (FR-ANA)
 
@@ -256,6 +256,7 @@ Alle Funktionen von SmartCodeReview als prüfbare Anforderungen, mit Akzeptanzkr
 | `provider/RepoListsTest` | 2 | FR-ZUG-08 (Filter, Reihenfolge und Doppelte beim Zusammenführen) |
 | `github/GitHubSearchTest` | 3 | FR-ZUG-08 (Suche auf eigenes Konto und Organisationen, eigene Qualifier, Länge) |
 | `gitlab/ProviderUrlTest` | 3 | FR-ZUG-03, FR-REP-01 |
+| `gitlab/GitLabProviderHttpTest` | 2 | FR-SNP-04 (GitLab-MR-Diffs in Seiten zu 30, gegen einen lokalen HTTP-Server) |
 | `repo/RepositorySnapshotTest` | 1 | FR-REP-02, -03 |
 
 **Anforderungen ohne automatischen Test** (nur manuell oder gar nicht geprüft). Sie sind die Grundlage für V-02 bis V-04 in [11-verbesserungen.md](11-verbesserungen.md):

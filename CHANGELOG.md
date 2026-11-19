@@ -6,6 +6,9 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+### Behoben
+- **Merge Requests auf GitLab 16.x:** Die geänderten Dateien eines Merge Requests werden in Seiten zu 30 statt 100 geladen. GitLab 16.x (geprüft mit 16.9) beantwortet mehr als 30 Einträge pro Seite mit einem Fehler 500, deshalb liess sich dort kein Merge Request öffnen. Die Obergrenze bleibt bei 3000 Dateien.
+
 ## [0.8.0] – 2026-11-18
 
 ### Neu

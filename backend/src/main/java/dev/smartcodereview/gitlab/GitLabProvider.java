@@ -58,6 +58,9 @@ public class GitLabProvider implements ReviewProvider {
 
     private static final int MAX_FILE_BYTES = 1_000_000;
     private static final int MAX_TREE_PAGES = 30;
+    /** GitLab 16.x answers 500 for more than 30 merge request diffs per page (newer versions accept 100). */
+    static final int MR_DIFFS_PER_PAGE = 30;
+    private static final int MAX_MR_DIFF_PAGES = 100;
 
     @Inject
     ObjectMapper mapper;
@@ -397,10 +400,10 @@ public class GitLabProvider implements ReviewProvider {
     private JsonNode diffs(String base) {
         try {
             var all = mapper.createArrayNode();
-            for (int page = 1; page <= 30; page++) {
-                JsonNode batch = getJson(base + "/diffs?per_page=100&page=" + page);
+            for (int page = 1; page <= MAX_MR_DIFF_PAGES; page++) {
+                JsonNode batch = getJson(base + "/diffs?per_page=" + MR_DIFFS_PER_PAGE + "&page=" + page);
                 batch.forEach(all::add);
-                if (batch.size() < 100) {
+                if (batch.size() < MR_DIFFS_PER_PAGE) {
                     break;
                 }
             }
