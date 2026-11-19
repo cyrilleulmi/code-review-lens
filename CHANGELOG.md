@@ -6,6 +6,8 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+## [0.9.0] – 2026-11-19
+
 ### Neu
 - **Self-managed GitLab hinter einem SSO-Proxy:** Liegt das GitLab hinter einem SSO-Proxy (z. B. Pritunl Zero), braucht jede Anfrage neben dem Token auch die Session-Cookies des Proxys. Die neue Einstellung `SCR_GITLAB_COOKIE` (`scr.gitlab.cookie`) nimmt sie entgegen, so wie sie im `Cookie`-Header des Browsers stehen (`name=wert; name2=wert2`), und schickt sie mit jeder GitLab-Anfrage mit.
 - **Cookie im UI erneuern:** Session-Cookies laufen regelmässig ab. Bei einem self-managed GitLab ist das Konto in der Statusleiste deshalb ein Knopf (mit Schloss): Er öffnet ein Feld, in das man den neuen Wert des Cookie-Headers einfügt – ohne Neustart. Der Dialog zeigt, warum das Konto nicht verbunden ist, bleibt offen, solange das Cookie nicht passt, und lädt danach die Merge Requests neu. Das Cookie wird nicht gespeichert: Es bleibt im Arbeitsspeicher und gilt bis zum nächsten Start, danach gilt wieder `SCR_GITLAB_COOKIE`. API: `PUT /api/accounts/{provider}/cookie`.
@@ -143,7 +145,8 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 ### Neu
 - Erster PoC: offene GitHub-PRs (eigene und Review-Anfragen), Zerlegung in Segmente, Quick wins per Regeln (ohne KI), Datenflüsse in Aufrufreihenfolge mit Diagramm, zeilenweises «ok» lokal in JSON-Dateien für Agenten, Inline-Kommentare werden sofort veröffentlicht, IntelliJ-artiges UI.
 
-[Unreleased]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.5.0...v0.6.0
