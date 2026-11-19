@@ -31,6 +31,19 @@ public interface ReviewProvider {
 
     User currentUser();
 
+    /**
+     * The session cookies of an SSO proxy in front of the host, sent with every request: empty when this host takes
+     * none, else whether a cookie is set.
+     */
+    default Optional<Boolean> cookieSet() {
+        return Optional.empty();
+    }
+
+    /** Replaces those cookies until the next start (kept in memory, never stored); blank removes them. */
+    default void setCookie(String cookie) {
+        throw new ProviderException(400, label() + " nimmt kein Cookie entgegen");
+    }
+
     /** Open PRs authored by the user, waiting for the user's review, or (role "involved") otherwise involving the user. */
     List<PullRequestSummary> openPullRequests();
 

@@ -714,9 +714,17 @@ public final class Model {
                                Analysis analysis, ReviewState state) {
     }
 
-    /** One configured code host. user is null when it has no credentials (error says why). */
+    /**
+     * One configured code host. user is null when it has no credentials (error says why). cookie: null when the host
+     * takes no session cookies of an SSO proxy, else whether a cookie is set (its value is never sent to the UI).
+     */
     @RegisterForReflection
-    public record Account(String provider, String label, String host, User user, String error) {
+    public record Account(String provider, String label, String host, User user, String error, Boolean cookie) {
+    }
+
+    /** cookie: value of the Cookie header ("name=value; name2=value2"); blank removes it. */
+    @RegisterForReflection
+    public record CookieRequest(String cookie) {
     }
 
     /** version: the running SmartCodeReview release (from pom.xml), e.g. "0.3.0". */

@@ -58,6 +58,7 @@ import java.util.regex.Pattern;
 @ApplicationScoped
 public class GitLabProvider implements ReviewProvider {
 
+    private static final String GITLAB_COM = "https://gitlab.com";
     private static final int MAX_FILE_BYTES = 1_000_000;
     private static final int MAX_TREE_PAGES = 30;
     /** GitLab 16.x answers 500 for more than 30 merge request diffs per page (newer versions accept 100). */
@@ -67,7 +68,7 @@ public class GitLabProvider implements ReviewProvider {
     @Inject
     ObjectMapper mapper;
 
-    @ConfigProperty(name = "scr.gitlab.url", defaultValue = "https://gitlab.com")
+    @ConfigProperty(name = "scr.gitlab.url", defaultValue = GITLAB_COM)
     String baseUrl;
 
     @ConfigProperty(name = "scr.gitlab.token")
@@ -78,7 +79,10 @@ public class GitLabProvider implements ReviewProvider {
 
     private JsonHttp http;
     private Tokens.Lazy token;
-    /** Value of the Cookie header of every request (session cookies of an SSO proxy), null for none. */
+    /**
+     * Value of the Cookie header of every request (session cookies of an SSO proxy), null for none. Starts as
+     * scr.gitlab.cookie and can be replaced while running: such cookies expire regularly.
+     */
     private volatile String cookie;
     private volatile String username;
 
@@ -126,6 +130,18 @@ public class GitLabProvider implements ReviewProvider {
     @Override
     public boolean hasCredentials() {
         return token.get().isPresent();
+    }
+
+    /** A proxy only stands in front of a self-managed GitLab; gitlab.com offers the cookie only when one is configured. */
+    @Override
+    public Optional<Boolean> cookieSet() {
+        boolean set = cookie != null;
+        return set || !GITLAB_COM.equals(baseUrl) ? Optional.of(set) : Optional.empty();
+    }
+
+    @Override
+    public void setCookie(String value) {
+        cookie = cookieValue(value);
     }
 
     @Override

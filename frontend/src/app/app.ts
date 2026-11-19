@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy, Component, ElementRef, HostListener, Injector, afterNextRender, computed, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
+import { AccountCookie } from './account-cookie';
 import { isTestsView, prLabel } from './api';
 import { applyLang, lang, serverText, setLang, t } from './i18n';
 import { applyTheme, theme, toggleTheme } from './theme';
@@ -33,7 +34,7 @@ interface EditorContent {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, CoverageOverview, RuleCheckOverview],
+  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, CoverageOverview, RuleCheckOverview, AccountCookie],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -41,6 +42,10 @@ export class App {
   protected readonly store = inject(ReviewStore);
   protected readonly tool = signal<ToolWindow>('prs');
   protected readonly toolWidth = signal(readWidth());
+  /** Provider whose cookie dialog is open (accounts behind an SSO proxy, status bar). */
+  protected readonly cookieFor = signal<string | null>(null);
+  protected readonly cookieAccount = computed(
+    () => this.store.me()?.accounts.find((a) => a.provider === this.cookieFor() && a.cookie != null) ?? null);
 
   protected readonly flow = computed(() => {
     const sel = this.store.selection();
@@ -153,6 +158,10 @@ export class App {
 
   protected toggleTool(t: ToolWindow): void {
     this.tool.set(this.tool() === t ? null : t);
+  }
+
+  protected toggleCookie(provider: string): void {
+    this.cookieFor.set(this.cookieFor() === provider ? null : provider);
   }
 
   protected startDrag(event: PointerEvent): void {

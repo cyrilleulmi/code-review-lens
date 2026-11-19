@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import dev.smartcodereview.github.GitHubProvider;
 import dev.smartcodereview.model.Model.PrRef;
 import dev.smartcodereview.model.Model.Snapshot;
 import dev.smartcodereview.provider.ProviderException;
@@ -87,6 +88,35 @@ class GitLabProviderHttpTest {
         provider().fetchSnapshot(MR);
 
         assertNull(requests.get(0).getRequestHeaders().getFirst("Cookie"));
+    }
+
+    @Test
+    void replacesTheCookieWhileRunning() {
+        cookie = "sso-session=expired";
+        GitLabProvider gitlab = provider();
+        assertEquals(Optional.of(true), gitlab.cookieSet());
+
+        gitlab.setCookie("sso-session=fresh");
+        gitlab.fetchSnapshot(MR);
+        assertEquals("sso-session=fresh", requests.get(0).getRequestHeaders().getFirst("Cookie"));
+
+        gitlab.setCookie(" ");
+        gitlab.fetchSnapshot(MR);
+        assertNull(requests.get(2).getRequestHeaders().getFirst("Cookie"));
+        assertEquals(Optional.of(false), gitlab.cookieSet());
+    }
+
+    @Test
+    void offersTheCookieOnlyWhereAProxyCanBe() {
+        GitLabProvider gitlabCom = new GitLabProvider();
+        gitlabCom.mapper = MAPPER;
+        gitlabCom.baseUrl = "https://gitlab.com/";
+        gitlabCom.configuredToken = Optional.of("glpat-test");
+        gitlabCom.init();
+
+        assertEquals(Optional.empty(), gitlabCom.cookieSet());
+        assertEquals(Optional.of(false), provider().cookieSet()); // self-managed
+        assertEquals(Optional.empty(), new GitHubProvider().cookieSet());
     }
 
     @Test

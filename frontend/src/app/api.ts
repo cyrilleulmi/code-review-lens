@@ -17,6 +17,8 @@ export interface Account {
   host: string;
   user: User | null;
   error: string | null;
+  /** null: the host takes no session cookies of an SSO proxy; else whether a cookie is set */
+  cookie?: boolean | null;
 }
 
 export interface Me {
@@ -825,6 +827,11 @@ export class Api {
 
   me(): Observable<Me> {
     return this.http.get<Me>('/api/me');
+  }
+
+  /** Replaces the session cookies of an SSO proxy in front of a provider (kept in memory by the backend); blank removes them. */
+  setCookie(provider: string, cookie: string): Observable<Me> {
+    return this.http.put<Me>(`/api/accounts/${provider}/cookie`, { cookie });
   }
 
   settings(): Observable<Settings> {

@@ -32,6 +32,8 @@ Voraussetzungen: JDK 21+ (getestet mit 25), Node 22+ und mindestens ein Code-Hos
 
 Das Skript baut beim ersten Mal das Angular-UI und startet dann Quarkus im Dev-Mode. Danach im Browser **http://localhost:8080** öffnen.
 
+Läuft das Cookie eines SSO-Proxys ab, meldet das Tool «HTML statt JSON … Ist das Cookie abgelaufen?». Ein Klick auf das GitLab-Konto in der Statusleiste (unten rechts, mit Schloss) öffnet ein Feld für das neue Cookie; ein Neustart ist nicht nötig.
+
 Beliebige PRs/MRs (auch fremde, öffentliche) öffnest du, indem du die URL ins Suchfeld der PR-Liste einfügst und Enter drückst. Eine **Repository-URL** (`https://github.com/owner/repo`, `https://gitlab.com/gruppe/projekt`) öffnet das **ganze Repository**: alle Dateien des Default-Branches, analysiert wie ein Pull Request, in dem jede Datei neu ist.
 
 ### Fertiges Image von Docker Hub

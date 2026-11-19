@@ -4,6 +4,7 @@ import dev.smartcodereview.ReviewService;
 import dev.smartcodereview.model.Model.Blame;
 import dev.smartcodereview.model.Model.Comment;
 import dev.smartcodereview.model.Model.Commits;
+import dev.smartcodereview.model.Model.CookieRequest;
 import dev.smartcodereview.model.Model.MarkRequest;
 import dev.smartcodereview.model.Model.Me;
 import dev.smartcodereview.model.Model.NewComment;
@@ -52,7 +53,17 @@ public class ReviewResource {
         return new Me(service.accounts(), store.root().toString(), version);
     }
 
-    /** Resolves a PR/MR web URL (GitHub or GitLab) to {provider, owner, repo, number}. */
+    /**
+     * Replaces the session cookies of an SSO proxy in front of a provider (they expire regularly): kept in memory
+     * until the next start, never stored and never returned. A blank cookie removes them. Answers like /me.
+     */
+    @PUT
+    @Path("/accounts/{provider}/cookie")
+    public Me cookie(@PathParam("provider") String provider, CookieRequest request) {
+        service.setCookie(provider, request == null ? null : request.cookie());
+        return me();
+    }
+
     /** Switched-off categories (global, <data>/settings.json): hidden in the UI, their places need no ok. */
     @GET
     @Path("/settings")
@@ -66,6 +77,7 @@ public class ReviewResource {
         return service.saveSettings(settings);
     }
 
+    /** Resolves a PR/MR web URL (GitHub or GitLab) to {provider, owner, repo, number}. */
     @GET
     @Path("/resolve")
     public PrRef resolve(@QueryParam("url") String url) {
