@@ -177,24 +177,28 @@ public class ReviewService {
     public List<Account> accounts() {
         List<Account> result = new ArrayList<>();
         for (ReviewProvider p : providerBeans) {
-            Boolean cookie = p.cookieSet().orElse(null);
-            if (!p.hasCredentials()) {
-                result.add(new Account(p.id(), p.label(), p.host(), null, "Kein Token konfiguriert", cookie));
-                continue;
-            }
-            try {
-                result.add(new Account(p.id(), p.label(), p.host(), p.currentUser(), null, cookie));
-            } catch (ProviderException e) {
-                result.add(new Account(p.id(), p.label(), p.host(), null, e.getMessage(), cookie));
-            }
+            result.add(account(p));
         }
         result.sort(Comparator.comparing((Account a) -> a.user() == null).thenComparing(Account::provider));
         return result;
     }
 
-    /** Replaces the session cookies of an SSO proxy in front of a provider (in memory, until the next start). */
-    public void setCookie(String provider, String cookie) {
-        provider(provider).setCookie(cookie);
+    /** The signed-in user of a provider, or why there is none. */
+    public Account account(ReviewProvider p) {
+        Boolean cookie = p.cookieSet().orElse(null);
+        if (!p.hasCredentials()) {
+            return new Account(p.id(), p.label(), p.host(), null, "Kein Token konfiguriert", cookie);
+        }
+        try {
+            return new Account(p.id(), p.label(), p.host(), p.currentUser(), null, cookie);
+        } catch (ProviderException e) {
+            return new Account(p.id(), p.label(), p.host(), null, e.getMessage(), cookie);
+        }
+    }
+
+    /** All providers (GitHub, GitLab). */
+    public List<ReviewProvider> providers() {
+        return providerBeans.stream().toList();
     }
 
     /** Turns a PR/MR web URL of any provider into a reference. */

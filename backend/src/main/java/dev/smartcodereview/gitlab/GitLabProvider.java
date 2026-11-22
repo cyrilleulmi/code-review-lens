@@ -18,6 +18,7 @@ import dev.smartcodereview.model.Model.PullRequestSummary;
 import dev.smartcodereview.model.Model.Snapshot;
 import dev.smartcodereview.model.Model.User;
 import dev.smartcodereview.provider.JsonHttp;
+import dev.smartcodereview.provider.ConnectionSettings;
 import dev.smartcodereview.provider.ProviderException;
 import dev.smartcodereview.provider.RepoLists;
 import dev.smartcodereview.provider.ReviewProvider;
@@ -68,8 +69,9 @@ public class GitLabProvider implements ReviewProvider {
     @Inject
     ObjectMapper mapper;
 
+    /** The startup configuration; afterwards the URL in use (the config page can change it while running). */
     @ConfigProperty(name = "scr.gitlab.url", defaultValue = GITLAB_COM)
-    String baseUrl;
+    volatile String baseUrl;
 
     @ConfigProperty(name = "scr.gitlab.token")
     Optional<String> configuredToken;
@@ -78,38 +80,86 @@ public class GitLabProvider implements ReviewProvider {
     Optional<String> configuredCookie = Optional.empty();
 
     private JsonHttp http;
-    private Tokens.Lazy token;
     /**
-     * Value of the Cookie header of every request (session cookies of an SSO proxy), null for none. Starts as
-     * scr.gitlab.cookie and can be replaced while running: such cookies expire regularly.
+     * URL, token and the Cookie header (session cookies of an SSO proxy) in use: the startup configuration, overridden
+     * by the config page; the cookie can also be replaced while running, because such cookies expire regularly.
      */
-    private volatile String cookie;
+    private volatile ConnectionSettings settings;
     private volatile String username;
 
     @PostConstruct
     void init() {
-        baseUrl = baseUrl.replaceAll("/+$", "");
         http = new JsonHttp(mapper, label());
-        token = new Tokens.Lazy(() -> Tokens.first(configuredToken, "GITLAB_TOKEN", "GL_TOKEN")
-                .or(() -> Tokens.fromCommand("glab", "config", "get", "token", "--host", URI.create(baseUrl).getHost())));
+        String startupUrl = baseUrl == null || baseUrl.isBlank() ? GITLAB_COM : baseUrl;
         try {
-            cookie = cookieValue(configuredCookie.orElse(null));
+            startupUrl = ConnectionSettings.normaliseUrl(startupUrl);
+        } catch (ProviderException e) {
+            Log.warnf("Ignoring scr.gitlab.url: %s", e.getMessage());
+            startupUrl = GITLAB_COM;
+        }
+        String host = URI.create(startupUrl).getHost();
+        Tokens.Lazy startupToken = new Tokens.Lazy(() -> Tokens.first(configuredToken == null ? Optional.empty() : configuredToken,
+                        "GITLAB_TOKEN", "GL_TOKEN")
+                .or(() -> Tokens.fromCommand("glab", "config", "get", "token", "--host", host)));
+        String startupCookie = configuredCookie == null ? null : configuredCookie.orElse(null);
+        try {
+            ConnectionSettings.cookieValue(startupCookie);
         } catch (ProviderException e) {
             Log.warnf("Ignoring scr.gitlab.cookie: %s", e.getMessage());
         }
+        use(ConnectionSettings.startup(GITLAB_COM, startupUrl, startupToken::get, startupCookie));
     }
 
-    /**
-     * The value of a Cookie header as the user gives it: trimmed, a leading "Cookie:" (copied along from the
-     * browser's developer tools) removed; null when blank. Characters a header cannot carry are refused.
-     */
+    /** Switches to other connection values; the signed-in user is looked up again. */
+    private synchronized void use(ConnectionSettings next) {
+        settings = next;
+        baseUrl = next.url();
+        username = null;
+    }
+
+    /** The value of a Cookie header as the user gives it (see {@link ConnectionSettings#cookieValue}). */
     static String cookieValue(String raw) {
-        String value = raw == null ? "" : raw.strip().replaceFirst("(?i)^cookie:\\s*", "");
-        if (value.chars().anyMatch(c -> c < 0x20 || c > 0x7e)) {
-            throw new ProviderException(400, "Das Cookie enthält Zeichen, die in einem HTTP-Header nicht erlaubt sind "
-                    + "(z. B. Zeilenumbrüche).");
-        }
-        return value.isEmpty() ? null : value;
+        return ConnectionSettings.cookieValue(raw);
+    }
+
+    @Override
+    public Optional<Model.Connection> connection(Model.Account account) {
+        ConnectionSettings s = settings;
+        return Optional.of(new Model.Connection(id(), label(), s.url(), s.urlSource(), s.startupUrl(),
+                s.token().isPresent(), s.tokenSource(), s.cookie() != null, s.cookieSource(), !s.saved().isEmpty(),
+                account));
+    }
+
+    @Override
+    public Model.SavedConnection savedConnection() {
+        return settings.saved();
+    }
+
+    @Override
+    public synchronized void loadConnection(Model.SavedConnection saved) {
+        use(settings.withSaved(saved));
+    }
+
+    @Override
+    public synchronized void configure(Model.ConnectionRequest request) {
+        use(settings.apply(request));
+    }
+
+    @Override
+    public synchronized void resetConnection() {
+        use(settings.reset());
+    }
+
+    /** Signs in with the values of the request (on top of the current ones) without using them. */
+    @Override
+    public User testConnection(Model.ConnectionRequest request) {
+        ConnectionSettings candidate = settings.apply(request);
+        GitLabProvider probe = new GitLabProvider();
+        probe.mapper = mapper;
+        probe.http = new JsonHttp(mapper, label());
+        probe.settings = candidate;
+        probe.baseUrl = candidate.url();
+        return probe.currentUser();
     }
 
     @Override
@@ -129,19 +179,19 @@ public class GitLabProvider implements ReviewProvider {
 
     @Override
     public boolean hasCredentials() {
-        return token.get().isPresent();
+        return settings.token().isPresent();
     }
 
     /** A proxy only stands in front of a self-managed GitLab; gitlab.com offers the cookie only when one is configured. */
     @Override
     public Optional<Boolean> cookieSet() {
-        boolean set = cookie != null;
+        boolean set = settings.cookie() != null;
         return set || !GITLAB_COM.equals(baseUrl) ? Optional.of(set) : Optional.empty();
     }
 
     @Override
-    public void setCookie(String value) {
-        cookie = cookieValue(value);
+    public synchronized void setCookie(String value) {
+        settings = settings.withCookie(value);
     }
 
     @Override
@@ -740,9 +790,9 @@ public class GitLabProvider implements ReviewProvider {
     }
 
     private void requireToken() {
-        if (token.get().isEmpty()) {
-            throw new ProviderException(401, "Kein GitLab-Token gefunden. Setze GITLAB_TOKEN (Scope: api) – ohne Token "
-                    + "lassen sich nur öffentliche Merge Requests per URL öffnen.");
+        if (settings.token().isEmpty()) {
+            throw new ProviderException(401, "Kein GitLab-Token gefunden. Trage eines unter «Verbindungen» ein oder setze "
+                    + "GITLAB_TOKEN (Scope: api) – ohne Token lassen sich nur öffentliche Merge Requests per URL öffnen.");
         }
     }
 
@@ -755,12 +805,13 @@ public class GitLabProvider implements ReviewProvider {
     }
 
     private HttpRequest.Builder request(String path) {
-        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(baseUrl + "/api/v4" + path))
+        ConnectionSettings s = settings; // one consistent set of values, even while the config page changes them
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(s.url() + "/api/v4" + path))
                 .timeout(Duration.ofSeconds(30))
                 .header("Accept", "application/json")
                 .header("User-Agent", "SmartCodeReview");
-        token.get().ifPresent(t -> b.header("PRIVATE-TOKEN", t));
-        String c = cookie;
+        s.token().ifPresent(t -> b.header("PRIVATE-TOKEN", t));
+        String c = s.cookie();
         if (c != null) {
             b.header("Cookie", c);
         }

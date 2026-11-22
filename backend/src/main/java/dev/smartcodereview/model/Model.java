@@ -1,5 +1,6 @@
 package dev.smartcodereview.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 import java.util.List;
@@ -759,6 +760,49 @@ public final class Model {
     /** cookie: value of the Cookie header ("name=value; name2=value2"); blank removes it. */
     @RegisterForReflection
     public record CookieRequest(String cookie) {
+    }
+
+    // ---------------------------------------------------------------- connections (config page)
+
+    /**
+     * A code host connection as saved on the config page, one entry of {@code <data>/connections.json}. Every field is
+     * optional: null means the startup configuration applies (scr.gitlab.url, GITLAB_TOKEN …). Holds secrets (token,
+     * cookie); the API never returns them.
+     */
+    @RegisterForReflection
+    public record SavedConnection(String url, String token, String cookie) {
+        public static final SavedConnection NONE = new SavedConnection(null, null, null);
+
+        @JsonIgnore // not a field of connections.json
+        public boolean isEmpty() {
+            return url == null && token == null && cookie == null;
+        }
+    }
+
+    /** {@code <data>/connections.json}: saved connections by provider id. */
+    @RegisterForReflection
+    public record SavedConnections(Map<String, SavedConnection> connections) {
+    }
+
+    /**
+     * What the config page shows of a connection; the secrets themselves never leave the backend.
+     * Sources: "saved" (config page, connections.json), "runtime" (set while running, only in memory: cookies),
+     * "startup" (startup configuration: properties, environment, CLI), "default" (built-in URL), null (not set).
+     * startupUrl: the URL of the startup configuration, to see what "reset" leads back to. cookie: null when the host
+     * takes no cookies. account: the connection as it is now (user, or why there is none).
+     */
+    @RegisterForReflection
+    public record Connection(String provider, String label, String url, String urlSource, String startupUrl,
+                             boolean token, String tokenSource, Boolean cookie, String cookieSource, boolean saved,
+                             Account account) {
+    }
+
+    /**
+     * A change on the config page. Per field: null keeps it, "" goes back to the startup configuration, else the new
+     * value. saveCookie: false keeps a new cookie only in memory (until the next start), like the status bar dialog.
+     */
+    @RegisterForReflection
+    public record ConnectionRequest(String url, String token, String cookie, Boolean saveCookie) {
     }
 
     /** version: the running SmartCodeReview release (from pom.xml), e.g. "0.3.0". */

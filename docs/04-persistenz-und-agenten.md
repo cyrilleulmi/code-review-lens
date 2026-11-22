@@ -16,6 +16,8 @@ Alles, was SmartCodeReview lokal weiss, liegt als **lesbare Dateien** in einem V
 ├── rules.default.json        Mitgelieferte Regeln (wird beim Start überschrieben, nur zum Nachschlagen)
 ├── rules.json                OPTIONAL: eigene Regeln; hat Vorrang. Änderungen werden automatisch übernommen.
 ├── settings.json             Ausgeschaltete Kategorien {"disabledCategories": [...]} (vom UI geschrieben)
+├── connections.json          OPTIONAL: Verbindungen der Seite «Verbindungen» {"connections": {"gitlab": {"url", "token", "cookie"}}};
+│                             null = Startkonfiguration. Enthält Geheimnisse im Klartext: nicht lesen, kopieren oder ausgeben
 └── reviews/
     └── <github|gitlab>/<owner>/<repo>/<number>/      (GitLab-Gruppen: gruppe~untergruppe; Nummer 0 = ganzes Repository)
         ├── snapshot.json     PR-Metadaten + Diff (eingefroren)

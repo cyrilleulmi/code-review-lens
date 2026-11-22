@@ -182,6 +182,9 @@ export const SERVER_EN: Record<string, string> = {
   'Beim ganzen Repository gibt es keinen Pull Request, an den Kommentare gehen könnten':
     'For the whole repository there is no pull request that comments could go to',
   'Kommentar ist leer': 'Comment is empty',
+  'Keine Angaben zur Verbindung': 'No details of the connection',
+  'Das Token enthält Zeichen, die in einem HTTP-Header nicht erlaubt sind (z. B. Zeilenumbrüche).':
+    'The token contains characters that are not allowed in an HTTP header (e.g. line breaks).',
   'Das Cookie enthält Zeichen, die in einem HTTP-Header nicht erlaubt sind (z. B. Zeilenumbrüche).':
     'The cookie contains characters that are not allowed in an HTTP header (e.g. line breaks).',
   'PR zuerst öffnen': 'Open the PR first',
@@ -205,8 +208,8 @@ export const SERVER_EN: Record<string, string> = {
   'resolved fehlt': 'resolved missing',
   'Kein GitHub-Token gefunden. Setze GITHUB_TOKEN oder melde dich mit `gh auth login` an.':
     'No GitHub token found. Set GITHUB_TOKEN or sign in with `gh auth login`.',
-  'Kein GitLab-Token gefunden. Setze GITLAB_TOKEN (Scope: api) – ohne Token lassen sich nur öffentliche Merge Requests per URL öffnen.':
-    'No GitLab token found. Set GITLAB_TOKEN (scope: api) – without a token only public merge requests can be opened by URL.',
+  'Kein GitLab-Token gefunden. Trage eines unter «Verbindungen» ein oder setze GITLAB_TOKEN (Scope: api) – ohne Token lassen sich nur öffentliche Merge Requests per URL öffnen.':
+    'No GitLab token found. Enter one under “Connections” or set GITLAB_TOKEN (scope: api) – without a token only public merge requests can be opened by URL.',
 };
 
 type Replace = (m: RegExpExecArray, tr: (text: string) => string) => string;
@@ -304,6 +307,8 @@ export const SERVER_EN_PATTERNS: [RegExp, Replace][] = [
     (m) => `There are new commits (${m[1]}) that are not loaded yet. Reload first.`],
   [/^(\S+) kann hier keine Threads auflösen$/, (m) => `${m[1]} cannot resolve threads here`],
   [/^(\S+) nimmt kein Cookie entgegen$/, (m) => `${m[1]} does not take a cookie`],
+  [/^(\S+) lässt sich hier nicht konfigurieren$/, (m) => `${m[1]} cannot be configured here`],
+  [/^Ungültige URL: «([\s\S]*)»\. Erwartet wird z\. B\. (\S+)$/, (m) => `Invalid URL: “${m[1]}”. Expected e.g. ${m[2]}`],
   [/^Unbekannter Provider: ([\s\S]*)$/, (m) => `Unknown provider: ${m[1]}`],
   [/^Datei ist nicht Teil des Pull Requests: ([\s\S]*)$/, (m) => `File is not part of the pull request: ${m[1]}`],
   [/^Inhalt der Datei ist nicht verfügbar: ([\s\S]*)$/, (m) => `Content of the file is not available: ${m[1]}`],

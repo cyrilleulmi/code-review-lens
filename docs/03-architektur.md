@@ -49,7 +49,11 @@ Alle PR-Endpunkte unter `/api/prs/{provider}/{owner}/{repo}/{number}`; `provider
 |---|---|---|
 | GET / PUT | `/api/settings` | Ausgeschaltete Kategorien `{"disabledCategories":["fe-templates"]}` (global, `<data>/settings.json`) |
 | GET | `/api/me` | Konten pro Provider (User oder Grund, warum keiner; `cookie`: ob Session-Cookies eines SSO-Proxys gesetzt sind, `null` = der Host nimmt keine), Datenverzeichnis |
-| PUT | `/api/accounts/{provider}/cookie` | `{"cookie":"name=wert; name2=wert2"}` ersetzt die Session-Cookies eines SSO-Proxys vor dem Host (nur im Arbeitsspeicher, bis zum nächsten Start; leer = entfernen). Antwort wie `/api/me`. Nur GitLab; sonst 400. |
+| PUT | `/api/accounts/{provider}/cookie` | `{"cookie":"name=wert; name2=wert2"}` ersetzt die Session-Cookies eines SSO-Proxys vor dem Host (nur im Arbeitsspeicher, bis zum nächsten Start; war das ersetzte auf der Seite «Verbindungen» gespeichert, wird das neue gespeichert; leer = entfernen). Antwort wie `/api/me`. Nur GitLab; sonst 400. |
+| GET | `/api/connections` | Verbindungen der Seite «Verbindungen» (nur GitLab): `url`, ob `token` und `cookie` gesetzt sind, woher jeder Wert kommt (`urlSource`, `tokenSource`, `cookieSource`: `saved` = Seite, `runtime` = nur im Arbeitsspeicher, `startup` = Startkonfiguration, `default`, `null`), `startupUrl`, `saved`, `account` (wie in `/api/me`). Nie Token oder Cookie selbst. |
+| PUT | `/api/connections/{provider}` | `{"url":…, "token":…, "cookie":…, "saveCookie":true}` ändert die Verbindung sofort und speichert sie in `<data>/connections.json`, Feld für Feld vor der Startkonfiguration. Pro Feld: `null` = behalten, `""` = zurück zur Startkonfiguration. `saveCookie: false` hält ein neues Cookie nur im Arbeitsspeicher. Eine neue URL verwirft Token und Cookie der alten (ausser neue kommen mit). Ungültiges → 400, nichts geändert. Antwort wie `GET /api/connections`. |
+| DELETE | `/api/connections/{provider}` | Zurück zur Startkonfiguration: Eintrag in `connections.json` und Cookie aus dem Arbeitsspeicher verwerfen. |
+| POST | `/api/connections/{provider}/test` | Wie `PUT`, aber nur anmelden (`GET /user`) und nichts übernehmen: Antwort der User, sonst der Fehler (z. B. 401 «HTML statt JSON …»). |
 | GET | `/api/resolve?url=…` | PR-/MR-URL von GitHub oder GitLab → `{provider, owner, repo, number}`; Repository-URL → `number` 0 |
 | GET | `/api/prs?filter=all\|authored\|review-requested` | Offene PRs (mit lokalem Fortschritt, falls vorhanden) |
 | GET | `/api/local` | PRs mit lokalen Daten (offline) |
