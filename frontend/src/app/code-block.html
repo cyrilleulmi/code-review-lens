@@ -239,7 +239,7 @@
               @for (th of threads().get(line.key!) ?? []; track th.root.id) {
                 <div class="thread" [class.right]="c.side === 'new'" [class.resolved]="th.root.resolved">
                   @if (th.root.resolved) {
-                    <button type="button" class="fold" (click)="toggleThread(th)" [attr.aria-expanded]="threadOpen(th)"
+                    <button type="button" class="thread-fold" (click)="toggleThread(th)" [attr.aria-expanded]="threadOpen(th)"
                             [title]="threadOpen(th) ? t('Aufgelösten Thread einklappen') : t('Aufgelösten Thread zeigen')">
                       <app-icon [name]="threadOpen(th) ? 'chevronDown' : 'chevronRight'" [size]="11" />
                       <app-icon name="check" [size]="12" class="done" />
