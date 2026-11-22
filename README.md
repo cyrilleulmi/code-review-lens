@@ -18,7 +18,7 @@ Voraussetzungen: JDK 21+ (getestet mit 25), Node 22+ und mindestens ein Code-Hos
 | Host | Zugang | Ohne Token |
 |---|---|---|
 | GitHub | `GITHUB_TOKEN` / `GH_TOKEN`, sonst `gh auth token` | – |
-| GitLab | `GITLAB_TOKEN` / `GL_TOKEN` (Scope `api`), sonst `glab config get token`; self-managed: `SCR_GITLAB_URL=https://gitlab.example.com`; hinter einem SSO-Proxy zusätzlich dessen Session-Cookies: `SCR_GITLAB_COOKIE="name=wert; name2=wert2"` | Öffentliche Merge Requests lassen sich per URL öffnen (nur lesen) |
+| GitLab | `GITLAB_TOKEN` / `GL_TOKEN` (Scope `api`), sonst `glab config get token`; self-managed: `SCR_GITLAB_URL=https://gitlab.example.com`; hinter einem SSO-Proxy zusätzlich dessen Session-Cookies: `SCR_GITLAB_COOKIE="name=wert; name2=wert2"`. **Oder alles im UI** auf der Seite «Verbindungen» (siehe unten) | Öffentliche Merge Requests lassen sich per URL öffnen (nur lesen) |
 
 ```powershell
 # Windows
@@ -31,6 +31,8 @@ Voraussetzungen: JDK 21+ (getestet mit 25), Node 22+ und mindestens ein Code-Hos
 ```
 
 Das Skript baut beim ersten Mal das Angular-UI und startet dann Quarkus im Dev-Mode. Danach im Browser **http://localhost:8080** öffnen.
+
+**GitLab im UI einrichten:** Statt über Umgebungsvariablen lässt sich GitLab auch auf der Seite **«Verbindungen»** verbinden (Stecker-Knopf in der Toolbar, oder «Code-Host verbinden» auf der Startseite): URL, Token und – hinter einem SSO-Proxy – das Cookie eintragen, «Verbindung testen», «Speichern». Das gilt sofort und auch nach einem Neustart (`<data>/connections.json`). Die Startkonfiguration bleibt die Grundlage: Was die Seite speichert, gilt Feld für Feld davor, «Auf Startkonfiguration zurücksetzen» verwirft es wieder. Token und Cookie stehen in dieser Datei im Klartext.
 
 Läuft das Cookie eines SSO-Proxys ab, meldet das Tool «HTML statt JSON … Ist das Cookie abgelaufen?». Ein Klick auf das GitLab-Konto in der Statusleiste (unten rechts, mit Schloss) öffnet ein Feld für das neue Cookie; ein Neustart ist nicht nötig.
 
@@ -84,6 +86,7 @@ cd frontend && npm start              # UI auf :4200, /api wird an :8080 weiterg
 | Tests | Kategorie *Tests*: Testübersicht mit Komponenten und abgedeckten Codestellen; im Code-Block «Getestet von …» bzw. «Testet …» |
 | Ganzes Repository | Ordner-Knopf in der Toolbar oder «Ganzes Repository analysieren» auf der Übersicht eines PRs (bzw. Repo-URL ins Suchfeld): Kategorien, Flows, Komponenten, Tests, Commits und Blame über den gesamten Code. Kommentare gibt es dort keine |
 | Commits | Review-Fenster → *Commits* oder Übersicht: Klick auf einen Commit zeigt in allen Ansichten nur seine Änderungen (Änderungen anderer Commits abgeblendet), Häkchen gelten dann nur für seine Zeilen; ✓ markiert den ganzen Commit. In der Toolbar ← → zum vorherigen/nächsten Commit, × zeigt wieder alles |
+| Verbindungen | Stecker-Knopf in der Toolbar: GitLab-URL, Token und Cookie des SSO-Proxys setzen, testen und speichern, ohne Neustart; pro Feld steht, ob der Wert von dieser Seite oder aus der Startkonfiguration kommt |
 | Design | Kontrast-Knopf in der Toolbar: dunkles (Standard) oder helles Design im Stil von IntelliJ, pro Browser gespeichert |
 | Sprache | Umschalter
  *DE \| EN* rechts in der Toolbar: das ganze UI auf Deutsch oder Englisch, ohne Neuladen; die Wahl gilt pro Browser |

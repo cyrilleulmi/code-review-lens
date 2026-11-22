@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, HostListener, Injector, afterNextRender, computed, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
 import { AccountCookie } from './account-cookie';
+import { Connections } from './connections';
 import { isTestsView, prLabel } from './api';
 import { applyLang, lang, serverText, setLang, t } from './i18n';
 import { applyTheme, theme, toggleTheme } from './theme';
@@ -34,7 +35,7 @@ interface EditorContent {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, CoverageOverview, RuleCheckOverview, AccountCookie],
+  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, CoverageOverview, RuleCheckOverview, AccountCookie, Connections],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -46,6 +47,14 @@ export class App {
   protected readonly cookieFor = signal<string | null>(null);
   protected readonly cookieAccount = computed(
     () => this.store.me()?.accounts.find((a) => a.provider === this.cookieFor() && a.cookie != null) ?? null);
+
+  /** Providers whose connection the config page can change (status bar: a click opens it). */
+  protected readonly configurable = computed(() => new Set((this.store.connections() ?? []).map((c) => c.provider)));
+  /** No code host is connected: the welcome screen offers the config page. */
+  protected readonly noAccount = computed(() => {
+    const me = this.store.me();
+    return !!me && !me.accounts.some((a) => a.user);
+  });
 
   protected readonly flow = computed(() => {
     const sel = this.store.selection();

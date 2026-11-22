@@ -6,8 +6,9 @@ import { ReviewStore } from './review.store';
 
 /**
  * Sets the session cookies of an SSO proxy in front of a code host while the tool runs: such cookies expire
- * regularly, and the configured one would need a restart. The value goes to the backend only (kept in memory there);
- * the backend never sends it back, so the field always starts empty.
+ * regularly, and the configured one would need a restart. The value goes to the backend only (kept in memory there,
+ * or saved again when the cookie being replaced was saved on the config page «Verbindungen»); the backend never sends
+ * it back, so the field always starts empty.
  */
 @Component({
   selector: 'app-account-cookie',
@@ -23,8 +24,9 @@ import { ReviewStore } from './review.store';
         <button type="button" class="close" (click)="closed.emit()" [title]="t('Schliessen')" [attr.aria-label]="t('Schliessen')"><app-icon name="close" [size]="13" /></button>
       </header>
       <p>{{ t('Liegt {host} hinter einem SSO-Proxy, braucht jede Anfrage neben dem Token auch dessen Session-Cookies. Füge hier den Wert des Cookie-Headers ein, wie ihn der Browser an {url} schickt (Entwicklertools → Netzwerk → Request-Header «Cookie»).', { host: a.label, url: a.host }) }}</p>
-      <p class="dim">{{ t('Das Cookie wird nicht gespeichert: Es gilt, bis das Tool neu startet.') }}
-        {{ a.cookie ? t('Zurzeit ist ein Cookie gesetzt.') : t('Zurzeit ist kein Cookie gesetzt.') }}</p>
+      <p class="dim">{{ saved() ? t('Das Cookie ist unter «Verbindungen» gespeichert: Ein neues ersetzt es dort.') : t('Das Cookie wird nicht gespeichert: Es gilt, bis das Tool neu startet.') }}
+        {{ a.cookie ? t('Zurzeit ist ein Cookie gesetzt.') : t('Zurzeit ist kein Cookie gesetzt.') }}
+        <button type="button" class="link" (click)="openConnections()">{{ t('Alle Einstellungen der Verbindung …') }}</button></p>
       @if (problem(); as e) {
         <p class="err" role="alert">{{ e }}</p>
       }
@@ -95,6 +97,19 @@ import { ReviewStore } from './review.store';
       color: var(--fg-muted);
     }
 
+    .link {
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--accent-fg);
+      font: inherit;
+      cursor: pointer;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+
     .err {
       padding: 6px 8px;
       border: 1px solid var(--error-border);
@@ -136,6 +151,9 @@ export class AccountCookie {
   /** why the last attempt to set the cookie failed (the account's own error is shown otherwise) */
   protected readonly error = signal<string | null>(null);
   /** What is wrong right now: the failed attempt, else why the account is not connected. */
+  /** The cookie was saved on the config page: a new one replaces it there. */
+  protected readonly saved = computed(
+    () => this.store.connections()?.find((c) => c.provider === this.account().provider)?.cookieSource === 'saved');
   protected readonly problem = computed(() => {
     const a = this.account();
     return this.error() ?? (a.user || !a.error ? null : serverText(a.error));
@@ -152,6 +170,11 @@ export class AccountCookie {
     }
   }
 
+  protected openConnections(): void {
+    this.store.connectionsOpen.set(true);
+    this.closed.emit();
+  }
+
   /** Sets the cookie (blank: removes it). Closes when the account is connected afterwards, else shows why not. */
   protected send(cookie: string): void {
     const provider = this.account().provider;
@@ -162,6 +185,7 @@ export class AccountCookie {
         this.busy.set(false);
         this.value.set('');
         this.store.me.set(me);
+        this.store.loadConnections();
         this.store.loadPrs();
         const now = me.accounts.find((a) => a.provider === provider);
         if (!cookie.trim()) {

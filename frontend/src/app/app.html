@@ -77,6 +77,10 @@
   } @else {
     <button type="button" class="tb-btn" (click)="store.loadPrs()" [title]="t('Pull Requests neu laden')"><app-icon name="refresh" /></button>
   }
+  <button type="button" class="tb-btn" [class.on]="store.connectionsOpen()" [attr.aria-pressed]="store.connectionsOpen()"
+          (click)="store.connectionsOpen.set(!store.connectionsOpen())" [title]="t('Verbindungen: GitLab-URL, Token und Cookie')">
+    <app-icon name="plug" />
+  </button>
   <button type="button" class="tb-btn" (click)="toggleTheme()"
           [title]="theme() === 'dark' ? t('Helles Design') : t('Dunkles Design')" [attr.aria-label]="theme() === 'dark' ? t('Helles Design') : t('Dunkles Design')">
     <app-icon name="contrast" />
@@ -128,7 +132,14 @@
   }
 
   <main class="editor">
-    @if (content(); as c) {
+    @if (store.connectionsOpen()) {
+      <div class="crumbs">
+        <span>{{ t('Verbindungen') }}</span>
+      </div>
+      <div class="editor-scroll">
+        <app-connections />
+      </div>
+    } @else if (content(); as c) {
       <div class="crumbs">
         <span>{{ prLabel(b!.pr) }}</span>
         @for (crumb of c.crumbs; track $index) {
@@ -174,6 +185,9 @@
           <p class="loading"><span class="spinner"></span> {{ l }}</p>
         } @else {
           <p class="hint">{{ t('Wähle links einen Pull/Merge Request oder füge eine URL ein') }} · <kbd>Alt</kbd>+<kbd>1</kbd> Pull Requests · <kbd>Alt</kbd>+<kbd>2</kbd> Review</p>
+          @if (noAccount()) {
+            <p><button type="button" class="btn primary" (click)="store.connectionsOpen.set(true)"><app-icon name="plug" [size]="14" /> {{ t('Code-Host verbinden') }}</button></p>
+          }
         }
       </div>
     }
@@ -204,6 +218,12 @@
               (click)="toggleCookie(a.provider)" [attr.aria-expanded]="cookieFor() === a.provider"
               [title]="(a.error ? serverText(a.error) : a.host) + ' – ' + t('Cookie des SSO-Proxys setzen')">
         <app-icon [name]="a.provider" [size]="12" /> {{ a.user?.login ?? t('nicht verbunden') }} <app-icon name="lock" [size]="11" />
+      </button>
+    } @else if (configurable().has(a.provider)) {
+      <button type="button" class="account" [class.offline]="!a.user" [class.on]="store.connectionsOpen()"
+              (click)="store.connectionsOpen.set(true)"
+              [title]="(a.error ? serverText(a.error) : a.host) + ' – ' + t('Verbindung einstellen')">
+        <app-icon [name]="a.provider" [size]="12" /> {{ a.user?.login ?? t('kein Token') }}
       </button>
     } @else {
       <span [class.offline]="!a.user" [title]="a.error ? serverText(a.error) : a.host"><app-icon [name]="a.provider" [size]="12" /> {{ a.user?.login ?? t('kein Token') }}</span>

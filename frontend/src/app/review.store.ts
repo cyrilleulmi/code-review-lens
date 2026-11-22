@@ -7,6 +7,7 @@ import {
   Commit,
   Commits,
   Component,
+  Connection,
   LineMark,
   LogEntry,
   Me,
@@ -100,6 +101,10 @@ export class ReviewStore {
   private readonly api = inject(Api);
 
   readonly me = signal<Me | null>(null);
+  /** Connections the config page can change (GitLab), null until loaded. */
+  readonly connections = signal<Connection[] | null>(null);
+  /** The config page «Verbindungen» is shown in the editor area. */
+  readonly connectionsOpen = signal(false);
   readonly prs = signal<PullRequestSummary[]>([]);
   readonly prsLoading = signal(false);
   readonly prFilter = signal<PrFilter>('all');
@@ -404,12 +409,25 @@ export class ReviewStore {
       error: (e) => this.error.set(errorMessage(e)),
     });
     this.api.settings().subscribe({ next: (s) => this.disabledCategories.set(new Set(s.disabledCategories)) });
+    this.loadConnections();
     this.loadPrs();
     const fromHash = parseHash(location.hash);
     if (fromHash) {
       this.open(fromHash.pr, fromHash.selection, fromHash.commit);
     }
     window.addEventListener('focus', () => this.refreshState());
+  }
+
+  loadConnections(): void {
+    this.api.connections().subscribe({ next: (c) => this.connections.set(c), error: () => this.connections.set([]) });
+  }
+
+  /** After a connection changed: accounts, connections and the list of pull requests are fetched again. */
+  connectionChanged(connections?: Connection[]): void {
+    if (connections) this.connections.set(connections);
+    else this.loadConnections();
+    this.api.me().subscribe({ next: (me) => this.me.set(me) });
+    this.loadPrs();
   }
 
   loadPrs(): void {
@@ -427,6 +445,7 @@ export class ReviewStore {
   }
 
   open(pr: PrKey, selection: Selection = { kind: 'overview' }, commit: string | null = null): void {
+    this.connectionsOpen.set(false);
     this.pendingCommit = commit;
     this.loading.set(t('Lade {pr} …', { pr: prLabel(pr) }));
     this.error.set(null);
@@ -558,6 +577,7 @@ export class ReviewStore {
   }
 
   select(selection: Selection): void {
+    this.connectionsOpen.set(false);
     this.selection.set(selection);
     this.collapseCommand.set(null);
     this.updateHash();

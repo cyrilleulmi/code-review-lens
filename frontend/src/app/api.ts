@@ -21,6 +21,39 @@ export interface Account {
   cookie?: boolean | null;
 }
 
+/**
+ * Where a value of a connection comes from: "saved" (config page, <data>/connections.json), "runtime" (set while
+ * running, only in memory), "startup" (startup configuration), "default" (built-in URL), null (not set).
+ */
+export type ConnectionSource = 'saved' | 'runtime' | 'startup' | 'default' | null;
+
+/** A connection as the config page shows it; token and cookie themselves never leave the backend. */
+export interface Connection {
+  provider: string;
+  label: string;
+  url: string;
+  urlSource: ConnectionSource;
+  /** URL of the startup configuration: what "reset" leads back to */
+  startupUrl: string;
+  token: boolean;
+  tokenSource: ConnectionSource;
+  /** null: the host takes no cookies */
+  cookie: boolean | null;
+  cookieSource: ConnectionSource;
+  /** something is saved on the config page */
+  saved: boolean;
+  account: Account;
+}
+
+/** Per field: null keeps it, "" goes back to the startup configuration, else the new value. */
+export interface ConnectionRequest {
+  url: string | null;
+  token: string | null;
+  cookie: string | null;
+  /** false: a new cookie is only kept in memory, until the next start */
+  saveCookie: boolean | null;
+}
+
 export interface Me {
   accounts: Account[];
   dataDir: string;
@@ -867,6 +900,23 @@ export class Api {
   /** Replaces the session cookies of an SSO proxy in front of a provider (kept in memory by the backend); blank removes them. */
   setCookie(provider: string, cookie: string): Observable<Me> {
     return this.http.put<Me>(`/api/accounts/${provider}/cookie`, { cookie });
+  }
+
+  connections(): Observable<Connection[]> {
+    return this.http.get<Connection[]>('/api/connections');
+  }
+
+  saveConnection(provider: string, request: ConnectionRequest): Observable<Connection[]> {
+    return this.http.put<Connection[]>(`/api/connections/${provider}`, request);
+  }
+
+  resetConnection(provider: string): Observable<Connection[]> {
+    return this.http.delete<Connection[]>(`/api/connections/${provider}`);
+  }
+
+  /** Signs in with these values without using or saving them. */
+  testConnection(provider: string, request: ConnectionRequest): Observable<User> {
+    return this.http.post<User>(`/api/connections/${provider}/test`, request);
   }
 
   settings(): Observable<Settings> {

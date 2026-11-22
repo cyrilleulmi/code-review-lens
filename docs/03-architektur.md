@@ -85,6 +85,7 @@ Angular 22, standalone Komponenten, Signals, zoneless, `OnPush`.
 | `pr-list.ts` | Tool-Fenster «Pull Requests» mit Filter und Suche. |
 | `review-actions.ts` | Auf der Übersicht: Stand des PRs auf dem Host, «Genehmigen» / «Genehmigung zurückziehen» und «Mergen …» mit Rückfrage. |
 | `account-cookie.ts` | Dialog aus der Statusleiste: Session-Cookies eines SSO-Proxys vor dem Code-Host zur Laufzeit setzen oder entfernen. |
+| `connections.ts` | Seite «Verbindungen» im Editorbereich (Toolbar-Knopf mit Stecker): GitLab-URL, Token und Cookie des SSO-Proxys setzen, testen, speichern oder auf die Startkonfiguration zurücksetzen; zeigt pro Feld, woher der Wert kommt. |
 | `review-tree.*` | Tool-Fenster «Review»: Kategorien / Flows / Dateien als Baum mit Fortschritt und ✓-Aktion, Tab *Commits*. |
 | `commit-list.ts` | Commits des PRs mit Fortschritt; Klick filtert alle Ansichten auf einen Commit, ✓ markiert seine Zeilen (Review-Fenster und Übersicht). |
 | `overview.*` | PR-Übersicht: Fortschritt, vorgeschlagene Reihenfolge, Beschreibung, allgemeine Kommentare, letzte Markierungen. |
