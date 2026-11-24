@@ -2,6 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Api, PullRequestSummary, RepositorySummary, errorMessage, ownerLabel, providerInfo } from './api';
 import { Icon } from './icon';
+import { pastedUrl } from './pasted-url';
 import { t } from './i18n';
 import { PrFilter, ReviewStore } from './review.store';
 
@@ -185,7 +186,9 @@ export class PrList {
     { id: 'involved', label: 'Beteiligt' },
   ];
 
-  protected readonly isUrl = computed(() => /^https?:\/\//.test(this.query().trim()));
+  /** The query as a PR/MR URL, also when pasted with invisible characters or <…> around it; null for a search. */
+  private readonly url = computed(() => pastedUrl(this.query()));
+  protected readonly isUrl = computed(() => this.url() != null);
 
   /** True when the query is long enough for a remote search (and is not a URL). */
   protected readonly remoteActive = computed(() => !this.isUrl() && this.query().trim().length >= 2);
@@ -209,7 +212,7 @@ export class PrList {
     clearTimeout(this.debounce);
     const q = value.trim();
     this.searchSeq++;
-    if (q.length < 2 || /^https?:\/\//.test(q)) {
+    if (q.length < 2 || pastedUrl(value) != null) {
       this.remoteRepos.set([]);
       this.remotePrsAll.set([]);
       this.remoteLoading.set(false);
@@ -310,8 +313,9 @@ export class PrList {
   }
 
   protected enter(): void {
-    if (this.isUrl()) {
-      this.store.openUrl(this.query());
+    const url = this.url();
+    if (url) {
+      this.store.openUrl(url);
       this.onInput('');
     }
   }
