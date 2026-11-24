@@ -67,7 +67,7 @@ Dieselben Endpunkte und derselbe Vergleich verbinden auch **Tests** mit dem Back
 
 Geänderte Code-Dateien gleichen Namens im gleichen Ordner bilden eine Komponente (`player-view.ts/.html/.scss`). Jede bekommt eine Spalte (Frontend, Adapter ein, API, Use Cases, Application, Logik, Adapter aus, Daten, Domäne, Tests); die Aufruf- und REST-Kanten zwischen ihren Segmenten werden zu `componentEdges` zusammengefasst. Die Übersicht zeigt daraus das Komponentendiagramm.
 
-![Komponentendiagramm und Architektur-Kategorien (buckpal#41)](img/components.png)
+![Komponentendiagramm (spongecoach#13)](img/components.png)
 
 ## 3e. Kategorien als Module
 
@@ -134,7 +134,7 @@ Sortiert ist die Liste nach Status (`none`, `indirect`, `existing`, `direct`) un
 
 **Im UI:** Die Kategorie Tests hat die Ansicht `tests` (`view()`): über der Testübersicht steht «Abdeckung des geänderten Codes» mit einer Zusammenfassung und den Funktionen in den Gruppen «Ohne Test», «Nur indirekt getestet», «Nur durch bestehende Tests» und «Direkt getestet» (eingeklappt). Unter dem Titel steht die Grundlage («Grundlage: geänderte Tests im PR + 2 nachgeladene Testdateien (Namenskonvention)», 5f). Klick auf eine Zeile springt zum Code, Klick auf einen Test zum Test. Ändert ein PR Code, aber keinen Test, gibt es die Kategorie Tests nicht; dann führt die Kachel «Abdeckung des geänderten Codes» auf der Übersicht (und der Eintrag «Abdeckung» im Review-Baum) auf eine eigene Seite. Jeder testbare Block trägt im Kopf ein Abzeichen: «ohne Test», «nur indirekt getestet», «durch bestehende Tests» oder «n Tests».
 
-![Dateiansicht: Block an zwei Orten](img/places.png)
+![Blöcke an mehreren Orten: grün = hier ok, blau = überall ok](img/places.png)
 
 ### 5b. Spezifikation (Testnamen)
 
