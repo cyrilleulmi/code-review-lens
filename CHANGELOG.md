@@ -6,6 +6,14 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+## [0.10.1] – 2026-11-24
+
+### Behoben
+- **Block-Kopf wieder lesbar:** Der Pfeil im Kopf jedes Code-Blocks wurde über die ganze Breite gezogen und schob den Titel aus dem Bild, weil der Knopf für aufgelöste Threads denselben Klassennamen benutzte. Jetzt hat er einen eigenen.
+
+### Geändert
+- **README auf Englisch** mit aktuellen Screenshots; die ausführliche Dokumentation unter `docs/` bleibt Deutsch.
+
 ## [0.10.0] – 2026-11-24
 
 ### Neu
@@ -156,7 +164,8 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 ### Neu
 - Erster PoC: offene GitHub-PRs (eigene und Review-Anfragen), Zerlegung in Segmente, Quick wins per Regeln (ohne KI), Datenflüsse in Aufrufreihenfolge mit Diagramm, zeilenweises «ok» lokal in JSON-Dateien für Agenten, Inline-Kommentare werden sofort veröffentlicht, IntelliJ-artiges UI.
 
-[Unreleased]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.7.0...v0.8.0
