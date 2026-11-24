@@ -91,7 +91,10 @@ public interface ReviewProvider {
     /** Free-text search over open PRs (provider-specific qualifiers allowed). */
     List<PullRequestSummary> searchPullRequests(String query);
 
-    /** Recognises a PR web URL of this host, or a repository URL (number 0 = the whole repository). */
+    /**
+     * Recognises a PR web URL of this host, or a repository URL (number 0 = the whole repository). May refuse a URL
+     * that clearly belongs to this kind of host but not to the configured one, with a message that says why.
+     */
     Optional<PrRef> parseUrl(String url);
 
     /** Default branch and its head commit. */

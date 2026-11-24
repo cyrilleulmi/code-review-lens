@@ -30,6 +30,7 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -202,19 +203,67 @@ public class GitLabProvider implements ReviewProvider {
         return new User(username, u.path("name").asText(null), u.path("avatar_url").asText(null));
     }
 
+    /** Path of a merge request below the GitLab URL: group[/sub]/project/-/merge_requests/<iid>[/diffs …]. */
+    private static final Pattern MR_PATH = Pattern.compile("^/(.+)/([^/]+)/-/merge_requests/(\\d+)(?:/.*)?$");
+    /** Path of a project (whole repository): group[/sub]/project, optionally .git or /-/tree/<branch>. */
+    private static final Pattern REPO_PATH = Pattern.compile("^/(.+?)/([^/]+?)(?:\\.git)?(?:/-/tree/.*)?/?$");
+    /** Characters copy and paste brings along (non-breaking and zero-width spaces, byte order mark, <…> of mails). */
+    private static final Pattern PASTE_NOISE = Pattern.compile("^[\\s\\u00a0\\u200b-\\u200d\\u2060\\ufeff<]+|[\\s\\u00a0\\u200b-\\u200d\\u2060\\ufeff>]+$");
+
+    /**
+     * Compares the URL with the GitLab in use by its parts, not as text: scheme (http/https), case of the host and
+     * default ports do not matter. A merge request URL of another GitLab is refused with a hint to the connection.
+     */
     @Override
     public Optional<PrRef> parseUrl(String url) {
-        String u = url.trim();
-        Matcher m = Pattern.compile("^" + Pattern.quote(baseUrl) + "/(.+)/([^/]+)/-/merge_requests/(\\d+).*$").matcher(u);
+        URI u = uri(url);
+        if (u == null) {
+            return Optional.empty();
+        }
+        Optional<String> path = pathBelow(uri(baseUrl), u);
+        if (path.isEmpty()) {
+            if (MR_PATH.matcher(u.getPath()).matches()) {
+                throw new ProviderException(400, "Der Merge Request liegt auf " + u.getHost() + ", verbunden ist "
+                        + URI.create(baseUrl).getHost() + ". Die GitLab-Verbindung lässt sich unter «Verbindungen» ändern.");
+            }
+            return Optional.empty();
+        }
+        Matcher m = MR_PATH.matcher(path.get());
         if (m.matches()) {
             return Optional.of(new PrRef(id(), m.group(1).replace('/', '~'), m.group(2), Integer.parseInt(m.group(3))));
         }
-        // project URL (whole repository): group[/sub]/project, optionally .git or /-/tree/<branch>
-        Matcher r = Pattern.compile("^" + Pattern.quote(baseUrl) + "/([^?#]+?)/([^/?#]+?)(?:\\.git)?(?:/-/tree/[^?#]*)?/?(?:[?#].*)?$").matcher(u);
+        Matcher r = REPO_PATH.matcher(path.get());
         if (r.matches() && !r.group(1).contains("/-") && !r.group(1).startsWith("-") && !r.group(2).equals("-")) {
             return Optional.of(new PrRef(id(), r.group(1).replace('/', '~'), r.group(2), 0));
         }
         return Optional.empty();
+    }
+
+    /** A pasted http(s) URL without the noise copying brings along; null when it is none. */
+    private static URI uri(String raw) {
+        String value = raw == null ? "" : PASTE_NOISE.matcher(raw).replaceAll("");
+        try {
+            URI u = new URI(value);
+            String scheme = u.getScheme() == null ? "" : u.getScheme().toLowerCase();
+            return (scheme.equals("http") || scheme.equals("https")) && u.getHost() != null && u.getPath() != null ? u : null;
+        } catch (URISyntaxException e) {
+            return null;
+        }
+    }
+
+    /** The path of url below base ("/group/project/…"), empty when url is on another host or outside base's path. */
+    static Optional<String> pathBelow(URI base, URI url) {
+        if (base == null || !base.getHost().equalsIgnoreCase(url.getHost()) || port(base) != port(url)) {
+            return Optional.empty();
+        }
+        String prefix = base.getPath() == null ? "" : base.getPath().replaceAll("/+$", "");
+        String path = url.getPath();
+        return path.startsWith(prefix + "/") ? Optional.of(path.substring(prefix.length())) : Optional.empty();
+    }
+
+    /** The port, -1 when it is the default of http or https. */
+    private static int port(URI u) {
+        return u.getPort() == 80 || u.getPort() == 443 ? -1 : u.getPort();
     }
 
     @Override

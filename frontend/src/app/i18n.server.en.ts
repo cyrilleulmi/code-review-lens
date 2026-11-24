@@ -298,6 +298,8 @@ export const SERVER_EN_PATTERNS: [RegExp, Replace][] = [
   [/^([\s\S]+) geändert in (\w+), ohne Test im Commit\. ([\s\S]+)$/, (m, tr) => `${m[1]} changed in ${m[2]}, without a test in the commit. ${tr(m[3])}`],
   // error messages (providers, ReviewService)
   [/^Keine bekannte Pull- oder Merge-Request-URL: ([\s\S]*)$/, (m) => `Not a known pull or merge request URL: ${m[1]}`],
+  [/^Der Merge Request liegt auf (.+), verbunden ist (.+)\. Die GitLab-Verbindung lässt sich unter «Verbindungen» ändern\.$/,
+    (m) => `The merge request is on ${m[1]}, connected is ${m[2]}. The GitLab connection can be changed under “Connections”.`],
   [/^(\S+) kann hier nicht genehmigen oder mergen$/, (m) => `${m[1]} cannot approve or merge here`],
   [/^(\S+) kann hier nicht genehmigen$/, (m) => `${m[1]} cannot approve here`],
   [/^(\S+) kann hier nicht mergen$/, (m) => `${m[1]} cannot merge here`],
