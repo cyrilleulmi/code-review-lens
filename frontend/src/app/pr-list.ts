@@ -1,7 +1,9 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Api, PullRequestSummary, RepositorySummary, errorMessage, ownerLabel, providerInfo } from './api';
+import { ConnectionPanel } from './connection-panel';
 import { Icon } from './icon';
+import { pastedUrl } from './pasted-url';
 import { t } from './i18n';
 import { PrFilter, ReviewStore } from './review.store';
 
@@ -23,8 +25,9 @@ function loadRecent(): RepoRef[] {
 @Component({
   selector: 'app-pr-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, NgTemplateOutlet],
+  imports: [Icon, NgTemplateOutlet, ConnectionPanel],
   template: `
+    <app-connection-panel />
     <div class="filters">
       @for (f of filters; track f.id) {
         <button type="button" [class.active]="store.prFilter() === f.id" (click)="store.prFilter.set(f.id)">
@@ -83,9 +86,9 @@ function loadRecent(): RepoRef[] {
           }
         }
 
-        @if (!query().trim() && recent().length) {
+        @if (!query().trim() && recentHere().length) {
           <h4 class="section">{{ t('Zuletzt geöffnete Repositories') }}</h4>
-          @for (r of recent(); track r.provider + r.owner + r.repo) {
+          @for (r of recentHere(); track r.provider + r.owner + r.repo) {
             <button type="button" class="item repo-item" (click)="showRepo(r)">
               <span class="line1">
                 <app-icon [name]="r.provider" [size]="14" />
@@ -163,11 +166,15 @@ export class PrList {
   protected readonly repoLoading = signal(false);
   protected readonly repoError = signal<string | null>(null);
 
-  protected readonly remoteRepos = signal<RepositorySummary[]>([]);
+  private readonly remoteReposAll = signal<RepositorySummary[]>([]);
+  /** Repositories found by the search, of the chosen connection only. */
+  protected readonly remoteRepos = computed(() => this.onHost(this.remoteReposAll()));
   private readonly remotePrsAll = signal<PullRequestSummary[]>([]);
   protected readonly remoteLoading = signal(false);
   protected readonly remoteError = signal<string | null>(null);
   protected readonly recent = signal<RepoRef[]>(loadRecent());
+  /** Recently opened repositories of the chosen connection. */
+  protected readonly recentHere = computed(() => this.onHost(this.recent()));
 
   private debounce: ReturnType<typeof setTimeout> | undefined;
   private searchSeq = 0;
@@ -180,7 +187,9 @@ export class PrList {
     { id: 'involved', label: 'Beteiligt' },
   ];
 
-  protected readonly isUrl = computed(() => /^https?:\/\//.test(this.query().trim()));
+  /** The query as a PR/MR URL, also when pasted with invisible characters or <…> around it; null for a search. */
+  private readonly url = computed(() => pastedUrl(this.query()));
+  protected readonly isUrl = computed(() => this.url() != null);
 
   /** True when the query is long enough for a remote search (and is not a URL). */
   protected readonly remoteActive = computed(() => !this.isUrl() && this.query().trim().length >= 2);
@@ -188,7 +197,7 @@ export class PrList {
   /** Search hits that are not already in the local list. */
   protected readonly remotePrs = computed(() => {
     const known = new Set(this.store.prs().map((p) => p.url));
-    return this.remotePrsAll().filter((p) => !known.has(p.url));
+    return this.onHost(this.remotePrsAll()).filter((p) => !known.has(p.url));
   });
 
   protected readonly visible = computed(() => {
@@ -199,13 +208,19 @@ export class PrList {
     return this.store.filteredPrs().filter((p) => !q || `${ownerLabel(p.owner)}/${p.repo} ${p.title} ${p.number} ${p.provider}`.toLowerCase().includes(q));
   });
 
+  /** Only what belongs to the chosen connection (everything when all are shown). */
+  private onHost<T extends { provider: string }>(list: T[]): T[] {
+    const id = this.store.activeHost();
+    return id ? list.filter((x) => x.provider === id) : list;
+  }
+
   protected onInput(value: string): void {
     this.query.set(value);
     clearTimeout(this.debounce);
     const q = value.trim();
     this.searchSeq++;
-    if (q.length < 2 || /^https?:\/\//.test(q)) {
-      this.remoteRepos.set([]);
+    if (q.length < 2 || pastedUrl(value) != null) {
+      this.remoteReposAll.set([]);
       this.remotePrsAll.set([]);
       this.remoteLoading.set(false);
       this.remoteError.set(null);
@@ -225,7 +240,7 @@ export class PrList {
     };
     this.remoteError.set(null);
     this.api.repos(q).subscribe({
-      next: (r) => seq === this.searchSeq && this.remoteRepos.set(r),
+      next: (r) => seq === this.searchSeq && this.remoteReposAll.set(r),
       error: (e) => {
         if (seq === this.searchSeq) {
           this.remoteError.set(errorMessage(e));
@@ -305,14 +320,15 @@ export class PrList {
   }
 
   protected enter(): void {
-    if (this.isUrl()) {
-      this.store.openUrl(this.query());
+    const url = this.url();
+    if (url) {
+      this.store.openUrl(url);
       this.onInput('');
     }
   }
 
   protected count(f: PrFilter): number {
-    return f === 'all' ? this.store.prs().length : this.store.prs().filter((p) => p.roles.includes(f)).length;
+    return f === 'all' ? this.store.hostPrs().length : this.store.hostPrs().filter((p) => p.roles.includes(f)).length;
   }
 
   protected isCurrent(pr: PullRequestSummary): boolean {

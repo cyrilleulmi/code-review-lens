@@ -18,7 +18,7 @@ Voraussetzungen: JDK 21+ (getestet mit 25), Node 22+ und mindestens ein Code-Hos
 | Host | Zugang | Ohne Token |
 |---|---|---|
 | GitHub | `GITHUB_TOKEN` / `GH_TOKEN`, sonst `gh auth token` | – |
-| GitLab | `GITLAB_TOKEN` / `GL_TOKEN` (Scope `api`), sonst `glab config get token`; self-managed: `SCR_GITLAB_URL=https://gitlab.example.com`; hinter einem SSO-Proxy zusätzlich dessen Session-Cookies: `SCR_GITLAB_COOKIE="name=wert; name2=wert2"` | Öffentliche Merge Requests lassen sich per URL öffnen (nur lesen) |
+| GitLab | `GITLAB_TOKEN` / `GL_TOKEN` (Scope `api`), sonst `glab config get token`; self-managed: `SCR_GITLAB_URL=https://gitlab.example.com`; hinter einem SSO-Proxy zusätzlich dessen Session-Cookies: `SCR_GITLAB_COOKIE="name=wert; name2=wert2"`. **Oder alles im UI** im Bereich «Verbindungen» (siehe unten) | Öffentliche Merge Requests lassen sich per URL öffnen (nur lesen) |
 
 ```powershell
 # Windows
@@ -31,6 +31,8 @@ Voraussetzungen: JDK 21+ (getestet mit 25), Node 22+ und mindestens ein Code-Hos
 ```
 
 Das Skript baut beim ersten Mal das Angular-UI und startet dann Quarkus im Dev-Mode. Danach im Browser **http://localhost:8080** öffnen.
+
+**GitHub und GitLab im UI verbinden:** Statt über Umgebungsvariablen lassen sich Code-Hosts auch im Bereich **«Verbindungen»** oben in der Liste «Pull/Merge Requests» verbinden, auch mehrere: z. B. gitlab.com und ein Firmen-GitLab, github.com und ein GitHub Enterprise Server. Ist noch nichts verbunden, steht dort ein hervorgehobener Kasten «Code-Host verbinden» (GitLab oder GitHub, URL, Token und – hinter einem SSO-Proxy – das Cookie, «Verbindung testen», «Verbinden»). Sonst ist der Bereich eine ruhige Liste: «Alle» und eine Zeile pro Verbindung (Host, Konto, Anzahl offener PRs) wählen, wessen Pull/Merge Requests die Liste zeigt; das Zahnrad öffnet das Formular einer Verbindung, «Verbindung hinzufügen» verbindet einen weiteren Host. Das gilt sofort und auch nach einem Neustart (`<data>/connections.json`). Die Startkonfiguration bleibt die Grundlage der ersten GitHub- und der ersten GitLab-Verbindung: Was das UI speichert, gilt Feld für Feld davor, «Auf Startkonfiguration zurücksetzen» verwirft es wieder; weitere Verbindungen lassen sich entfernen. Token und Cookie stehen in dieser Datei im Klartext.
 
 Läuft das Cookie eines SSO-Proxys ab, meldet das Tool «HTML statt JSON … Ist das Cookie abgelaufen?». Ein Klick auf das GitLab-Konto in der Statusleiste (unten rechts, mit Schloss) öffnet ein Feld für das neue Cookie; ein Neustart ist nicht nötig.
 
@@ -84,6 +86,7 @@ cd frontend && npm start              # UI auf :4200, /api wird an :8080 weiterg
 | Tests | Kategorie *Tests*: Testübersicht mit Komponenten und abgedeckten Codestellen; im Code-Block «Getestet von …» bzw. «Testet …» |
 | Ganzes Repository | Ordner-Knopf in der Toolbar oder «Ganzes Repository analysieren» auf der Übersicht eines PRs (bzw. Repo-URL ins Suchfeld): Kategorien, Flows, Komponenten, Tests, Commits und Blame über den gesamten Code. Kommentare gibt es dort keine |
 | Commits | Review-Fenster → *Commits* oder Übersicht: Klick auf einen Commit zeigt in allen Ansichten nur seine Änderungen (Änderungen anderer Commits abgeblendet), Häkchen gelten dann nur für seine Zeilen; ✓ markiert den ganzen Commit. In der Toolbar ← → zum vorherigen/nächsten Commit, × zeigt wieder alles |
+| Verbindungen | Oben in der Liste «Pull/Merge Requests» (nichts verbunden: hervorgehoben mit offenem Formular; sonst «Alle» und eine Zeile pro Verbindung als Filter der Liste, Zahnrad pro Verbindung, «Verbindung hinzufügen»; auch über den Stecker-Knopf in der Toolbar): mehrere GitHub- und GitLab-Hosts; URL, Token und Cookie des SSO-Proxys setzen, testen und speichern, ohne Neustart; pro Feld steht, ob der Wert von dieser Seite oder aus der Startkonfiguration kommt |
 | Design | Kontrast-Knopf in der Toolbar: dunkles (Standard) oder helles Design im Stil von IntelliJ, pro Browser gespeichert |
 | Sprache | Umschalter
  *DE \| EN* rechts in der Toolbar: das ganze UI auf Deutsch oder Englisch, ohne Neuladen; die Wahl gilt pro Browser |

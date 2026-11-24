@@ -15,7 +15,7 @@ Mögliche zukünftige Funktionen, grob nach Nutzen geordnet. Verbesserungen am B
 | 5 | Sortiermöglichkeiten | teilweise: «nach Commit» ist mit dem Commit-Filter umgesetzt; Risiko, Schicht, Datei offen (F-10) |
 | 6 | Echter Parser | offen (F-14) |
 | 7 | MCP-Server | offen (F-30) |
-| 8 | Weitere Provider | GitHub und GitLab umgesetzt; Bitbucket, Azure DevOps, mehrere GitLab-Instanzen offen (F-33) |
+| 8 | Weitere Provider | GitHub und GitLab umgesetzt; mehrere Hosts pro Art umgesetzt; Bitbucket, Azure DevOps offen (F-33) |
 | 9 | Review abschliessen | offen (F-05) |
 | 10 | Laufzeit-Coverage | offen (F-15) |
 | 11 | Fokus-Zustand merken | offen (F-06) |
@@ -65,7 +65,7 @@ Mögliche zukünftige Funktionen, grob nach Nutzen geordnet. Verbesserungen am B
 | F-30 | **MCP-Server** | Quarkus-MCP-Extension mit Tools wie `list_prs`, `get_segments`, `get_flow`, `mark_ok`, `comment`, damit Agenten nicht über Dateien oder `curl` gehen. Baut auf V-52 (OpenAPI) auf. | ★★★ | M |
 | F-31 | **«In IDE öffnen»** | Sprung vom Block an die Stelle in IntelliJ (`jetbrains://`-Link bzw. Toolbox) oder VS Code (`vscode://file/…`), wenn das Repo lokal ausgecheckt ist. | ★★ | S |
 | F-32 | **Kategorien von aussen** | Module aus einem Verzeichnis oder Prozess laden (`origin = external`); fremde Module dürfen die anderen nicht stören; Schnittstelle `SegmentFacts` wächst nur. | ★★ | M–L |
-| F-33 | **Weitere Provider** | Bitbucket, Azure DevOps; mehrere GitLab-Instanzen gleichzeitig. | ★★ | M pro Provider |
+| F-33 | **Weitere Provider** | Bitbucket, Azure DevOps (mehrere GitHub- und GitLab-Hosts gleichzeitig: umgesetzt, FR-ZUG-12). | ★★ | M pro Provider |
 | F-34 | **Neue Commits melden** | Periodisch prüfen, ob ein offener PR einen neuen Head hat, und im UI anbieten, neu zu laden (zusammen mit F-01). | ★★ | S |
 | F-35 | **Team-Modus** | Review-Status mehrerer Personen zusammenführen (z. B. über einen geteilten Ordner oder als versteckter PR-Kommentar). Bricht mit «ein Benutzer, lokal» (A1) und braucht ein Konzept. | ★ | L |
 

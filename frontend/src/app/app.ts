@@ -47,6 +47,26 @@ export class App {
   protected readonly cookieAccount = computed(
     () => this.store.me()?.accounts.find((a) => a.provider === this.cookieFor() && a.cookie != null) ?? null);
 
+  /**
+   * Accounts for the status bar: connected or set up somehow. A GitHub or GitLab of the startup configuration with
+   * nothing set is left out, like in the connection panel.
+   */
+  protected readonly statusAccounts = computed(() => {
+    const connections = this.store.connections() ?? [];
+    return (this.store.me()?.accounts ?? []).filter((a) => {
+      const c = connections.find((x) => x.provider === a.provider);
+      return !c || !!a.user || c.token || c.saved || c.added;
+    });
+  });
+
+  /** Providers whose connection the config page can change (status bar: a click opens it). */
+  protected readonly configurable = computed(() => new Set((this.store.connections() ?? []).map((c) => c.provider)));
+  /** No code host is connected: the welcome screen offers the config page. */
+  protected readonly noAccount = computed(() => {
+    const me = this.store.me();
+    return !!me && !me.accounts.some((a) => a.user);
+  });
+
   protected readonly flow = computed(() => {
     const sel = this.store.selection();
     return sel.kind === 'flow' ? this.store.bundle()?.analysis.flows.find((f) => f.id === sel.id) ?? null : null;
@@ -153,6 +173,12 @@ export class App {
         untracked(() => this.tool.set('review'));
       }
       lastPr = id;
+    });
+    // The connections live at the top of the pull request tool window: opening them (toolbar, status bar) shows it.
+    effect(() => {
+      if (this.store.connectionsOpen()) {
+        untracked(() => this.tool.set('prs'));
+      }
     });
   }
 

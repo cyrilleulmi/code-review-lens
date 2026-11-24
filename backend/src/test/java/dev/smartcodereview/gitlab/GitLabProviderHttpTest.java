@@ -7,9 +7,12 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import dev.smartcodereview.github.GitHubProvider;
 import dev.smartcodereview.model.Model.Comment;
+import dev.smartcodereview.model.Model.Connection;
+import dev.smartcodereview.model.Model.ConnectionRequest;
 import dev.smartcodereview.model.Model.MergeOptions;
 import dev.smartcodereview.model.Model.PrStatus;
 import dev.smartcodereview.model.Model.PrRef;
+import dev.smartcodereview.model.Model.SavedConnection;
 import dev.smartcodereview.model.Model.Snapshot;
 import dev.smartcodereview.provider.ProviderException;
 import org.junit.jupiter.api.AfterEach;
@@ -144,6 +147,94 @@ class GitLabProviderHttpTest {
         assertNull(GitLabProvider.cookieValue(null));
         ProviderException e = assertThrows(ProviderException.class, () -> GitLabProvider.cookieValue("a=1\r\nX-Injected: 1"));
         assertEquals(400, e.status());
+    }
+
+    @Test
+    void theConfigPageConnectsAGitLabWhileRunning() {
+        GitLabProvider gitlab = new GitLabProvider(); // nothing configured at start: gitlab.com
+        gitlab.mapper = MAPPER;
+        gitlab.baseUrl = "https://gitlab.com";
+        gitlab.configuredToken = Optional.empty();
+        gitlab.init();
+
+        gitlab.configure(new ConnectionRequest(url() + "/api/v4", "glpat-page", "Cookie: sso=page", true));
+        gitlab.fetchSnapshot(MR);
+
+        assertEquals(url(), gitlab.host());
+        assertTrue(gitlab.hasCredentials());
+        assertEquals(Optional.of(true), gitlab.cookieSet());
+        assertEquals("/api/v4/projects/acme%2Fshop/merge_requests/7", requests.get(0).getRequestURI().getRawPath());
+        for (HttpExchange r : requests) {
+            assertEquals("glpat-page", r.getRequestHeaders().getFirst("PRIVATE-TOKEN"));
+            assertEquals("sso=page", r.getRequestHeaders().getFirst("Cookie"));
+        }
+        assertEquals(new SavedConnection(url(), "glpat-page", "sso=page"), gitlab.savedConnection());
+        assertEquals(Optional.of(MR), gitlab.parseUrl(url() + "/acme/shop/-/merge_requests/7"));
+    }
+
+    @Test
+    void savedValuesApplyOnTopOfTheStartupConfiguration() {
+        cookie = "sso=startup";
+        GitLabProvider gitlab = provider();
+
+        gitlab.loadConnection(new SavedConnection(null, "glpat-saved", null));
+        gitlab.fetchSnapshot(MR);
+
+        assertEquals("glpat-saved", requests.get(0).getRequestHeaders().getFirst("PRIVATE-TOKEN"));
+        assertEquals("sso=startup", requests.get(0).getRequestHeaders().getFirst("Cookie"));
+
+        gitlab.resetConnection();
+        gitlab.fetchSnapshot(MR);
+        assertEquals("glpat-test", requests.get(2).getRequestHeaders().getFirst("PRIVATE-TOKEN"));
+        assertEquals(SavedConnection.NONE, gitlab.savedConnection());
+    }
+
+    @Test
+    void testsAConnectionWithoutUsingIt() {
+        GitLabProvider gitlab = provider();
+
+        gitlab.testConnection(new ConnectionRequest(null, "glpat-other", "sso=try", true));
+        gitlab.fetchSnapshot(MR);
+
+        assertEquals("/api/v4/user", requests.get(0).getRequestURI().getRawPath());
+        assertEquals("glpat-other", requests.get(0).getRequestHeaders().getFirst("PRIVATE-TOKEN"));
+        assertEquals("sso=try", requests.get(0).getRequestHeaders().getFirst("Cookie"));
+        assertEquals("glpat-test", requests.get(1).getRequestHeaders().getFirst("PRIVATE-TOKEN"));
+        assertNull(requests.get(1).getRequestHeaders().getFirst("Cookie"));
+        assertEquals(SavedConnection.NONE, gitlab.savedConnection());
+    }
+
+    @Test
+    void testingAConnectionReportsWhyItFails() {
+        ProviderException e = assertThrows(ProviderException.class,
+                () -> provider().testConnection(new ConnectionRequest("http://127.0.0.1:1", "glpat-x", null, null)));
+        assertEquals(502, e.status());
+        assertTrue(e.getMessage().startsWith("GitLab nicht erreichbar"), e.getMessage());
+
+        // another host: the token of the startup configuration is not sent there
+        ProviderException noToken = assertThrows(ProviderException.class,
+                () -> provider().testConnection(new ConnectionRequest("http://127.0.0.1:1", null, null, null)));
+        assertEquals(401, noToken.status());
+    }
+
+    @Test
+    void showsWhereTheValuesComeFromButNeverTheSecrets() throws Exception {
+        cookie = "sso=startup";
+        GitLabProvider gitlab = provider();
+        gitlab.configure(new ConnectionRequest(null, "glpat-page", null, null));
+
+        Connection c = gitlab.connection(null).orElseThrow();
+
+        assertEquals(url(), c.url());
+        assertEquals("startup", c.urlSource());
+        assertTrue(c.token());
+        assertEquals("saved", c.tokenSource());
+        assertEquals(Boolean.TRUE, c.cookie());
+        assertEquals("startup", c.cookieSource());
+        assertTrue(c.saved());
+        String json = MAPPER.writeValueAsString(c);
+        assertFalse(json.contains("glpat-"), json);
+        assertFalse(json.contains("sso="), json);
     }
 
     @Test
@@ -297,11 +388,15 @@ class GitLabProviderHttpTest {
     private GitLabProvider provider() {
         GitLabProvider gitlab = new GitLabProvider();
         gitlab.mapper = MAPPER;
-        gitlab.baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+        gitlab.baseUrl = url();
         gitlab.configuredToken = Optional.of("glpat-test");
         gitlab.configuredCookie = Optional.ofNullable(cookie);
         gitlab.init();
         return gitlab;
+    }
+
+    private String url() {
+        return "http://127.0.0.1:" + server.getAddress().getPort();
     }
 
     private List<String> diffQueries() {

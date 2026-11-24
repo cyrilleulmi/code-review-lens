@@ -3,6 +3,7 @@
 #   bash:       GITHUB_TOKEN=$(gh auth token) GITLAB_TOKEN=glpat-... docker compose up --build
 # Self-managed GitLab: also set SCR_GITLAB_URL (default https://gitlab.com); behind an SSO proxy also
 # SCR_GITLAB_COOKIE (the proxy's session cookies, "name=value; name2=value2").
+# All of this can also be set in the UI instead (page "Verbindungen"); it is saved in ./data/connections.json.
 services:
   smart-code-review:
     build: .
