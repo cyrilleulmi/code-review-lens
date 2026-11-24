@@ -1,10 +1,14 @@
 package dev.smartcodereview.api;
 
+import dev.smartcodereview.ConnectionService;
 import dev.smartcodereview.ReviewService;
 import dev.smartcodereview.model.Model.ApprovalRequest;
 import dev.smartcodereview.model.Model.Blame;
 import dev.smartcodereview.model.Model.Comment;
 import dev.smartcodereview.model.Model.Commits;
+import dev.smartcodereview.model.Model.Connection;
+import dev.smartcodereview.model.Model.NewConnection;
+import dev.smartcodereview.model.Model.ConnectionRequest;
 import dev.smartcodereview.model.Model.CookieRequest;
 import dev.smartcodereview.model.Model.MarkRequest;
 import dev.smartcodereview.model.Model.Me;
@@ -17,10 +21,12 @@ import dev.smartcodereview.model.Model.ResolveRequest;
 import dev.smartcodereview.model.Model.ReviewBundle;
 import dev.smartcodereview.model.Model.ReviewState;
 import dev.smartcodereview.model.Model.Settings;
+import dev.smartcodereview.model.Model.User;
 import dev.smartcodereview.model.Model.WholeFile;
 import dev.smartcodereview.provider.ProviderException;
 import dev.smartcodereview.store.DataStore;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
@@ -51,6 +57,9 @@ public class ReviewResource {
     @Inject
     DataStore store;
 
+    @Inject
+    ConnectionService connectionService;
+
     @GET
     @Path("/me")
     public Me me() {
@@ -59,13 +68,62 @@ public class ReviewResource {
 
     /**
      * Replaces the session cookies of an SSO proxy in front of a provider (they expire regularly): kept in memory
-     * until the next start, never stored and never returned. A blank cookie removes them. Answers like /me.
+     * until the next start, unless the cookie replaced was saved on the config page (then the new one is saved).
+     * Never returned. A blank cookie removes them. Answers like /me.
      */
     @PUT
     @Path("/accounts/{provider}/cookie")
     public Me cookie(@PathParam("provider") String provider, CookieRequest request) {
-        service.setCookie(provider, request == null ? null : request.cookie());
+        connectionService.setCookie(provider, request == null ? null : request.cookie());
         return me();
+    }
+
+    /** All connections (URL, token, cookie and where each comes from; no secrets), startup ones first. */
+    @GET
+    @Path("/connections")
+    public List<Connection> connections() {
+        return connectionService.connections();
+    }
+
+    /**
+     * Changes a connection: used at once, saved in {@code <data>/connections.json} on top of the startup configuration.
+     * Per field null keeps it, "" goes back to the startup configuration.
+     */
+    @PUT
+    @Path("/connections/{provider}")
+    public List<Connection> configure(@PathParam("provider") String provider, ConnectionRequest request) {
+        return connectionService.configure(provider, request);
+    }
+
+    /**
+     * An added connection is removed; for the one of the startup configuration, what the UI saved (and a cookie set
+     * while running) is dropped: back to the startup configuration.
+     */
+    @DELETE
+    @Path("/connections/{provider}")
+    public List<Connection> resetConnection(@PathParam("provider") String provider) {
+        return connectionService.remove(provider);
+    }
+
+    /** Adds a connection to another host (GitHub or GitLab), used at once and saved in connections.json. */
+    @POST
+    @Path("/connections")
+    public List<Connection> addConnection(NewConnection request) {
+        return connectionService.add(request);
+    }
+
+    /** Signs in with the values of a connection still to be added, without adding it. */
+    @POST
+    @Path("/connections/test")
+    public User testNewConnection(NewConnection request) {
+        return connectionService.testNew(request);
+    }
+
+    /** Signs in with the values of the request without using or saving them; errors like any other request. */
+    @POST
+    @Path("/connections/{provider}/test")
+    public User testConnection(@PathParam("provider") String provider, ConnectionRequest request) {
+        return connectionService.test(provider, request);
     }
 
     /** Switched-off categories (global, <data>/settings.json): hidden in the UI, their places need no ok. */

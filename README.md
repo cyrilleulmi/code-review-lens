@@ -151,7 +151,7 @@ Requirements: JDK 21+ (tested with 25), Node 22+ and at least one code host:
 | Host | Access | Without a token |
 |---|---|---|
 | GitHub | `GITHUB_TOKEN` / `GH_TOKEN`, otherwise `gh auth token` | – |
-| GitLab | `GITLAB_TOKEN` / `GL_TOKEN` (scope `api`), otherwise `glab config get token`; self-managed: `SCR_GITLAB_URL=https://gitlab.example.com`; behind an SSO proxy also its session cookies: `SCR_GITLAB_COOKIE="name=value; name2=value2"` | Public merge requests can be opened by URL (read only) |
+| GitLab | `GITLAB_TOKEN` / `GL_TOKEN` (scope `api`), otherwise `glab config get token`; self-managed: `SCR_GITLAB_URL=https://gitlab.example.com`; behind an SSO proxy also its session cookies: `SCR_GITLAB_COOKIE="name=value; name2=value2"`. **Or everything in the UI** in the «Connections» section (see below) | Public merge requests can be opened by URL (read only) |
 
 ```powershell
 # Windows
@@ -164,6 +164,17 @@ Requirements: JDK 21+ (tested with 25), Node 22+ and at least one code host:
 ```
 
 The script builds the Angular UI on the first run and then starts Quarkus in dev mode. Open **http://localhost:8080**.
+
+**Connect GitHub and GitLab in the UI:** instead of environment variables, code hosts can also be connected in the
+**«Connections»** section at the top of the «Pull/Merge Requests» list, several of them too: e.g. gitlab.com and a
+company GitLab, github.com and a GitHub Enterprise Server. While nothing is connected, a highlighted «Connect a code host»
+box shows there (GitLab or GitHub, URL, token and – behind an SSO proxy – the cookie, «Test connection», «Connect»).
+Otherwise the section is a quiet list: «All» and one row per connection (host, account, number of open PRs) choose whose
+pull/merge requests the list shows; the gear opens a connection's form, «Add connection» connects another host. This
+applies at once and after a restart (`<data>/connections.json`). The startup configuration stays the base of the first
+GitHub and the first GitLab connection: what the UI saves takes precedence field by field, «Reset to startup
+configuration» discards it again; further connections can be removed. Token and cookie are stored in that file in plain
+text.
 
 When the cookie of an SSO proxy expires, the tool reports «HTML instead of JSON … has the cookie expired?». A click on
 the GitLab account in the status bar (bottom right, with a lock) opens a field for the new cookie; no restart needed.
@@ -222,6 +233,7 @@ cd frontend && npm start              # UI on :4200, /api is proxied to :8080
 | Whole repository | Folder button in the toolbar, «Analyse whole repository» on the overview, or a repository URL in the search field |
 | Commits | Review window → *Commits* or overview: a click shows only that commit's changes; ← → in the toolbar, × shows everything again |
 | Blame | Toolbar button (lines icon): date, author and PR commit per line; a click filters to that commit |
+| Connections | Top of the «Pull/Merge Requests» list: «All» and one row per connection filter the list, a gear per connection opens its form (URL, token, SSO cookie; test, save), «Add connection» for another GitHub or GitLab host; also via the plug button in the toolbar |
 | Theme / language | Contrast button (dark/light) and *DE \| EN* switch in the toolbar, stored per browser |
 
 ## Documentation

@@ -18,6 +18,9 @@ import dev.smartcodereview.model.Model.PullRequestSummary;
 import dev.smartcodereview.model.Model.Snapshot;
 import dev.smartcodereview.model.Model.User;
 import dev.smartcodereview.provider.JsonHttp;
+import dev.smartcodereview.provider.ConnectionIds;
+import dev.smartcodereview.provider.ConnectionSettings;
+import dev.smartcodereview.provider.HostProvider;
 import dev.smartcodereview.provider.ProviderException;
 import dev.smartcodereview.provider.RepoLists;
 import dev.smartcodereview.provider.ReviewProvider;
@@ -29,6 +32,7 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -56,7 +60,7 @@ import java.util.regex.Pattern;
  * A self-managed GitLab behind an SSO proxy also needs the session cookies of the proxy (scr.gitlab.cookie).
  */
 @ApplicationScoped
-public class GitLabProvider implements ReviewProvider {
+public class GitLabProvider extends HostProvider {
 
     private static final String GITLAB_COM = "https://gitlab.com";
     private static final int MAX_FILE_BYTES = 1_000_000;
@@ -68,8 +72,9 @@ public class GitLabProvider implements ReviewProvider {
     @Inject
     ObjectMapper mapper;
 
+    /** The startup configuration; afterwards the URL in use (the config page can change it while running). */
     @ConfigProperty(name = "scr.gitlab.url", defaultValue = GITLAB_COM)
-    String baseUrl;
+    volatile String baseUrl;
 
     @ConfigProperty(name = "scr.gitlab.token")
     Optional<String> configuredToken;
@@ -78,43 +83,56 @@ public class GitLabProvider implements ReviewProvider {
     Optional<String> configuredCookie = Optional.empty();
 
     private JsonHttp http;
-    private Tokens.Lazy token;
-    /**
-     * Value of the Cookie header of every request (session cookies of an SSO proxy), null for none. Starts as
-     * scr.gitlab.cookie and can be replaced while running: such cookies expire regularly.
-     */
-    private volatile String cookie;
+    /* settings (HostProvider): URL, token and the Cookie header (session cookies of an SSO proxy) in use - the startup
+       configuration, overridden in the UI; the cookie can also be replaced while running, as such cookies expire. */
     private volatile String username;
 
     @PostConstruct
     void init() {
-        baseUrl = baseUrl.replaceAll("/+$", "");
         http = new JsonHttp(mapper, label());
-        token = new Tokens.Lazy(() -> Tokens.first(configuredToken, "GITLAB_TOKEN", "GL_TOKEN")
-                .or(() -> Tokens.fromCommand("glab", "config", "get", "token", "--host", URI.create(baseUrl).getHost())));
+        String startupUrl = baseUrl == null || baseUrl.isBlank() ? GITLAB_COM : baseUrl;
         try {
-            cookie = cookieValue(configuredCookie.orElse(null));
+            startupUrl = ConnectionSettings.normaliseUrl(startupUrl);
+        } catch (ProviderException e) {
+            Log.warnf("Ignoring scr.gitlab.url: %s", e.getMessage());
+            startupUrl = GITLAB_COM;
+        }
+        String host = URI.create(startupUrl).getHost();
+        Tokens.Lazy startupToken = new Tokens.Lazy(() -> Tokens.first(configuredToken == null ? Optional.empty() : configuredToken,
+                        "GITLAB_TOKEN", "GL_TOKEN")
+                .or(() -> Tokens.fromCommand("glab", "config", "get", "token", "--host", host)));
+        String startupCookie = configuredCookie == null ? null : configuredCookie.orElse(null);
+        try {
+            ConnectionSettings.cookieValue(startupCookie);
         } catch (ProviderException e) {
             Log.warnf("Ignoring scr.gitlab.cookie: %s", e.getMessage());
         }
+        use(ConnectionSettings.startup(GITLAB_COM, startupUrl, startupToken::get, startupCookie));
     }
 
-    /**
-     * The value of a Cookie header as the user gives it: trimmed, a leading "Cookie:" (copied along from the
-     * browser's developer tools) removed; null when blank. Characters a header cannot carry are refused.
-     */
-    static String cookieValue(String raw) {
-        String value = raw == null ? "" : raw.strip().replaceFirst("(?i)^cookie:\\s*", "");
-        if (value.chars().anyMatch(c -> c < 0x20 || c > 0x7e)) {
-            throw new ProviderException(400, "Das Cookie enthält Zeichen, die in einem HTTP-Header nicht erlaubt sind "
-                    + "(z. B. Zeilenumbrüche).");
-        }
-        return value.isEmpty() ? null : value;
+    /** Other connection values: the signed-in user is looked up again. */
+    @Override
+    protected void changed() {
+        baseUrl = settings.url();
+        username = null;
     }
 
     @Override
-    public String id() {
-        return "gitlab";
+    public String kind() {
+        return ConnectionIds.GITLAB;
+    }
+
+    @Override
+    protected HostProvider blank() {
+        GitLabProvider p = new GitLabProvider();
+        p.mapper = mapper;
+        p.http = new JsonHttp(mapper, label());
+        return p;
+    }
+
+    /** The value of a Cookie header as the user gives it (see {@link ConnectionSettings#cookieValue}). */
+    static String cookieValue(String raw) {
+        return ConnectionSettings.cookieValue(raw);
     }
 
     @Override
@@ -122,26 +140,16 @@ public class GitLabProvider implements ReviewProvider {
         return "GitLab";
     }
 
-    @Override
-    public String host() {
-        return baseUrl;
-    }
-
-    @Override
-    public boolean hasCredentials() {
-        return token.get().isPresent();
-    }
-
     /** A proxy only stands in front of a self-managed GitLab; gitlab.com offers the cookie only when one is configured. */
     @Override
     public Optional<Boolean> cookieSet() {
-        boolean set = cookie != null;
+        boolean set = settings.cookie() != null;
         return set || !GITLAB_COM.equals(baseUrl) ? Optional.of(set) : Optional.empty();
     }
 
     @Override
-    public void setCookie(String value) {
-        cookie = cookieValue(value);
+    public synchronized void setCookie(String value) {
+        settings = settings.withCookie(value);
     }
 
     @Override
@@ -152,19 +160,68 @@ public class GitLabProvider implements ReviewProvider {
         return new User(username, u.path("name").asText(null), u.path("avatar_url").asText(null));
     }
 
+    /** Path of a merge request below the GitLab URL: group[/sub]/project/-/merge_requests/<iid>[/diffs …]. */
+    private static final Pattern MR_PATH = Pattern.compile("^/(.+)/([^/]+)/-/merge_requests/(\\d+)(?:/.*)?$");
+    /** Path of a project (whole repository): group[/sub]/project, optionally .git or /-/tree/<branch>. */
+    private static final Pattern REPO_PATH = Pattern.compile("^/(.+?)/([^/]+?)(?:\\.git)?(?:/-/tree/.*)?/?$");
+    /** Characters copy and paste brings along (non-breaking and zero-width spaces, byte order mark, <…> of mails). */
+    private static final Pattern PASTE_NOISE = Pattern.compile("^[\\s\\u00a0\\u200b-\\u200d\\u2060\\ufeff<]+|[\\s\\u00a0\\u200b-\\u200d\\u2060\\ufeff>]+$");
+
+    /**
+     * Compares the URL with the GitLab in use by its parts, not as text: scheme (http/https), case of the host and
+     * default ports do not matter. A merge request URL of another GitLab is refused with a hint to the connection.
+     */
     @Override
     public Optional<PrRef> parseUrl(String url) {
-        String u = url.trim();
-        Matcher m = Pattern.compile("^" + Pattern.quote(baseUrl) + "/(.+)/([^/]+)/-/merge_requests/(\\d+).*$").matcher(u);
+        URI u = uri(url);
+        if (u == null) {
+            return Optional.empty();
+        }
+        Optional<String> path = pathBelow(uri(baseUrl), u);
+        if (path.isEmpty()) {
+            if (MR_PATH.matcher(u.getPath()).matches()) {
+                throw new ProviderException(400, "Der Merge Request liegt auf " + u.getHost() + ", verbunden ist "
+                        + URI.create(baseUrl).getHost() + ". Unter «Verbindungen» lässt sich eine Verbindung zu " + u.getHost()
+                        + " hinzufügen.");
+            }
+            return Optional.empty();
+        }
+        Matcher m = MR_PATH.matcher(path.get());
         if (m.matches()) {
             return Optional.of(new PrRef(id(), m.group(1).replace('/', '~'), m.group(2), Integer.parseInt(m.group(3))));
         }
-        // project URL (whole repository): group[/sub]/project, optionally .git or /-/tree/<branch>
-        Matcher r = Pattern.compile("^" + Pattern.quote(baseUrl) + "/([^?#]+?)/([^/?#]+?)(?:\\.git)?(?:/-/tree/[^?#]*)?/?(?:[?#].*)?$").matcher(u);
+        Matcher r = REPO_PATH.matcher(path.get());
         if (r.matches() && !r.group(1).contains("/-") && !r.group(1).startsWith("-") && !r.group(2).equals("-")) {
             return Optional.of(new PrRef(id(), r.group(1).replace('/', '~'), r.group(2), 0));
         }
         return Optional.empty();
+    }
+
+    /** A pasted http(s) URL without the noise copying brings along; null when it is none. */
+    private static URI uri(String raw) {
+        String value = raw == null ? "" : PASTE_NOISE.matcher(raw).replaceAll("");
+        try {
+            URI u = new URI(value);
+            String scheme = u.getScheme() == null ? "" : u.getScheme().toLowerCase();
+            return (scheme.equals("http") || scheme.equals("https")) && u.getHost() != null && u.getPath() != null ? u : null;
+        } catch (URISyntaxException e) {
+            return null;
+        }
+    }
+
+    /** The path of url below base ("/group/project/…"), empty when url is on another host or outside base's path. */
+    static Optional<String> pathBelow(URI base, URI url) {
+        if (base == null || !base.getHost().equalsIgnoreCase(url.getHost()) || port(base) != port(url)) {
+            return Optional.empty();
+        }
+        String prefix = base.getPath() == null ? "" : base.getPath().replaceAll("/+$", "");
+        String path = url.getPath();
+        return path.startsWith(prefix + "/") ? Optional.of(path.substring(prefix.length())) : Optional.empty();
+    }
+
+    /** The port, -1 when it is the default of http or https. */
+    private static int port(URI u) {
+        return u.getPort() == 80 || u.getPort() == 443 ? -1 : u.getPort();
     }
 
     @Override
@@ -740,9 +797,9 @@ public class GitLabProvider implements ReviewProvider {
     }
 
     private void requireToken() {
-        if (token.get().isEmpty()) {
-            throw new ProviderException(401, "Kein GitLab-Token gefunden. Setze GITLAB_TOKEN (Scope: api) – ohne Token "
-                    + "lassen sich nur öffentliche Merge Requests per URL öffnen.");
+        if (settings.token().isEmpty()) {
+            throw new ProviderException(401, "Kein GitLab-Token gefunden. Trage eines unter «Verbindungen» ein oder setze "
+                    + "GITLAB_TOKEN (Scope: api) – ohne Token lassen sich nur öffentliche Merge Requests per URL öffnen.");
         }
     }
 
@@ -755,12 +812,13 @@ public class GitLabProvider implements ReviewProvider {
     }
 
     private HttpRequest.Builder request(String path) {
-        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(baseUrl + "/api/v4" + path))
+        ConnectionSettings s = settings; // one consistent set of values, even while the config page changes them
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(s.url() + "/api/v4" + path))
                 .timeout(Duration.ofSeconds(30))
                 .header("Accept", "application/json")
                 .header("User-Agent", "SmartCodeReview");
-        token.get().ifPresent(t -> b.header("PRIVATE-TOKEN", t));
-        String c = cookie;
+        s.token().ifPresent(t -> b.header("PRIVATE-TOKEN", t));
+        String c = s.cookie();
         if (c != null) {
             b.header("Cookie", c);
         }

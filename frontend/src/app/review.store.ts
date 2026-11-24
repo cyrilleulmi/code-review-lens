@@ -7,6 +7,7 @@ import {
   Commit,
   Commits,
   Component,
+  Connection,
   LineMark,
   LogEntry,
   Me,
@@ -100,9 +101,17 @@ export class ReviewStore {
   private readonly api = inject(Api);
 
   readonly me = signal<Me | null>(null);
+  /** Connections the config page can change (GitLab), null until loaded. */
+  readonly connections = signal<Connection[] | null>(null);
+  /** The connection form at the top of the pull request tool window is open (a host not connected shows it anyway). */
+  readonly connectionsOpen = signal(false);
+  /** The connection whose form is open (null: the chosen one, else the first). */
+  readonly editedConnection = signal<string | null>(null);
   readonly prs = signal<PullRequestSummary[]>([]);
   readonly prsLoading = signal(false);
   readonly prFilter = signal<PrFilter>('all');
+  /** The connection whose pull requests the list shows (id, e.g. "gitlab~git.example.com"); null: all of them. */
+  readonly prHost = signal<string | null>(readText(PR_HOST_KEY));
   readonly bundle = signal<ReviewBundle | null>(null);
   readonly loading = signal<string | null>(null);
   readonly error = signal<string | null>(null);
@@ -389,10 +398,34 @@ export class ReviewStore {
   /** The switched-on test category, which shows the coverage above its test overview; null when there is none. */
   readonly testsCategory = computed(() => this.categories().find((c) => isTestsView(c)) ?? null);
 
+  /** The chosen connection, or null for all (also when the chosen one is gone). */
+  readonly activeHost = computed(() => {
+    const id = this.prHost();
+    return id && (this.connections() ?? []).some((c) => c.provider === id) ? id : null;
+  });
+
+  /** Pull requests of the chosen connection (all without one). */
+  readonly hostPrs = computed(() => {
+    const id = this.activeHost();
+    return id ? this.prs().filter((p) => p.provider === id) : this.prs();
+  });
+
   readonly filteredPrs = computed(() => {
     const f = this.prFilter();
-    return f === 'all' ? this.prs() : this.prs().filter((p) => p.roles.includes(f));
+    return f === 'all' ? this.hostPrs() : this.hostPrs().filter((p) => p.roles.includes(f));
   });
+
+  /** Opens the form of a connection (status bar, toolbar); null: the chosen or the first one. */
+  editConnection(id: string | null): void {
+    this.editedConnection.set(id);
+    this.connectionsOpen.set(true);
+  }
+
+  /** Shows the pull requests of one connection only (null: of all), remembered in the browser. */
+  chooseHost(id: string | null): void {
+    this.prHost.set(id);
+    writeChoice(PR_HOST_KEY, id);
+  }
 
   readonly totalProgress = computed(() => this.progressOf(this.slotsFor({ kind: 'overview' })));
 
@@ -404,12 +437,25 @@ export class ReviewStore {
       error: (e) => this.error.set(errorMessage(e)),
     });
     this.api.settings().subscribe({ next: (s) => this.disabledCategories.set(new Set(s.disabledCategories)) });
+    this.loadConnections();
     this.loadPrs();
     const fromHash = parseHash(location.hash);
     if (fromHash) {
       this.open(fromHash.pr, fromHash.selection, fromHash.commit);
     }
     window.addEventListener('focus', () => this.refreshState());
+  }
+
+  loadConnections(): void {
+    this.api.connections().subscribe({ next: (c) => this.connections.set(c), error: () => this.connections.set([]) });
+  }
+
+  /** After a connection changed: accounts, connections and the list of pull requests are fetched again. */
+  connectionChanged(connections?: Connection[]): void {
+    if (connections) this.connections.set(connections);
+    else this.loadConnections();
+    this.api.me().subscribe({ next: (me) => this.me.set(me) });
+    this.loadPrs();
   }
 
   loadPrs(): void {
@@ -427,6 +473,7 @@ export class ReviewStore {
   }
 
   open(pr: PrKey, selection: Selection = { kind: 'overview' }, commit: string | null = null): void {
+    this.connectionsOpen.set(false);
     this.pendingCommit = commit;
     this.loading.set(t('Lade {pr} …', { pr: prLabel(pr) }));
     this.error.set(null);
@@ -558,6 +605,7 @@ export class ReviewStore {
   }
 
   select(selection: Selection): void {
+    this.connectionsOpen.set(false);
     this.selection.set(selection);
     this.collapseCommand.set(null);
     this.updateHash();
@@ -1122,6 +1170,16 @@ function categoryOf(place: string): string {
 
 function lineOf(key: string | undefined): number {
   return key ? Number(key.substring(1)) : 0;
+}
+
+const PR_HOST_KEY = 'scr.prHost';
+
+function readText(name: string): string | null {
+  try {
+    return localStorage.getItem(name);
+  } catch {
+    return null;
+  }
 }
 
 function readFlag(name: string): boolean {

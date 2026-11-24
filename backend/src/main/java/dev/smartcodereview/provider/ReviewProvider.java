@@ -39,9 +39,44 @@ public interface ReviewProvider {
         return Optional.empty();
     }
 
-    /** Replaces those cookies until the next start (kept in memory, never stored); blank removes them. */
+    /**
+     * Replaces those cookies while running: kept in memory until the next start, unless the cookie being replaced was
+     * saved on the config page (then the new one is saved instead). Blank removes them (a saved one for good).
+     */
     default void setCookie(String cookie) {
         throw new ProviderException(400, label() + " nimmt kein Cookie entgegen");
+    }
+
+    /**
+     * The connection as the config page shows it (URL, whether token and cookie are set and where they come from);
+     * empty when this host cannot be configured there. account: its state, passed through.
+     */
+    default Optional<Model.Connection> connection(Model.Account account) {
+        return Optional.empty();
+    }
+
+    /** The values saved on the config page, for connections.json ({@link Model.SavedConnection#NONE}: none). */
+    default Model.SavedConnection savedConnection() {
+        return Model.SavedConnection.NONE;
+    }
+
+    /** Uses values read from connections.json on top of the startup configuration (at start). */
+    default void loadConnection(Model.SavedConnection saved) {
+    }
+
+    /** Changes the connection from the config page (see {@link Model.ConnectionRequest}); takes effect at once. */
+    default void configure(Model.ConnectionRequest request) {
+        throw new ProviderException(400, label() + " lässt sich hier nicht konfigurieren");
+    }
+
+    /** Drops the values of the config page and the cookie set while running: back to the startup configuration. */
+    default void resetConnection() {
+        throw new ProviderException(400, label() + " lässt sich hier nicht konfigurieren");
+    }
+
+    /** Signs in with the values of the request (on top of the current ones) without using them: the user, or why not. */
+    default User testConnection(Model.ConnectionRequest request) {
+        throw new ProviderException(400, label() + " lässt sich hier nicht konfigurieren");
     }
 
     /** Open PRs authored by the user, waiting for the user's review, or (role "involved") otherwise involving the user. */
@@ -56,7 +91,10 @@ public interface ReviewProvider {
     /** Free-text search over open PRs (provider-specific qualifiers allowed). */
     List<PullRequestSummary> searchPullRequests(String query);
 
-    /** Recognises a PR web URL of this host, or a repository URL (number 0 = the whole repository). */
+    /**
+     * Recognises a PR web URL of this host, or a repository URL (number 0 = the whole repository). May refuse a URL
+     * that clearly belongs to this kind of host but not to the configured one, with a message that says why.
+     */
     Optional<PrRef> parseUrl(String url);
 
     /** Default branch and its head commit. */
