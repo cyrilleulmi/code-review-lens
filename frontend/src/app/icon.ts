@@ -66,9 +66,10 @@ const PATHS: Record<string, string> = {
   styles: `:host { display: inline-flex; flex: none; } svg { display: block; }`,
 })
 export class Icon {
+  /** an icon name; a connection id like "gitlab~git.example.com" shows the icon of its kind */
   readonly name = input.required<string>();
   readonly size = input(16);
-  protected readonly d = computed(() => PATHS[this.name()] ?? PATHS['file']);
+  protected readonly d = computed(() => PATHS[this.name()] ?? PATHS[this.name().split('~')[0]] ?? PATHS['file']);
 }
 
 /** IntelliJ-style round badge for a symbol kind (c = class, m = method, f = function, ...). */

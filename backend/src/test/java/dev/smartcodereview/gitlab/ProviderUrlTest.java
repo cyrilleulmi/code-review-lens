@@ -1,10 +1,14 @@
 package dev.smartcodereview.gitlab;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.smartcodereview.ReviewService;
 import dev.smartcodereview.github.GitHubProvider;
 import dev.smartcodereview.model.Model.PrRef;
 import dev.smartcodereview.provider.ProviderException;
+import dev.smartcodereview.provider.ReviewProvider;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -62,11 +66,30 @@ class ProviderUrlTest {
         gitlab.baseUrl = "https://gitlab.com";
         ProviderException e = assertThrows(ProviderException.class,
                 () -> gitlab.parseUrl("https://my.git.com/path/to/project/-/merge_requests/747"));
-        assertEquals("Der Merge Request liegt auf my.git.com, verbunden ist gitlab.com. Die GitLab-Verbindung lässt sich "
-                + "unter «Verbindungen» ändern.", e.getMessage());
+        assertEquals("Der Merge Request liegt auf my.git.com, verbunden ist gitlab.com. Unter «Verbindungen» lässt sich "
+                + "eine Verbindung zu my.git.com hinzufügen.", e.getMessage());
         assertTrue(gitlab.parseUrl("https://my.git.com/path/to/project").isEmpty());
         assertTrue(gitlab.parseUrl("https://github.com/cyrilleulmi/spongecoach/pull/13").isEmpty());
         assertTrue(gitlab.parseUrl("not a url").isEmpty());
+    }
+
+    @Test
+    void aMergeRequestGoesToTheConnectionOfItsHostEvenWhenAnotherOneRefusesIt() {
+        GitLabProvider gitlabCom = GitLabProviders.create(new ObjectMapper(), null, null, null);
+        ReviewService service = new ReviewService() {
+            @Override
+            protected List<ReviewProvider> startupProviders() {
+                return List.of(gitlabCom);
+            }
+        };
+        service.addProvider(gitlabCom.added("https://my.git.com"));
+
+        assertEquals(new PrRef("gitlab~my.git.com", "path~to", "project", 747),
+                service.resolve("https://my.git.com/path/to/project/-/merge_requests/747"));
+        assertEquals(new PrRef("gitlab", "a", "b", 1), service.resolve("https://gitlab.com/a/b/-/merge_requests/1"));
+        ProviderException e = assertThrows(ProviderException.class,
+                () -> service.resolve("https://other.git.com/a/b/-/merge_requests/1"));
+        assertTrue(e.getMessage().startsWith("Der Merge Request liegt auf other.git.com"), e.getMessage());
     }
 
     @Test

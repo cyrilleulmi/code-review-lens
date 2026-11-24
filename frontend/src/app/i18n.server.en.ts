@@ -206,8 +206,9 @@ export const SERVER_EN: Record<string, string> = {
   'Der Merge Request ist nicht offen': 'The merge request is not open',
   'GitLab prüft noch, ob sich der Merge Request mergen lässt': 'GitLab is still checking whether the merge request can be merged',
   'resolved fehlt': 'resolved missing',
-  'Kein GitHub-Token gefunden. Setze GITHUB_TOKEN oder melde dich mit `gh auth login` an.':
-    'No GitHub token found. Set GITHUB_TOKEN or sign in with `gh auth login`.',
+  'Kein GitHub-Token gefunden. Trage eines unter «Verbindungen» ein, setze GITHUB_TOKEN oder melde dich mit `gh auth login` an.':
+    'No GitHub token found. Enter one under “Connections”, set GITHUB_TOKEN or sign in with `gh auth login`.',
+  'Die Adresse des Hosts fehlt': 'The address of the host is missing',
   'Kein GitLab-Token gefunden. Trage eines unter «Verbindungen» ein oder setze GITLAB_TOKEN (Scope: api) – ohne Token lassen sich nur öffentliche Merge Requests per URL öffnen.':
     'No GitLab token found. Enter one under “Connections” or set GITLAB_TOKEN (scope: api) – without a token only public merge requests can be opened by URL.',
 };
@@ -298,8 +299,8 @@ export const SERVER_EN_PATTERNS: [RegExp, Replace][] = [
   [/^([\s\S]+) geändert in (\w+), ohne Test im Commit\. ([\s\S]+)$/, (m, tr) => `${m[1]} changed in ${m[2]}, without a test in the commit. ${tr(m[3])}`],
   // error messages (providers, ReviewService)
   [/^Keine bekannte Pull- oder Merge-Request-URL: ([\s\S]*)$/, (m) => `Not a known pull or merge request URL: ${m[1]}`],
-  [/^Der Merge Request liegt auf (.+), verbunden ist (.+)\. Die GitLab-Verbindung lässt sich unter «Verbindungen» ändern\.$/,
-    (m) => `The merge request is on ${m[1]}, connected is ${m[2]}. The GitLab connection can be changed under “Connections”.`],
+  [/^Der Merge Request liegt auf (.+), verbunden ist (.+)\. Unter «Verbindungen» lässt sich eine Verbindung zu (.+) hinzufügen\.$/,
+    (m) => `The merge request is on ${m[1]}, connected is ${m[2]}. A connection to ${m[3]} can be added under “Connections”.`],
   [/^(\S+) kann hier nicht genehmigen oder mergen$/, (m) => `${m[1]} cannot approve or merge here`],
   [/^(\S+) kann hier nicht genehmigen$/, (m) => `${m[1]} cannot approve here`],
   [/^(\S+) kann hier nicht mergen$/, (m) => `${m[1]} cannot merge here`],
@@ -312,6 +313,12 @@ export const SERVER_EN_PATTERNS: [RegExp, Replace][] = [
   [/^(\S+) lässt sich hier nicht konfigurieren$/, (m) => `${m[1]} cannot be configured here`],
   [/^Ungültige URL: «([\s\S]*)»\. Erwartet wird z\. B\. (\S+)$/, (m) => `Invalid URL: “${m[1]}”. Expected e.g. ${m[2]}`],
   [/^Unbekannter Provider: ([\s\S]*)$/, (m) => `Unknown provider: ${m[1]}`],
+  [/^Unbekannte Art von Verbindung: (\S*) \(erwartet: github oder gitlab\)$/, (m) => `Unknown kind of connection: ${m[1]} (expected: github or gitlab)`],
+  [/^Mit (\S+) gibt es schon eine Verbindung\. Ändere dort Token oder Cookie\.$/, (m) => `There is already a connection to ${m[1]}. Change its token or cookie there.`],
+  [/^Diese Verbindung gibt es schon: (\S+)$/, (m) => `This connection already exists: ${m[1]}`],
+  [/^Die Adresse dieser Verbindung lässt sich nicht ändern\. Füge für (\S+) eine neue Verbindung hinzu\.$/,
+    (m) => `The address of this connection cannot be changed. Add a new connection for ${m[1]}.`],
+  [/^Zu (\S+) lassen sich keine weiteren Verbindungen hinzufügen$/, (m) => `No further connections to ${m[1]} can be added`],
   [/^Datei ist nicht Teil des Pull Requests: ([\s\S]*)$/, (m) => `File is not part of the pull request: ${m[1]}`],
   [/^Inhalt der Datei ist nicht verfügbar: ([\s\S]*)$/, (m) => `Content of the file is not available: ${m[1]}`],
   [/^rules\.json ist ungültig: ([\s\S]*)$/, (m) => `rules.json is invalid: ${m[1]}`],

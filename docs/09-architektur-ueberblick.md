@@ -55,7 +55,7 @@ flowchart LR
 | Reviewer:in | Browser, eingebettetes Angular-UI | ein/aus | Ein Benutzer pro Prozess (Annahme A1). |
 | Agent | REST `/api/…` oder direkt die Dateien | ein/aus | Anleitung im Datenverzeichnis: `AGENTS.md`. |
 | GitHub | REST v3 (`api.github.com` oder Enterprise `…/api/v3`), GraphQL nur für Blame | aus | Token: `GITHUB_TOKEN` / `GH_TOKEN` / `gh auth token`. |
-| GitLab | REST v4 (gitlab.com oder self-managed, eine Instanz) | aus | Token: `GITLAB_TOKEN` / `GL_TOKEN` / `glab config get token`; öffentliche MRs auch ohne. Hinter einem SSO-Proxy zusätzlich dessen Session-Cookies (`SCR_GITLAB_COOKIE`). URL, Token und Cookie lassen sich auch im UI setzen (Bereich «Verbindungen», `<data>/connections.json`). |
+| GitLab | REST v4 (gitlab.com und self-managed, mehrere Hosts) | aus | Token: `GITLAB_TOKEN` / `GL_TOKEN` / `glab config get token`; öffentliche MRs auch ohne. Hinter einem SSO-Proxy zusätzlich dessen Session-Cookies (`SCR_GITLAB_COOKIE`). URL, Token und Cookie lassen sich auch im UI setzen (Bereich «Verbindungen», `<data>/connections.json`). |
 | Dateisystem | JSON + Quelltexte unter `<data>/reviews/…` | ein/aus | Der einzige echte Zustand ist `review.json`. |
 
 Was **nicht** zum Kontext gehört: keine Datenbank, kein Message-Broker, kein Identity-Provider, keine Cloud-Dienste ausser den Code-Hosts.

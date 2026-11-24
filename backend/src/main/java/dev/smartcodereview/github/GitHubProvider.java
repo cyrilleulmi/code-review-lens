@@ -15,6 +15,9 @@ import dev.smartcodereview.model.Model.PullRequestInfo;
 import dev.smartcodereview.model.Model.PullRequestSummary;
 import dev.smartcodereview.model.Model.Snapshot;
 import dev.smartcodereview.model.Model.User;
+import dev.smartcodereview.provider.ConnectionIds;
+import dev.smartcodereview.provider.ConnectionSettings;
+import dev.smartcodereview.provider.HostProvider;
 import dev.smartcodereview.provider.JsonHttp;
 import dev.smartcodereview.provider.ProviderException;
 import dev.smartcodereview.provider.RepoLists;
@@ -25,7 +28,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+import io.quarkus.logging.Log;
+
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -40,38 +46,65 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** GitHub via its REST API. */
+/**
+ * GitHub (github.com or GitHub Enterprise Server) via its REST API. The connection of the startup configuration comes
+ * from scr.github.api-url / scr.github.token, GITHUB_TOKEN, GH_TOKEN or `gh auth token`; the UI can override it and
+ * add connections to further hosts.
+ */
 @ApplicationScoped
-public class GitHubProvider implements ReviewProvider {
+public class GitHubProvider extends HostProvider {
 
+    static final String GITHUB_COM = "https://github.com";
+    private static final String GITHUB_COM_API = "https://api.github.com";
     private static final int MAX_FILE_BYTES = 1_000_000;
-    private static final Pattern PR_URL = Pattern.compile("^https?://github\\.com/([^/]+)/([^/]+)/pull/(\\d+).*$");
-    /** github.com/owner/repo, optionally .git, /tree/<branch>, query or fragment */
-    private static final Pattern REPO_URL =
-            Pattern.compile("^https?://github\\.com/([^/]+)/([^/?#]+?)(?:\\.git)?(?:/tree/[^?#]*)?/?(?:[?#].*)?$");
+    /** Path of a pull request below the host: /owner/repo/pull/<n>[/files …]. */
+    private static final Pattern PR_PATH = Pattern.compile("^/([^/]+)/([^/]+)/pull/(\\d+)(?:/.*)?$");
+    /** Path of a repository: /owner/repo, optionally .git or /tree/<branch>. */
+    private static final Pattern REPO_PATH = Pattern.compile("^/([^/]+)/([^/]+?)(?:\\.git)?(?:/tree/.*)?/?$");
+    /** Characters copy and paste brings along (non-breaking and zero-width spaces, byte order mark, <…> of mails). */
+    private static final Pattern PASTE_NOISE = Pattern.compile("^[\\s\\u00a0\\u200b-\\u200d\\u2060\\ufeff<]+|[\\s\\u00a0\\u200b-\\u200d\\u2060\\ufeff>]+$");
 
     @Inject
     ObjectMapper mapper;
 
-    @ConfigProperty(name = "scr.github.api-url", defaultValue = "https://api.github.com")
-    String apiUrl;
+    /** REST API of the startup configuration: https://api.github.com, or https://host/api/v3 for GitHub Enterprise. */
+    @ConfigProperty(name = "scr.github.api-url", defaultValue = GITHUB_COM_API)
+    String apiUrl = GITHUB_COM_API;
 
     @ConfigProperty(name = "scr.github.token")
-    Optional<String> configuredToken;
+    Optional<String> configuredToken = Optional.empty();
 
     private JsonHttp http;
-    private Tokens.Lazy token;
 
     @PostConstruct
     void init() {
         http = new JsonHttp(mapper, label());
-        token = new Tokens.Lazy(() -> Tokens.first(configuredToken, "GITHUB_TOKEN", "GH_TOKEN")
-                .or(() -> Tokens.fromCommand("gh", "auth", "token")));
+        String startupUrl = webUrl(apiUrl);
+        try {
+            startupUrl = ConnectionSettings.normaliseUrl(startupUrl);
+        } catch (ProviderException e) {
+            Log.warnf("Ignoring scr.github.api-url: %s", e.getMessage());
+            startupUrl = GITHUB_COM;
+        }
+        String host = URI.create(startupUrl).getHost();
+        Tokens.Lazy startupToken = new Tokens.Lazy(() -> Tokens.first(configuredToken == null ? Optional.empty() : configuredToken,
+                        "GITHUB_TOKEN", "GH_TOKEN")
+                .or(() -> GITHUB_COM.equals(webUrlOf(host)) ? Tokens.fromCommand("gh", "auth", "token")
+                        : Tokens.fromCommand("gh", "auth", "token", "--hostname", host)));
+        use(ConnectionSettings.startup(GITHUB_COM, startupUrl, startupToken::get, null));
     }
 
     @Override
-    public String id() {
-        return "github";
+    public String kind() {
+        return ConnectionIds.GITHUB;
+    }
+
+    @Override
+    protected HostProvider blank() {
+        GitHubProvider p = new GitHubProvider();
+        p.mapper = mapper;
+        p.http = new JsonHttp(mapper, label());
+        return p;
     }
 
     @Override
@@ -79,14 +112,24 @@ public class GitHubProvider implements ReviewProvider {
         return "GitHub";
     }
 
-    @Override
-    public String host() {
-        return "https://github.com";
+    /** The web URL of the host for an API URL of the startup configuration. */
+    static String webUrl(String api) {
+        String a = api == null || api.isBlank() ? GITHUB_COM_API : api.strip().replaceAll("/+$", "");
+        if (a.equalsIgnoreCase(GITHUB_COM_API)) {
+            return GITHUB_COM;
+        }
+        return a.replaceFirst("(?i)/api/v3$", "");
     }
 
-    @Override
-    public boolean hasCredentials() {
-        return token.get().isPresent();
+    private static String webUrlOf(String host) {
+        return "https://" + host;
+    }
+
+    /** REST API of the host in use: api.github.com for github.com, else <host>/api/v3 (GitHub Enterprise Server). */
+    private String api() {
+        String web = settings == null ? GITHUB_COM : settings.url();
+        URI u = URI.create(web);
+        return "github.com".equalsIgnoreCase(u.getHost()) ? GITHUB_COM_API : web + "/api/v3";
     }
 
     @Override
@@ -95,14 +138,40 @@ public class GitHubProvider implements ReviewProvider {
         return new User(u.path("login").asText(), u.path("name").asText(null), u.path("avatar_url").asText(null));
     }
 
+    /** Pull request or repository URLs of the host in use, compared by host and port (scheme and case do not matter). */
     @Override
     public Optional<PrRef> parseUrl(String url) {
-        Matcher m = PR_URL.matcher(url.trim());
+        URI u = uri(url);
+        URI base = URI.create(settings == null ? GITHUB_COM : settings.url());
+        if (u == null || !base.getHost().equalsIgnoreCase(u.getHost()) || port(base) != port(u)) {
+            return Optional.empty();
+        }
+        String prefix = base.getPath() == null ? "" : base.getPath().replaceAll("/+$", "");
+        if (!u.getPath().startsWith(prefix + "/")) {
+            return Optional.empty();
+        }
+        String path = u.getPath().substring(prefix.length());
+        Matcher m = PR_PATH.matcher(path);
         if (m.matches()) {
             return Optional.of(new PrRef(id(), m.group(1), m.group(2), Integer.parseInt(m.group(3))));
         }
-        Matcher r = REPO_URL.matcher(url.trim());
+        Matcher r = REPO_PATH.matcher(path);
         return r.matches() ? Optional.of(new PrRef(id(), r.group(1), r.group(2), 0)) : Optional.empty();
+    }
+
+    private static URI uri(String raw) {
+        String value = raw == null ? "" : PASTE_NOISE.matcher(raw).replaceAll("");
+        try {
+            URI u = new URI(value);
+            String scheme = u.getScheme() == null ? "" : u.getScheme().toLowerCase();
+            return (scheme.equals("http") || scheme.equals("https")) && u.getHost() != null && u.getPath() != null ? u : null;
+        } catch (URISyntaxException e) {
+            return null;
+        }
+    }
+
+    private static int port(URI u) {
+        return u.getPort() == 80 || u.getPort() == 443 ? -1 : u.getPort();
     }
 
     @Override
@@ -400,7 +469,8 @@ public class GitHubProvider implements ReviewProvider {
 
     /** https://api.github.com/graphql, or https://host/api/graphql for GitHub Enterprise (REST: /api/v3). */
     private String graphqlUrl() {
-        return apiUrl.endsWith("/api/v3") ? apiUrl.substring(0, apiUrl.length() - 3) + "graphql" : apiUrl + "/graphql";
+        String api = api();
+        return api.endsWith("/api/v3") ? api.substring(0, api.length() - 3) + "graphql" : api + "/graphql";
     }
 
     private static String firstLine(String message) {
@@ -473,12 +543,13 @@ public class GitHubProvider implements ReviewProvider {
     }
 
     private HttpRequest.Builder request(String path) {
-        return request(URI.create(apiUrl + path));
+        return request(URI.create(api() + path));
     }
 
     private HttpRequest.Builder request(URI uri) {
-        String t = token.get().orElseThrow(() -> new ProviderException(401,
-                "Kein GitHub-Token gefunden. Setze GITHUB_TOKEN oder melde dich mit `gh auth login` an."));
+        String t = settings.token().orElseThrow(() -> new ProviderException(401,
+                "Kein GitHub-Token gefunden. Trage eines unter «Verbindungen» ein, setze GITHUB_TOKEN oder melde dich "
+                        + "mit `gh auth login` an."));
         return HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofSeconds(30))
                 .header("Authorization", "Bearer " + t)

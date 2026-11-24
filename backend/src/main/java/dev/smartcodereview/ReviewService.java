@@ -38,6 +38,7 @@ import dev.smartcodereview.model.Model.Settings;
 import dev.smartcodereview.model.Model.Segment;
 import dev.smartcodereview.model.Model.Snapshot;
 import dev.smartcodereview.model.Model.WholeFile;
+import dev.smartcodereview.provider.ConnectionIds;
 import dev.smartcodereview.provider.ProviderException;
 import dev.smartcodereview.provider.ReviewProvider;
 import dev.smartcodereview.repo.RepositorySnapshot;
@@ -70,6 +71,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -92,22 +94,42 @@ public class ReviewService {
     ObjectMapper mapper;
 
     private final Map<String, Object> locks = new ConcurrentHashMap<>();
+    /** connections added in the UI (kind~host), after those of the startup configuration */
+    private final List<ReviewProvider> added = new CopyOnWriteArrayList<>();
 
     // ------------------------------------------------------------------ providers
 
     public ReviewProvider provider(String id) {
-        return providerBeans.stream().filter(p -> p.id().equals(id)).findFirst()
+        return providers().stream().filter(p -> p.id().equals(id)).findFirst()
                 .orElseThrow(() -> new ProviderException(404, "Unbekannter Provider: " + id));
     }
 
     public List<String> providerIds() {
-        return providerBeans.stream().map(ReviewProvider::id).toList();
+        return providers().stream().map(ReviewProvider::id).toList();
+    }
+
+    /** The connections of the startup configuration (one per kind: GitHub, GitLab). */
+    protected List<ReviewProvider> startupProviders() {
+        return providerBeans.stream().toList();
+    }
+
+    /** Uses another connection (added in the UI or read from connections.json). */
+    public void addProvider(ReviewProvider p) {
+        if (providers().stream().anyMatch(x -> x.id().equals(p.id()))) {
+            throw new ProviderException(409, "Diese Verbindung gibt es schon: " + p.host());
+        }
+        added.add(p);
+    }
+
+    /** Stops using an added connection; its reviews stay in the data directory. */
+    public void removeProvider(String id) {
+        added.removeIf(p -> p.id().equals(id));
     }
 
     /** Open PRs of all providers with credentials; a failing provider is logged and skipped. */
     public List<PullRequestSummary> openPullRequests() {
         List<PullRequestSummary> result = new ArrayList<>();
-        for (ReviewProvider p : providerBeans) {
+        for (ReviewProvider p : providers()) {
             if (!p.hasCredentials()) {
                 continue;
             }
@@ -128,7 +150,7 @@ public class ReviewService {
     /** Repositories of all providers with credentials (per provider: own ones first, most recently active first). */
     public List<Model.RepositorySummary> repositories(String query) {
         List<Model.RepositorySummary> result = new ArrayList<>();
-        for (ReviewProvider p : providerBeans) {
+        for (ReviewProvider p : providers()) {
             if (!p.hasCredentials()) {
                 continue;
             }
@@ -149,7 +171,7 @@ public class ReviewService {
     /** Free-text search of open PRs over all providers with credentials. */
     public List<PullRequestSummary> searchPullRequests(String query) {
         List<PullRequestSummary> result = new ArrayList<>();
-        for (ReviewProvider p : providerBeans) {
+        for (ReviewProvider p : providers()) {
             if (!p.hasCredentials()) {
                 continue;
             }
@@ -176,7 +198,7 @@ public class ReviewService {
     /** One entry per provider: the signed-in user, or why there is none. */
     public List<Account> accounts() {
         List<Account> result = new ArrayList<>();
-        for (ReviewProvider p : providerBeans) {
+        for (ReviewProvider p : providers()) {
             result.add(account(p));
         }
         result.sort(Comparator.comparing((Account a) -> a.user() == null).thenComparing(Account::provider));
@@ -186,30 +208,41 @@ public class ReviewService {
     /** The signed-in user of a provider, or why there is none. */
     public Account account(ReviewProvider p) {
         Boolean cookie = p.cookieSet().orElse(null);
+        String kind = ConnectionIds.kind(p.id());
         if (!p.hasCredentials()) {
-            return new Account(p.id(), p.label(), p.host(), null, "Kein Token konfiguriert", cookie);
+            return new Account(p.id(), p.label(), p.host(), null, "Kein Token konfiguriert", cookie, kind);
         }
         try {
-            return new Account(p.id(), p.label(), p.host(), p.currentUser(), null, cookie);
+            return new Account(p.id(), p.label(), p.host(), p.currentUser(), null, cookie, kind);
         } catch (ProviderException e) {
-            return new Account(p.id(), p.label(), p.host(), null, e.getMessage(), cookie);
+            return new Account(p.id(), p.label(), p.host(), null, e.getMessage(), cookie, kind);
         }
     }
 
-    /** All providers (GitHub, GitLab). */
+    /** All connections: those of the startup configuration (GitHub, GitLab), then the ones added in the UI. */
     public List<ReviewProvider> providers() {
-        return providerBeans.stream().toList();
+        List<ReviewProvider> all = new ArrayList<>(startupProviders());
+        all.addAll(added);
+        return all;
     }
 
-    /** Turns a PR/MR web URL of any provider into a reference. */
+    /**
+     * Turns a PR/MR web URL of any connection into a reference. A connection may refuse a URL of its kind of host that
+     * is not its own (with a reason); another connection to that host still takes it.
+     */
     public PrRef resolve(String url) {
-        for (ReviewProvider p : providerBeans) {
-            Optional<PrRef> ref = p.parseUrl(url);
-            if (ref.isPresent()) {
-                return ref.get();
+        ProviderException refused = null;
+        for (ReviewProvider p : providers()) {
+            try {
+                Optional<PrRef> ref = p.parseUrl(url);
+                if (ref.isPresent()) {
+                    return ref.get();
+                }
+            } catch (ProviderException e) {
+                refused = refused == null ? e : refused;
             }
         }
-        throw new ProviderException(400, "Keine bekannte Pull- oder Merge-Request-URL: " + url);
+        throw refused != null ? refused : new ProviderException(400, "Keine bekannte Pull- oder Merge-Request-URL: " + url);
     }
 
     // ------------------------------------------------------------------ bundle

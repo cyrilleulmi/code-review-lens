@@ -19,13 +19,15 @@ export interface Account {
   error: string | null;
   /** null: the host takes no session cookies of an SSO proxy; else whether a cookie is set */
   cookie?: boolean | null;
+  /** "github" or "gitlab"; provider is the connection id ("gitlab", "gitlab~host" for an added one) */
+  kind?: string;
 }
 
 /**
  * Where a value of a connection comes from: "saved" (config page, <data>/connections.json), "runtime" (set while
  * running, only in memory), "startup" (startup configuration), "default" (built-in URL), null (not set).
  */
-export type ConnectionSource = 'saved' | 'runtime' | 'startup' | 'default' | null;
+export type ConnectionSource = 'saved' | 'runtime' | 'startup' | 'default' | 'added' | null;
 
 /** A connection as the config page shows it; token and cookie themselves never leave the backend. */
 export interface Connection {
@@ -40,9 +42,22 @@ export interface Connection {
   /** null: the host takes no cookies */
   cookie: boolean | null;
   cookieSource: ConnectionSource;
-  /** something is saved on the config page */
+  /** something is saved in the UI */
   saved: boolean;
   account: Account;
+  /** "github" or "gitlab" */
+  kind: string;
+  /** added in the UI: its URL is fixed, and it is removed instead of reset */
+  added: boolean;
+}
+
+/** A connection to add: kind ("github", "gitlab"), URL of the host, token and cookie. */
+export interface NewConnection {
+  kind: string;
+  url: string;
+  token: string | null;
+  cookie: string | null;
+  saveCookie: boolean | null;
 }
 
 /** Per field: null keeps it, "" goes back to the startup configuration, else the new value. */
@@ -73,8 +88,22 @@ const PROVIDERS: Record<string, ProviderInfo> = {
   gitlab: { label: 'GitLab', sigil: '!', noun: 'Merge Request' },
 };
 
+/** The kind of host of a connection id: "gitlab~git.example.com" is a GitLab. */
+export function providerKind(provider: string | null | undefined): string {
+  return (provider ?? '').split('~')[0];
+}
+
 export function providerInfo(provider: string | null | undefined): ProviderInfo {
-  return PROVIDERS[provider ?? ''] ?? { label: provider ?? '?', sigil: '#', noun: 'Pull Request' };
+  return PROVIDERS[providerKind(provider)] ?? { label: provider ?? '?', sigil: '#', noun: 'Pull Request' };
+}
+
+/** The host of a connection as people know it: "gitlab.com", "git.example.com:8443". */
+export function hostLabel(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
 }
 
 /** Nested GitLab groups travel as "group~sub" in refs and URLs; show them with slashes. */
@@ -910,8 +939,18 @@ export class Api {
     return this.http.put<Connection[]>(`/api/connections/${provider}`, request);
   }
 
+  /** Removes an added connection, or brings the one of the startup configuration back to it. */
   resetConnection(provider: string): Observable<Connection[]> {
     return this.http.delete<Connection[]>(`/api/connections/${provider}`);
+  }
+
+  addConnection(request: NewConnection): Observable<Connection[]> {
+    return this.http.post<Connection[]>('/api/connections', request);
+  }
+
+  /** Signs in with the values of a connection still to be added, without adding it. */
+  testNewConnection(request: NewConnection): Observable<User> {
+    return this.http.post<User>('/api/connections/test', request);
   }
 
   /** Signs in with these values without using or saving them. */

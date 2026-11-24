@@ -7,6 +7,7 @@ import dev.smartcodereview.model.Model.Blame;
 import dev.smartcodereview.model.Model.Comment;
 import dev.smartcodereview.model.Model.Commits;
 import dev.smartcodereview.model.Model.Connection;
+import dev.smartcodereview.model.Model.NewConnection;
 import dev.smartcodereview.model.Model.ConnectionRequest;
 import dev.smartcodereview.model.Model.CookieRequest;
 import dev.smartcodereview.model.Model.MarkRequest;
@@ -77,7 +78,7 @@ public class ReviewResource {
         return me();
     }
 
-    /** The connections of the config page (GitLab: URL, token, cookie and where each comes from; no secrets). */
+    /** All connections (URL, token, cookie and where each comes from; no secrets), startup ones first. */
     @GET
     @Path("/connections")
     public List<Connection> connections() {
@@ -94,11 +95,28 @@ public class ReviewResource {
         return connectionService.configure(provider, request);
     }
 
-    /** Drops what the config page saved (and a cookie set while running): back to the startup configuration. */
+    /**
+     * An added connection is removed; for the one of the startup configuration, what the UI saved (and a cookie set
+     * while running) is dropped: back to the startup configuration.
+     */
     @DELETE
     @Path("/connections/{provider}")
     public List<Connection> resetConnection(@PathParam("provider") String provider) {
-        return connectionService.reset(provider);
+        return connectionService.remove(provider);
+    }
+
+    /** Adds a connection to another host (GitHub or GitLab), used at once and saved in connections.json. */
+    @POST
+    @Path("/connections")
+    public List<Connection> addConnection(NewConnection request) {
+        return connectionService.add(request);
+    }
+
+    /** Signs in with the values of a connection still to be added, without adding it. */
+    @POST
+    @Path("/connections/test")
+    public User testNewConnection(NewConnection request) {
+        return connectionService.testNew(request);
     }
 
     /** Signs in with the values of the request without using or saving them; errors like any other request. */

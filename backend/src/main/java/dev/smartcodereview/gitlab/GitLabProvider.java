@@ -18,7 +18,9 @@ import dev.smartcodereview.model.Model.PullRequestSummary;
 import dev.smartcodereview.model.Model.Snapshot;
 import dev.smartcodereview.model.Model.User;
 import dev.smartcodereview.provider.JsonHttp;
+import dev.smartcodereview.provider.ConnectionIds;
 import dev.smartcodereview.provider.ConnectionSettings;
+import dev.smartcodereview.provider.HostProvider;
 import dev.smartcodereview.provider.ProviderException;
 import dev.smartcodereview.provider.RepoLists;
 import dev.smartcodereview.provider.ReviewProvider;
@@ -58,7 +60,7 @@ import java.util.regex.Pattern;
  * A self-managed GitLab behind an SSO proxy also needs the session cookies of the proxy (scr.gitlab.cookie).
  */
 @ApplicationScoped
-public class GitLabProvider implements ReviewProvider {
+public class GitLabProvider extends HostProvider {
 
     private static final String GITLAB_COM = "https://gitlab.com";
     private static final int MAX_FILE_BYTES = 1_000_000;
@@ -81,11 +83,8 @@ public class GitLabProvider implements ReviewProvider {
     Optional<String> configuredCookie = Optional.empty();
 
     private JsonHttp http;
-    /**
-     * URL, token and the Cookie header (session cookies of an SSO proxy) in use: the startup configuration, overridden
-     * by the config page; the cookie can also be replaced while running, because such cookies expire regularly.
-     */
-    private volatile ConnectionSettings settings;
+    /* settings (HostProvider): URL, token and the Cookie header (session cookies of an SSO proxy) in use - the startup
+       configuration, overridden in the UI; the cookie can also be replaced while running, as such cookies expire. */
     private volatile String username;
 
     @PostConstruct
@@ -111,11 +110,24 @@ public class GitLabProvider implements ReviewProvider {
         use(ConnectionSettings.startup(GITLAB_COM, startupUrl, startupToken::get, startupCookie));
     }
 
-    /** Switches to other connection values; the signed-in user is looked up again. */
-    private synchronized void use(ConnectionSettings next) {
-        settings = next;
-        baseUrl = next.url();
+    /** Other connection values: the signed-in user is looked up again. */
+    @Override
+    protected void changed() {
+        baseUrl = settings.url();
         username = null;
+    }
+
+    @Override
+    public String kind() {
+        return ConnectionIds.GITLAB;
+    }
+
+    @Override
+    protected HostProvider blank() {
+        GitLabProvider p = new GitLabProvider();
+        p.mapper = mapper;
+        p.http = new JsonHttp(mapper, label());
+        return p;
     }
 
     /** The value of a Cookie header as the user gives it (see {@link ConnectionSettings#cookieValue}). */
@@ -124,63 +136,8 @@ public class GitLabProvider implements ReviewProvider {
     }
 
     @Override
-    public Optional<Model.Connection> connection(Model.Account account) {
-        ConnectionSettings s = settings;
-        return Optional.of(new Model.Connection(id(), label(), s.url(), s.urlSource(), s.startupUrl(),
-                s.token().isPresent(), s.tokenSource(), s.cookie() != null, s.cookieSource(), !s.saved().isEmpty(),
-                account));
-    }
-
-    @Override
-    public Model.SavedConnection savedConnection() {
-        return settings.saved();
-    }
-
-    @Override
-    public synchronized void loadConnection(Model.SavedConnection saved) {
-        use(settings.withSaved(saved));
-    }
-
-    @Override
-    public synchronized void configure(Model.ConnectionRequest request) {
-        use(settings.apply(request));
-    }
-
-    @Override
-    public synchronized void resetConnection() {
-        use(settings.reset());
-    }
-
-    /** Signs in with the values of the request (on top of the current ones) without using them. */
-    @Override
-    public User testConnection(Model.ConnectionRequest request) {
-        ConnectionSettings candidate = settings.apply(request);
-        GitLabProvider probe = new GitLabProvider();
-        probe.mapper = mapper;
-        probe.http = new JsonHttp(mapper, label());
-        probe.settings = candidate;
-        probe.baseUrl = candidate.url();
-        return probe.currentUser();
-    }
-
-    @Override
-    public String id() {
-        return "gitlab";
-    }
-
-    @Override
     public String label() {
         return "GitLab";
-    }
-
-    @Override
-    public String host() {
-        return baseUrl;
-    }
-
-    @Override
-    public boolean hasCredentials() {
-        return settings.token().isPresent();
     }
 
     /** A proxy only stands in front of a self-managed GitLab; gitlab.com offers the cookie only when one is configured. */
@@ -224,7 +181,8 @@ public class GitLabProvider implements ReviewProvider {
         if (path.isEmpty()) {
             if (MR_PATH.matcher(u.getPath()).matches()) {
                 throw new ProviderException(400, "Der Merge Request liegt auf " + u.getHost() + ", verbunden ist "
-                        + URI.create(baseUrl).getHost() + ". Die GitLab-Verbindung lässt sich unter «Verbindungen» ändern.");
+                        + URI.create(baseUrl).getHost() + ". Unter «Verbindungen» lässt sich eine Verbindung zu " + u.getHost()
+                        + " hinzufügen.");
             }
             return Optional.empty();
         }

@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { Api, Connection, ConnectionRequest, ConnectionSource, User, errorMessage } from './api';
+import { Api, Connection, ConnectionRequest, ConnectionSource, User, errorMessage, hostLabel } from './api';
 import { Icon } from './icon';
 import { serverText, t } from './i18n';
 import { ReviewStore } from './review.store';
@@ -33,7 +33,7 @@ import { ReviewStore } from './review.store';
 
       <label class="field">
         <span class="name">{{ t('URL') }}</span>
-        <input type="url" autocomplete="off" spellcheck="false" [placeholder]="'https://gitlab.com'"
+        <input type="url" autocomplete="off" spellcheck="false" [placeholder]="defaultUrl(c.kind)" [readOnly]="c.added"
                [value]="url()" (input)="url.set($any($event.target).value)" />
         <span class="hint">{{ urlHint() }}</span>
         @if (urlChanged()) {
@@ -44,7 +44,7 @@ import { ReviewStore } from './review.store';
       <label class="field">
         <span class="name">{{ t('Token') }}</span>
         <input type="password" autocomplete="off" spellcheck="false"
-               [placeholder]="c.token ? t('gesetzt – leer lassen, um es zu behalten') : 'glpat-…'"
+               [placeholder]="c.token ? t('gesetzt – leer lassen, um es zu behalten') : tokenPlaceholder(c.kind)"
                [value]="token()" (input)="token.set($any($event.target).value)" />
         <span class="hint">
           {{ tokenHint() }}
@@ -90,10 +90,17 @@ import { ReviewStore } from './review.store';
         <button type="button" class="btn" [disabled]="busy()" (click)="test()"
                 [title]="t('Mit den Werten im Formular anmelden, ohne sie zu übernehmen')">{{ t('Verbindung testen') }}</button>
         <span class="spacer"></span>
-        <button type="button" class="btn" [disabled]="busy() || !(c.saved || c.cookieSource === 'runtime')" (click)="reset()"
-                [title]="t('Alles, was hier gesetzt wurde, verwerfen: es gilt wieder die Startkonfiguration ({url})', { url: c.startupUrl })">
-          {{ t('Auf Startkonfiguration zurücksetzen') }}
-        </button>
+        @if (c.added) {
+          <button type="button" class="btn" [disabled]="busy()" (click)="reset()"
+                  [title]="t('Die Verbindung nicht mehr verwenden. Reviews und Markierungen im Datenverzeichnis bleiben.')">
+            {{ t('Verbindung entfernen') }}
+          </button>
+        } @else {
+          <button type="button" class="btn" [disabled]="busy() || !(c.saved || c.cookieSource === 'runtime')" (click)="reset()"
+                  [title]="t('Alles, was hier gesetzt wurde, verwerfen: es gilt wieder die Startkonfiguration ({url})', { url: c.startupUrl })">
+            {{ t('Auf Startkonfiguration zurücksetzen') }}
+          </button>
+        }
       </div>
     </form>
   `,
@@ -287,24 +294,34 @@ export class ConnectionForm {
     return !!url && url !== this.connection().url;
   });
 
+  protected readonly defaultUrl = defaultUrl;
+  protected readonly tokenPlaceholder = tokenPlaceholder;
+
   protected readonly urlHint = computed(() => {
     const c = this.connection();
+    const github = c.kind === 'github';
     switch (c.urlSource) {
+      case 'added':
+        return t('Feste Adresse dieser Verbindung. Für einen anderen Host eine weitere Verbindung hinzufügen.');
       case 'saved':
         return t('Hier gespeichert. Startkonfiguration: {url}', { url: c.startupUrl });
       case 'startup':
-        return t('Aus der Startkonfiguration (SCR_GITLAB_URL).');
+        return github ? t('Aus der Startkonfiguration (SCR_GITHUB_API_URL).') : t('Aus der Startkonfiguration (SCR_GITLAB_URL).');
       default:
-        return t('Standard. Für ein self-managed GitLab dessen Adresse eintragen.');
+        return github ? t('Standard. Für GitHub Enterprise dessen Adresse eintragen.')
+                      : t('Standard. Für ein self-managed GitLab dessen Adresse eintragen.');
     }
   });
 
-  protected readonly tokenHint = computed(() =>
-    sourceText(this.connection().tokenSource, {
+  protected readonly tokenHint = computed(() => {
+    const c = this.connection();
+    return sourceText(c.tokenSource, {
       saved: t('Hier gespeichert.'),
-      startup: t('Aus der Startkonfiguration (GITLAB_TOKEN, GL_TOKEN oder glab).'),
-      none: t('Kein Token: Merge Requests lassen sich nicht auflisten und nicht kommentieren, öffentliche nur per URL öffnen. Scope «api».'),
-    }));
+      startup: c.kind === 'github' ? t('Aus der Startkonfiguration (GITHUB_TOKEN, GH_TOKEN oder gh).')
+                                   : t('Aus der Startkonfiguration (GITLAB_TOKEN, GL_TOKEN oder glab).'),
+      none: tokenHelp(c.kind),
+    });
+  });
 
   protected readonly cookieHint = computed(() =>
     sourceText(this.connection().cookieSource, {
@@ -358,7 +375,9 @@ export class ConnectionForm {
   }
 
   protected reset(): void {
-    this.run(this.api.resetConnection(this.connection().provider), t('Zurückgesetzt: es gilt die Startkonfiguration'));
+    const c = this.connection();
+    this.run(this.api.resetConnection(c.provider),
+      c.added ? t('Verbindung zu {host} entfernt', { host: hostLabel(c.url) }) : t('Zurückgesetzt: es gilt die Startkonfiguration'));
   }
 
   /** Sends a change; fields not given are kept. */
@@ -391,240 +410,6 @@ export class ConnectionForm {
   }
 }
 
-const LATER_KEY = 'scr.connectionSetupLater';
-
-function loadLater(): string[] {
-  try {
-    const v = JSON.parse(localStorage.getItem(LATER_KEY) ?? '[]');
-    return Array.isArray(v) ? v.filter((p) => typeof p === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-function storeLater(providers: string[]): void {
-  try {
-    localStorage.setItem(LATER_KEY, JSON.stringify(providers));
-  } catch {
-    // private window or blocked storage: «Später» lasts until the page is reloaded
-  }
-}
-
-/**
- * The connections at the top of the «Pull/Merge Requests» tool window. A host that is not connected shows its form
- * right away in a highlighted box (until «Später»); a connected one is a single line that opens the form.
- */
-@Component({
-  selector: 'app-connection-panel',
-  changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, ConnectionForm],
-  template: `
-    @for (c of store.connections() ?? []; track c.provider) {
-      @if (setup(c)) {
-        <section class="setup" [attr.aria-label]="t('{host} verbinden', { host: c.label })">
-          <header>
-            <app-icon [name]="c.provider" [size]="16" />
-            <h3>{{ t('{host} verbinden', { host: c.label }) }}</h3>
-            <button type="button" class="later" (click)="later(c.provider)" [title]="t('Einklappen; über die Zeile mit dem Host wieder öffnen')">{{ t('Später') }}</button>
-          </header>
-          <p>{{ c.token ? t('{host} ist eingerichtet, aber nicht erreichbar. Prüfe URL, Token und Cookie.', { host: c.label })
-                       : t('Noch nicht eingerichtet: URL deines {host} und ein Token (Scope «api») eintragen. Danach stehen hier deine Merge Requests.', { host: c.label }) }}</p>
-          <app-connection-form [connection]="c" [embedded]="true" />
-          <p class="dim">{{ t('Gespeichert wird in {file}. Token und Cookie stehen dort im Klartext und werden nie wieder angezeigt.', { file: file() }) }}</p>
-        </section>
-      } @else {
-        <div class="conn" [class.open]="store.connectionsOpen()">
-          <button type="button" class="line" (click)="toggle(c)" [attr.aria-expanded]="store.connectionsOpen()"
-                  [title]="t('Verbindungen: GitLab-URL, Token und Cookie')">
-            <app-icon [name]="c.provider" [size]="13" />
-            <span class="host">{{ host(c.url) }}</span>
-            @if (c.account.user; as u) {
-              <span class="state ok"><app-icon name="check" [size]="11" /> {{ u.login }}</span>
-            } @else {
-              <span class="state off"><app-icon name="warning" [size]="11" /> {{ t('nicht verbunden') }}</span>
-            }
-            <app-icon [name]="store.connectionsOpen() ? 'chevronDown' : 'chevronRight'" [size]="12" />
-          </button>
-          @if (store.connectionsOpen()) {
-            <div class="body">
-              <app-connection-form [connection]="c" [embedded]="true" />
-              <p class="dim">{{ t('Was hier gespeichert wird, gilt vor der Startkonfiguration (Umgebungsvariablen, application.properties), Feld für Feld; leere Felder behalten ihren Wert.') }}</p>
-              <p class="dim">{{ t('Gespeichert wird in {file}. Token und Cookie stehen dort im Klartext und werden nie wieder angezeigt.', { file: file() }) }}</p>
-            </div>
-          }
-        </div>
-      }
-    }
-  `,
-  styles: `
-    :host {
-      display: block;
-      flex-shrink: 0;
-      max-height: 70%;
-      overflow: auto;
-      padding: 8px 10px 2px;
-      font-size: 12.5px;
-    }
-
-    .setup {
-      margin-bottom: 6px;
-      padding: 12px;
-      border: 1px solid var(--accent);
-      border-radius: 8px;
-      background: var(--bg-panel);
-      box-shadow: inset 3px 0 0 var(--accent);
-
-      header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      h3 {
-        flex: 1;
-        margin: 0;
-        font-size: 14px;
-        font-weight: 600;
-      }
-
-      p {
-        margin: 8px 0 12px;
-        line-height: 1.45;
-      }
-    }
-
-    .later {
-      padding: 2px 6px;
-      border: 0;
-      border-radius: 4px;
-      background: none;
-      color: var(--fg-muted);
-      font: inherit;
-      cursor: pointer;
-
-      &:hover {
-        background: var(--bg-hover);
-        color: var(--fg);
-      }
-    }
-
-    .conn {
-      margin-bottom: 4px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-
-      &.open {
-        background: var(--bg-panel);
-      }
-    }
-
-    .line {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      width: 100%;
-      height: 28px;
-      padding: 0 8px;
-      border: 0;
-      border-radius: 6px;
-      background: none;
-      color: var(--fg-muted);
-      font: inherit;
-      text-align: left;
-      cursor: pointer;
-
-      &:hover {
-        background: var(--bg-hover);
-        color: var(--fg);
-      }
-    }
-
-    .host {
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      color: var(--fg);
-    }
-
-    .state {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-      white-space: nowrap;
-
-      &.ok {
-        color: var(--ok);
-      }
-
-      &.off {
-        color: var(--warn);
-      }
-    }
-
-    .body {
-      padding: 4px 10px 10px;
-    }
-
-    .dim {
-      margin: 8px 0 0;
-      color: var(--fg-muted);
-      line-height: 1.45;
-      overflow-wrap: anywhere;
-    }
-  `,
-})
-export class ConnectionPanel {
-  protected readonly store = inject(ReviewStore);
-  protected readonly t = t;
-  private readonly postponed = signal<string[]>(loadLater());
-
-  protected readonly file = computed(() => {
-    const dir = this.store.me()?.dataDir;
-    return dir ? `${dir}${dir.includes('\\') ? '\\' : '/'}connections.json` : 'connections.json';
-  });
-
-  constructor() {
-    // fresh state of the accounts every time the form is opened (toolbar, status bar, the line)
-    effect(() => {
-      if (this.store.connectionsOpen()) {
-        untracked(() => this.store.loadConnections());
-      }
-    });
-  }
-
-  /** Not connected and not put off: the form is shown at once, highlighted. */
-  protected setup(c: Connection): boolean {
-    return !c.account.user && (this.store.connectionsOpen() || !this.postponed().includes(c.provider));
-  }
-
-  protected later(provider: string): void {
-    const next = [...new Set([...this.postponed(), provider])];
-    this.postponed.set(next);
-    storeLater(next);
-    this.store.connectionsOpen.set(false);
-  }
-
-  protected toggle(c: Connection): void {
-    if (!c.account.user && this.postponed().includes(c.provider)) {
-      // opening a postponed setup brings the highlighted box back for good
-      const next = this.postponed().filter((p) => p !== c.provider);
-      this.postponed.set(next);
-      storeLater(next);
-    }
-    this.store.connectionsOpen.set(!this.store.connectionsOpen());
-  }
-
-  protected host(url: string): string {
-    try {
-      return new URL(url).host;
-    } catch {
-      return url;
-    }
-  }
-}
-
 /**
  * What the form sends: only what was changed. An unchanged or emptied URL keeps the URL in use (going back to the
  * startup URL is «reset»); empty token and cookie fields keep the values that are set.
@@ -640,6 +425,22 @@ export function formRequest(
     cookie: form.cookie.trim() || null,
     saveCookie: form.saveCookie,
   };
+}
+
+/** The URL a connection of this kind has without anything configured. */
+export function defaultUrl(kind: string): string {
+  return kind === 'github' ? 'https://github.com' : 'https://gitlab.com';
+}
+
+export function tokenPlaceholder(kind: string): string {
+  return kind === 'github' ? 'ghp_…' : 'glpat-…';
+}
+
+/** What a missing token means and which one to create. */
+export function tokenHelp(kind: string): string {
+  return kind === 'github'
+    ? t('Kein Token: Pull Requests lassen sich nicht auflisten und nicht öffnen. Ein Personal Access Token mit Scope «repo».')
+    : t('Kein Token: Merge Requests lassen sich nicht auflisten und nicht kommentieren, öffentliche nur per URL öffnen. Scope «api».');
 }
 
 function sourceText(

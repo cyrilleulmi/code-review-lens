@@ -47,6 +47,18 @@ export class App {
   protected readonly cookieAccount = computed(
     () => this.store.me()?.accounts.find((a) => a.provider === this.cookieFor() && a.cookie != null) ?? null);
 
+  /**
+   * Accounts for the status bar: connected or set up somehow. A GitHub or GitLab of the startup configuration with
+   * nothing set is left out, like in the connection panel.
+   */
+  protected readonly statusAccounts = computed(() => {
+    const connections = this.store.connections() ?? [];
+    return (this.store.me()?.accounts ?? []).filter((a) => {
+      const c = connections.find((x) => x.provider === a.provider);
+      return !c || !!a.user || c.token || c.saved || c.added;
+    });
+  });
+
   /** Providers whose connection the config page can change (status bar: a click opens it). */
   protected readonly configurable = computed(() => new Set((this.store.connections() ?? []).map((c) => c.provider)));
   /** No code host is connected: the welcome screen offers the config page. */

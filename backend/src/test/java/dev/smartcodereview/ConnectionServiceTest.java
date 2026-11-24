@@ -5,6 +5,7 @@ import dev.smartcodereview.gitlab.GitLabProvider;
 import dev.smartcodereview.gitlab.GitLabProviders;
 import dev.smartcodereview.model.Model.Connection;
 import dev.smartcodereview.model.Model.ConnectionRequest;
+import dev.smartcodereview.model.Model.NewConnection;
 import dev.smartcodereview.model.Model.SavedConnection;
 import dev.smartcodereview.provider.ProviderException;
 import dev.smartcodereview.provider.ReviewProvider;
@@ -89,7 +90,7 @@ class ConnectionServiceTest {
         connections.configure("gitlab", new ConnectionRequest(null, "glpat-page", null, null));
         assertTrue(Files.exists(dir.resolve("connections.json")));
 
-        List<Connection> after = connections.reset("gitlab");
+        List<Connection> after = connections.remove("gitlab");
 
         assertFalse(Files.exists(dir.resolve("connections.json")));
         assertFalse(after.get(0).saved());
@@ -115,6 +116,61 @@ class ConnectionServiceTest {
         assertEquals("https://gitlab.com", gitlab.host());
     }
 
+    @Test
+    void addsAConnectionToAnotherHostAndUsesItAgainAfterARestart() throws IOException {
+        List<Connection> after = connections.add(new NewConnection("gitlab", "http://127.0.0.1:1/", "glpat-other", null, null));
+
+        Connection added = after.stream().filter(Connection::added).findFirst().orElseThrow();
+        assertEquals("gitlab~127.0.0.1_1", added.provider());
+        assertEquals("http://127.0.0.1:1", added.url());
+        assertEquals("gitlab", added.kind());
+        String file = Files.readString(dir.resolve("connections.json"));
+        assertTrue(file.contains("\"gitlab~127.0.0.1_1\"") && file.contains("glpat-other"), file);
+        assertFalse(file.contains("\"gitlab\":"), "the startup connection has nothing saved: " + file);
+
+        GitLabProvider restarted = gitlab();
+        ConnectionService again = service(restarted);
+        again.onStart(null);
+        ReviewProvider back = again.service.provider("gitlab~127.0.0.1_1");
+        assertEquals("http://127.0.0.1:1", back.host());
+        assertTrue(back.hasCredentials());
+        assertEquals("https://gitlab.com", restarted.host(), "the startup connection stays as it was");
+    }
+
+    @Test
+    void aSecondConnectionToTheSameHostIsRefused() {
+        connections.add(new NewConnection("gitlab", "https://git.example.com", "glpat-a", null, null));
+
+        assertEquals(409, assertThrows(ProviderException.class,
+                () -> connections.add(new NewConnection("gitlab", "HTTPS://git.example.com:443/", "glpat-b", null, null))).status());
+        assertEquals(409, assertThrows(ProviderException.class,
+                () -> connections.add(new NewConnection("gitlab", "https://gitlab.com", "glpat-b", null, null))).status(),
+                "the startup connection already goes to gitlab.com");
+        assertEquals(400, assertThrows(ProviderException.class,
+                () -> connections.add(new NewConnection("bitbucket", "https://bitbucket.org", "x", null, null))).status());
+    }
+
+    @Test
+    void theUrlOfAnAddedConnectionIsFixedButItsTokenCanChange() {
+        connections.add(new NewConnection("gitlab", "https://git.example.com", "glpat-a", null, null));
+
+        assertEquals(400, assertThrows(ProviderException.class, () -> connections.configure("gitlab~git.example.com",
+                new ConnectionRequest("https://other.example.com", null, null, null))).status());
+        connections.configure("gitlab~git.example.com", new ConnectionRequest("https://git.example.com/", "glpat-b", null, null));
+        assertEquals(new SavedConnection("https://git.example.com", "glpat-b", null),
+                connections.service.provider("gitlab~git.example.com").savedConnection());
+    }
+
+    @Test
+    void removingAnAddedConnectionDropsIt() {
+        connections.add(new NewConnection("gitlab", "https://git.example.com", "glpat-a", null, null));
+
+        connections.remove("gitlab~git.example.com");
+
+        assertFalse(Files.exists(dir.resolve("connections.json")));
+        assertEquals(List.of("gitlab"), connections.service.providerIds());
+    }
+
     private GitLabProvider gitlab() {
         return GitLabProviders.create(MAPPER, null, "glpat-startup", null);
     }
@@ -123,16 +179,8 @@ class ConnectionServiceTest {
         ConnectionService s = new ConnectionService();
         s.service = new ReviewService() {
             @Override
-            public List<ReviewProvider> providers() {
+            protected List<ReviewProvider> startupProviders() {
                 return List.of(provider);
-            }
-
-            @Override
-            public ReviewProvider provider(String id) {
-                if (!id.equals(provider.id())) {
-                    throw new ProviderException(404, "Unbekannter Provider: " + id);
-                }
-                return provider;
             }
         };
         s.store = new DataStore() {

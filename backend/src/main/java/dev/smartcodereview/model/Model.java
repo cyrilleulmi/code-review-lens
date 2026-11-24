@@ -752,9 +752,11 @@ public final class Model {
     /**
      * One configured code host. user is null when it has no credentials (error says why). cookie: null when the host
      * takes no session cookies of an SSO proxy, else whether a cookie is set (its value is never sent to the UI).
+     * provider: the connection id ("gitlab", or "gitlab~host" for an added one); kind: "github" or "gitlab".
      */
     @RegisterForReflection
-    public record Account(String provider, String label, String host, User user, String error, Boolean cookie) {
+    public record Account(String provider, String label, String host, User user, String error, Boolean cookie,
+                          String kind) {
     }
 
     /** cookie: value of the Cookie header ("name=value; name2=value2"); blank removes it. */
@@ -765,9 +767,9 @@ public final class Model {
     // ---------------------------------------------------------------- connections (config page)
 
     /**
-     * A code host connection as saved on the config page, one entry of {@code <data>/connections.json}. Every field is
-     * optional: null means the startup configuration applies (scr.gitlab.url, GITLAB_TOKEN …). Holds secrets (token,
-     * cookie); the API never returns them.
+     * A code host connection as saved in the UI, one entry of {@code <data>/connections.json}. Every field is
+     * optional: null means the startup configuration applies (scr.gitlab.url, GITLAB_TOKEN …). An added connection
+     * (id kind~host) always has its url. Holds secrets (token, cookie); the API never returns them.
      */
     @RegisterForReflection
     public record SavedConnection(String url, String token, String cookie) {
@@ -779,7 +781,7 @@ public final class Model {
         }
     }
 
-    /** {@code <data>/connections.json}: saved connections by provider id. */
+    /** {@code <data>/connections.json}: saved connections by connection id ("gitlab", "github", "gitlab~host" …). */
     @RegisterForReflection
     public record SavedConnections(Map<String, SavedConnection> connections) {
     }
@@ -789,12 +791,18 @@ public final class Model {
      * Sources: "saved" (config page, connections.json), "runtime" (set while running, only in memory: cookies),
      * "startup" (startup configuration: properties, environment, CLI), "default" (built-in URL), null (not set).
      * startupUrl: the URL of the startup configuration, to see what "reset" leads back to. cookie: null when the host
-     * takes no cookies. account: the connection as it is now (user, or why there is none).
+     * takes no cookies. account: the connection as it is now (user, or why there is none). kind: "github" or "gitlab".
+     * added: added in the UI (urlSource "added": its URL is fixed; it is removed instead of reset).
      */
     @RegisterForReflection
     public record Connection(String provider, String label, String url, String urlSource, String startupUrl,
                              boolean token, String tokenSource, Boolean cookie, String cookieSource, boolean saved,
-                             Account account) {
+                             Account account, String kind, boolean added) {
+    }
+
+    /** A connection added in the UI: kind ("github", "gitlab"), URL of the host, token and cookie as in a change. */
+    @RegisterForReflection
+    public record NewConnection(String kind, String url, String token, String cookie, Boolean saveCookie) {
     }
 
     /**

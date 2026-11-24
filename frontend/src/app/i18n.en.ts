@@ -121,19 +121,30 @@ export const EN: Record<string, string> = {
     'The cookie is saved under “Connections”: a new one replaces it there.',
   'Alle Einstellungen der Verbindung …': 'All settings of the connection …',
   // ------------------------------------------------------------------ connections (top of the pull request list)
-  'Verbindungen: GitLab-URL, Token und Cookie': 'Connections: GitLab URL, token and cookie',
+  'Verbindungen zu GitHub und GitLab': 'Connections to GitHub and GitLab',
+  'Verbindung hinzufügen': 'Add connection',
+  'Art': 'Kind',
+  'github.com oder die Adresse eines GitHub Enterprise Server.': 'github.com or the address of a GitHub Enterprise Server.',
+  'gitlab.com oder die Adresse eines self-managed GitLab.': 'gitlab.com or the address of a self-managed GitLab.',
+  'Verbinden': 'Connect',
+  'Verbunden mit {host}': 'Connected to {host}',
+  'Verbinde GitHub oder GitLab, dann stehen hier deine offenen Pull und Merge Requests.':
+    'Connect GitHub or GitLab, and your open pull and merge requests will be listed here.',
+  'Pull Requests von': 'Pull requests of',
+  'Die Verbindung nicht mehr verwenden. Reviews und Markierungen im Datenverzeichnis bleiben.':
+    'Stop using this connection. Reviews and marks in the data directory are kept.',
+  'Verbindung entfernen': 'Remove connection',
+  'Verbindung zu {host} entfernt': 'Connection to {host} removed',
+  'Feste Adresse dieser Verbindung. Für einen anderen Host eine weitere Verbindung hinzufügen.':
+    'The fixed address of this connection. For another host, add another connection.',
+  'Aus der Startkonfiguration (SCR_GITHUB_API_URL).': 'From the startup configuration (SCR_GITHUB_API_URL).',
+  'Standard. Für GitHub Enterprise dessen Adresse eintragen.': 'Default. For GitHub Enterprise, enter its address.',
+  'Aus der Startkonfiguration (GITHUB_TOKEN, GH_TOKEN oder gh).': 'From the startup configuration (GITHUB_TOKEN, GH_TOKEN or gh).',
+  'Kein Token: Pull Requests lassen sich nicht auflisten und nicht öffnen. Ein Personal Access Token mit Scope «repo».':
+    'No token: pull requests can be neither listed nor opened. A personal access token with scope “repo”.',
   'Verbindung einstellen': 'Set up the connection',
   'Code-Host verbinden': 'Connect a code host',
-  '{host} verbinden': 'Connect {host}',
-  'Später': 'Later',
   'Liegt {host} hinter einem SSO-Proxy? Cookie eintragen': 'Is {host} behind an SSO proxy? Enter its cookie',
-  'Einklappen; über die Zeile mit dem Host wieder öffnen': 'Collapse; reopen it from the line with the host',
-  '{host} ist eingerichtet, aber nicht erreichbar. Prüfe URL, Token und Cookie.':
-    '{host} is set up but cannot be reached. Check the URL, token and cookie.',
-  'Noch nicht eingerichtet: URL deines {host} und ein Token (Scope «api») eintragen. Danach stehen hier deine Merge Requests.':
-    'Not set up yet: enter the URL of your {host} and a token (scope “api”). Your merge requests will then be listed here.',
-  'Was hier gespeichert wird, gilt vor der Startkonfiguration (Umgebungsvariablen, application.properties), Feld für Feld; leere Felder behalten ihren Wert.':
-    'What is saved here takes precedence over the startup configuration (environment variables, application.properties), field by field; empty fields keep their value.',
   'Gespeichert wird in {file}. Token und Cookie stehen dort im Klartext und werden nie wieder angezeigt.':
     'It is saved in {file}. Token and cookie are stored there in plain text and are never shown again.',
   'verbunden als {login}': 'connected as {login}',

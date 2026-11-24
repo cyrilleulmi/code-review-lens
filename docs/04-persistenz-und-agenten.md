@@ -16,10 +16,10 @@ Alles, was SmartCodeReview lokal weiss, liegt als **lesbare Dateien** in einem V
 ├── rules.default.json        Mitgelieferte Regeln (wird beim Start überschrieben, nur zum Nachschlagen)
 ├── rules.json                OPTIONAL: eigene Regeln; hat Vorrang. Änderungen werden automatisch übernommen.
 ├── settings.json             Ausgeschaltete Kategorien {"disabledCategories": [...]} (vom UI geschrieben)
-├── connections.json          OPTIONAL: Verbindungen des Bereichs «Verbindungen» {"connections": {"gitlab": {"url", "token", "cookie"}}};
+├── connections.json          OPTIONAL: Verbindungen des Bereichs «Verbindungen» {"connections": {"gitlab": {"url", "token", "cookie"}, "gitlab~git.example.com": {…}}};
 │                             null = Startkonfiguration. Enthält Geheimnisse im Klartext: nicht lesen, kopieren oder ausgeben
 └── reviews/
-    └── <github|gitlab>/<owner>/<repo>/<number>/      (GitLab-Gruppen: gruppe~untergruppe; Nummer 0 = ganzes Repository)
+    └── <provider>/<owner>/<repo>/<number>/      (provider: github | gitlab, weitere Verbindungen github~host | gitlab~host, Port als host_port; GitLab-Gruppen: gruppe~untergruppe; Nummer 0 = ganzes Repository)
         ├── snapshot.json     PR-Metadaten + Diff (eingefroren)
         ├── sources/<pfad>    Quelltext der neuen Version (nur analysierte Dateien)
         ├── sources-base/<pfad>  Alte Version (Basis-Commit) geänderter Testdateien, unter dem alten Pfad (Spec-Diff)
