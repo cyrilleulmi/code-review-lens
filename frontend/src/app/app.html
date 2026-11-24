@@ -132,14 +132,7 @@
   }
 
   <main class="editor">
-    @if (store.connectionsOpen()) {
-      <div class="crumbs">
-        <span>{{ t('Verbindungen') }}</span>
-      </div>
-      <div class="editor-scroll">
-        <app-connections />
-      </div>
-    } @else if (content(); as c) {
+    @if (content(); as c) {
       <div class="crumbs">
         <span>{{ prLabel(b!.pr) }}</span>
         @for (crumb of c.crumbs; track $index) {

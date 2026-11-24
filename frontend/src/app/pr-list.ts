@@ -1,6 +1,7 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Api, PullRequestSummary, RepositorySummary, errorMessage, ownerLabel, providerInfo } from './api';
+import { ConnectionPanel } from './connections';
 import { Icon } from './icon';
 import { pastedUrl } from './pasted-url';
 import { t } from './i18n';
@@ -24,8 +25,9 @@ function loadRecent(): RepoRef[] {
 @Component({
   selector: 'app-pr-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, NgTemplateOutlet],
+  imports: [Icon, NgTemplateOutlet, ConnectionPanel],
   template: `
+    <app-connection-panel />
     <div class="filters">
       @for (f of filters; track f.id) {
         <button type="button" [class.active]="store.prFilter() === f.id" (click)="store.prFilter.set(f.id)">
@@ -81,9 +83,6 @@ function loadRecent(): RepoRef[] {
         } @empty {
           @if (!store.prsLoading() && !remoteActive()) {
             <p class="empty">{{ t('Keine offenen Pull/Merge Requests. Ohne Token lassen sich öffentliche per URL öffnen.') }}</p>
-            @if (!connected()) {
-              <p class="empty"><button type="button" class="btn small" (click)="store.connectionsOpen.set(true)">{{ t('Code-Host verbinden') }}</button></p>
-            }
           }
         }
 
@@ -158,8 +157,6 @@ function loadRecent(): RepoRef[] {
 })
 export class PrList {
   protected readonly store = inject(ReviewStore);
-  /** Some code host is connected (else the empty list offers the config page). */
-  protected readonly connected = computed(() => (this.store.me()?.accounts ?? []).some((a) => a.user));
   private readonly api = inject(Api);
   protected readonly t = t;
   protected readonly query = signal('');

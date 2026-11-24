@@ -15,17 +15,19 @@ import { ReviewStore } from './review.store';
   imports: [Icon],
   template: `
     @let c = connection();
-    <form class="card" novalidate (submit)="save($event)" [attr.aria-label]="c.label">
-      <header>
-        <app-icon [name]="c.provider" [size]="16" />
-        <h2>{{ c.label }}</h2>
-        @if (c.account.user; as u) {
-          <span class="state ok"><app-icon name="check" [size]="12" /> {{ t('verbunden als {login}', { login: u.login }) }}</span>
-        } @else {
-          <span class="state off">{{ t('nicht verbunden') }}</span>
-        }
-      </header>
-      @if (!c.account.user && c.account.error) {
+    <form class="card" [class.embedded]="embedded()" novalidate (submit)="save($event)" [attr.aria-label]="c.label">
+      @if (!embedded()) {
+        <header>
+          <app-icon [name]="c.provider" [size]="16" />
+          <h2>{{ c.label }}</h2>
+          @if (c.account.user; as u) {
+            <span class="state ok"><app-icon name="check" [size]="12" /> {{ t('verbunden als {login}', { login: u.login }) }}</span>
+          } @else {
+            <span class="state off">{{ t('nicht verbunden') }}</span>
+          }
+        </header>
+      }
+      @if (!c.account.user && c.account.error && (c.token || !embedded())) {
         <p class="err" role="alert">{{ serverText(c.account.error) }}</p>
       }
 
@@ -52,7 +54,11 @@ import { ReviewStore } from './review.store';
         </span>
       </label>
 
-      @if (c.cookie != null) {
+      @if (c.cookie != null && !showCookie()) {
+        <p class="dim">
+          <button type="button" class="link first" (click)="showCookie.set(true)">{{ t('Liegt {host} hinter einem SSO-Proxy? Cookie eintragen', { host: c.label }) }}</button>
+        </p>
+      } @else if (c.cookie != null) {
         <label class="field">
           <span class="name">{{ t('Cookie des SSO-Proxys') }} <span class="opt">{{ t('optional') }}</span></span>
           <input type="password" autocomplete="off" spellcheck="false"
@@ -85,7 +91,7 @@ import { ReviewStore } from './review.store';
                 [title]="t('Mit den Werten im Formular anmelden, ohne sie zu übernehmen')">{{ t('Verbindung testen') }}</button>
         <span class="spacer"></span>
         <button type="button" class="btn" [disabled]="busy() || !(c.saved || c.cookieSource === 'runtime')" (click)="reset()"
-                [title]="t('Alles, was auf dieser Seite gesetzt wurde, verwerfen: es gilt wieder die Startkonfiguration ({url})', { url: c.startupUrl })">
+                [title]="t('Alles, was hier gesetzt wurde, verwerfen: es gilt wieder die Startkonfiguration ({url})', { url: c.startupUrl })">
           {{ t('Auf Startkonfiguration zurücksetzen') }}
         </button>
       </div>
@@ -101,6 +107,18 @@ import { ReviewStore } from './review.store';
       background: var(--bg-panel);
       font-size: 12.5px;
       line-height: 1.45;
+
+      &.embedded {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+
+        .field:first-of-type {
+          margin-top: 0;
+        }
+      }
     }
 
     header {
@@ -198,6 +216,11 @@ import { ReviewStore } from './review.store';
         opacity: 0.5;
         cursor: default;
       }
+
+      &.first {
+        margin-left: 0;
+        text-align: left;
+      }
     }
 
     .err,
@@ -235,6 +258,8 @@ import { ReviewStore } from './review.store';
 })
 export class ConnectionForm {
   readonly connection = input.required<Connection>();
+  /** Inside the connection panel: no card and no head of its own, the panel shows host and state. */
+  readonly embedded = input(false);
 
   private readonly api = inject(Api);
   private readonly store = inject(ReviewStore);
@@ -245,6 +270,8 @@ export class ConnectionForm {
   protected readonly token = signal('');
   protected readonly cookie = signal('');
   protected readonly saveCookie = signal(false);
+  /** The cookie fields are shown: a cookie is set, or someone asked for them (most hosts need none). */
+  protected readonly showCookie = signal(false);
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
   /** the user of the last successful test (of the values in the form at that time) */
@@ -264,7 +291,7 @@ export class ConnectionForm {
     const c = this.connection();
     switch (c.urlSource) {
       case 'saved':
-        return t('Auf dieser Seite gespeichert. Startkonfiguration: {url}', { url: c.startupUrl });
+        return t('Hier gespeichert. Startkonfiguration: {url}', { url: c.startupUrl });
       case 'startup':
         return t('Aus der Startkonfiguration (SCR_GITLAB_URL).');
       default:
@@ -274,14 +301,14 @@ export class ConnectionForm {
 
   protected readonly tokenHint = computed(() =>
     sourceText(this.connection().tokenSource, {
-      saved: t('Auf dieser Seite gespeichert.'),
+      saved: t('Hier gespeichert.'),
       startup: t('Aus der Startkonfiguration (GITLAB_TOKEN, GL_TOKEN oder glab).'),
       none: t('Kein Token: Merge Requests lassen sich nicht auflisten und nicht kommentieren, öffentliche nur per URL öffnen. Scope «api».'),
     }));
 
   protected readonly cookieHint = computed(() =>
     sourceText(this.connection().cookieSource, {
-      saved: t('Auf dieser Seite gespeichert.'),
+      saved: t('Hier gespeichert.'),
       runtime: t('Nur im Arbeitsspeicher gesetzt: gilt bis zum nächsten Start.'),
       startup: t('Aus der Startkonfiguration (SCR_GITLAB_COOKIE).'),
       none: t('Kein Cookie gesetzt.'),
@@ -296,6 +323,7 @@ export class ConnectionForm {
         this.token.set('');
         this.cookie.set('');
         this.saveCookie.set(c.cookieSource === 'saved');
+        this.showCookie.set(this.showCookie() || !!c.cookie);
       });
     });
     // Changing the form makes an earlier test result meaningless.
@@ -363,82 +391,115 @@ export class ConnectionForm {
   }
 }
 
-/** The config page «Verbindungen» in the editor area. */
+const LATER_KEY = 'scr.connectionSetupLater';
+
+function loadLater(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(LATER_KEY) ?? '[]');
+    return Array.isArray(v) ? v.filter((p) => typeof p === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function storeLater(providers: string[]): void {
+  try {
+    localStorage.setItem(LATER_KEY, JSON.stringify(providers));
+  } catch {
+    // private window or blocked storage: «Später» lasts until the page is reloaded
+  }
+}
+
+/**
+ * The connections at the top of the «Pull/Merge Requests» tool window. A host that is not connected shows its form
+ * right away in a highlighted box (until «Später»); a connected one is a single line that opens the form.
+ */
 @Component({
-  selector: 'app-connections',
+  selector: 'app-connection-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Icon, ConnectionForm],
   template: `
-    <div class="page">
-      <div class="head">
-        <app-icon name="plug" [size]="18" />
-        <div class="titles">
-          <h1>{{ t('Verbindungen') }}</h1>
-          <p>{{ t('Code-Hosts verbinden, ohne das Tool neu zu starten. Was hier gespeichert wird, gilt vor der Startkonfiguration (Umgebungsvariablen, application.properties), Feld für Feld; leere Felder behalten ihren Wert. «Auf Startkonfiguration zurücksetzen» verwirft alles von dieser Seite.') }}</p>
+    @for (c of store.connections() ?? []; track c.provider) {
+      @if (setup(c)) {
+        <section class="setup" [attr.aria-label]="t('{host} verbinden', { host: c.label })">
+          <header>
+            <app-icon [name]="c.provider" [size]="16" />
+            <h3>{{ t('{host} verbinden', { host: c.label }) }}</h3>
+            <button type="button" class="later" (click)="later(c.provider)" [title]="t('Einklappen; über die Zeile mit dem Host wieder öffnen')">{{ t('Später') }}</button>
+          </header>
+          <p>{{ c.token ? t('{host} ist eingerichtet, aber nicht erreichbar. Prüfe URL, Token und Cookie.', { host: c.label })
+                       : t('Noch nicht eingerichtet: URL deines {host} und ein Token (Scope «api») eintragen. Danach stehen hier deine Merge Requests.', { host: c.label }) }}</p>
+          <app-connection-form [connection]="c" [embedded]="true" />
           <p class="dim">{{ t('Gespeichert wird in {file}. Token und Cookie stehen dort im Klartext und werden nie wieder angezeigt.', { file: file() }) }}</p>
-        </div>
-        <button type="button" class="close" (click)="store.connectionsOpen.set(false)" [title]="t('Schliessen')" [attr.aria-label]="t('Schliessen')">
-          <app-icon name="close" [size]="14" />
-        </button>
-      </div>
-
-      @if (store.connections(); as list) {
-        @for (c of list; track c.provider) {
-          <app-connection-form [connection]="c" />
-        }
+        </section>
       } @else {
-        <p class="dim"><span class="spinner"></span> {{ t('Lade Verbindungen …') }}</p>
-      }
-
-      @for (a of others(); track a.provider) {
-        <div class="other">
-          <app-icon [name]="a.provider" [size]="14" />
-          <strong>{{ a.label }}</strong>
-          <span class="dim">{{ a.user ? t('verbunden als {login}', { login: a.user.login }) : serverText(a.error) }}</span>
-          <span class="dim">· {{ t('nur über die Startkonfiguration (GITHUB_TOKEN, GH_TOKEN oder gh)') }}</span>
+        <div class="conn" [class.open]="store.connectionsOpen()">
+          <button type="button" class="line" (click)="toggle(c)" [attr.aria-expanded]="store.connectionsOpen()"
+                  [title]="t('Verbindungen: GitLab-URL, Token und Cookie')">
+            <app-icon [name]="c.provider" [size]="13" />
+            <span class="host">{{ host(c.url) }}</span>
+            @if (c.account.user; as u) {
+              <span class="state ok"><app-icon name="check" [size]="11" /> {{ u.login }}</span>
+            } @else {
+              <span class="state off"><app-icon name="warning" [size]="11" /> {{ t('nicht verbunden') }}</span>
+            }
+            <app-icon [name]="store.connectionsOpen() ? 'chevronDown' : 'chevronRight'" [size]="12" />
+          </button>
+          @if (store.connectionsOpen()) {
+            <div class="body">
+              <app-connection-form [connection]="c" [embedded]="true" />
+              <p class="dim">{{ t('Was hier gespeichert wird, gilt vor der Startkonfiguration (Umgebungsvariablen, application.properties), Feld für Feld; leere Felder behalten ihren Wert.') }}</p>
+              <p class="dim">{{ t('Gespeichert wird in {file}. Token und Cookie stehen dort im Klartext und werden nie wieder angezeigt.', { file: file() }) }}</p>
+            </div>
+          }
         </div>
       }
-    </div>
+    }
   `,
   styles: `
-    .page {
-      padding: 20px 24px 32px;
+    :host {
+      display: block;
+      flex-shrink: 0;
+      max-height: 70%;
+      overflow: auto;
+      padding: 8px 10px 2px;
       font-size: 12.5px;
     }
 
-    .head {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      max-width: 640px;
-      margin-bottom: 16px;
+    .setup {
+      margin-bottom: 6px;
+      padding: 12px;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      background: var(--bg-panel);
+      box-shadow: inset 3px 0 0 var(--accent);
 
-      .titles {
-        flex: 1;
+      header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
 
-      h1 {
-        margin: 0 0 6px;
-        font-size: 18px;
+      h3 {
+        flex: 1;
+        margin: 0;
+        font-size: 14px;
         font-weight: 600;
       }
 
       p {
-        margin: 0 0 6px;
-        line-height: 1.5;
+        margin: 8px 0 12px;
+        line-height: 1.45;
       }
     }
 
-    .close {
-      display: grid;
-      place-items: center;
-      width: 26px;
-      height: 26px;
-      padding: 0;
+    .later {
+      padding: 2px 6px;
       border: 0;
-      border-radius: 5px;
+      border-radius: 4px;
       background: none;
       color: var(--fg-muted);
+      font: inherit;
       cursor: pointer;
 
       &:hover {
@@ -447,41 +508,120 @@ export class ConnectionForm {
       }
     }
 
-    .dim {
-      color: var(--fg-muted);
-      overflow-wrap: anywhere;
+    .conn {
+      margin-bottom: 4px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+
+      &.open {
+        background: var(--bg-panel);
+      }
     }
 
-    .other {
+    .line {
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
       gap: 6px;
-      max-width: 640px;
-      padding: 10px 16px;
-      border: 1px dashed var(--border);
-      border-radius: 8px;
+      width: 100%;
+      height: 28px;
+      padding: 0 8px;
+      border: 0;
+      border-radius: 6px;
+      background: none;
+      color: var(--fg-muted);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+
+      &:hover {
+        background: var(--bg-hover);
+        color: var(--fg);
+      }
+    }
+
+    .host {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--fg);
+    }
+
+    .state {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      white-space: nowrap;
+
+      &.ok {
+        color: var(--ok);
+      }
+
+      &.off {
+        color: var(--warn);
+      }
+    }
+
+    .body {
+      padding: 4px 10px 10px;
+    }
+
+    .dim {
+      margin: 8px 0 0;
+      color: var(--fg-muted);
+      line-height: 1.45;
+      overflow-wrap: anywhere;
     }
   `,
 })
-export class Connections {
+export class ConnectionPanel {
   protected readonly store = inject(ReviewStore);
   protected readonly t = t;
-  protected readonly serverText = serverText;
+  private readonly postponed = signal<string[]>(loadLater());
 
   protected readonly file = computed(() => {
     const dir = this.store.me()?.dataDir;
     return dir ? `${dir}${dir.includes('\\') ? '\\' : '/'}connections.json` : 'connections.json';
   });
 
-  /** Accounts the page cannot change (GitHub): shown for completeness. */
-  protected readonly others = computed(() => {
-    const configurable = new Set((this.store.connections() ?? []).map((c) => c.provider));
-    return (this.store.me()?.accounts ?? []).filter((a) => !configurable.has(a.provider));
-  });
-
   constructor() {
-    this.store.loadConnections(); // fresh state of the accounts every time the page opens
+    // fresh state of the accounts every time the form is opened (toolbar, status bar, the line)
+    effect(() => {
+      if (this.store.connectionsOpen()) {
+        untracked(() => this.store.loadConnections());
+      }
+    });
+  }
+
+  /** Not connected and not put off: the form is shown at once, highlighted. */
+  protected setup(c: Connection): boolean {
+    return !c.account.user && (this.store.connectionsOpen() || !this.postponed().includes(c.provider));
+  }
+
+  protected later(provider: string): void {
+    const next = [...new Set([...this.postponed(), provider])];
+    this.postponed.set(next);
+    storeLater(next);
+    this.store.connectionsOpen.set(false);
+  }
+
+  protected toggle(c: Connection): void {
+    if (!c.account.user && this.postponed().includes(c.provider)) {
+      // opening a postponed setup brings the highlighted box back for good
+      const next = this.postponed().filter((p) => p !== c.provider);
+      this.postponed.set(next);
+      storeLater(next);
+    }
+    this.store.connectionsOpen.set(!this.store.connectionsOpen());
+  }
+
+  protected host(url: string): string {
+    try {
+      return new URL(url).host;
+    } catch {
+      return url;
+    }
   }
 }
 

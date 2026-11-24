@@ -120,17 +120,22 @@ export const EN: Record<string, string> = {
   'Das Cookie ist unter «Verbindungen» gespeichert: Ein neues ersetzt es dort.':
     'The cookie is saved under “Connections”: a new one replaces it there.',
   'Alle Einstellungen der Verbindung …': 'All settings of the connection …',
-  // ------------------------------------------------------------------ connections (config page)
-  'Verbindungen': 'Connections',
+  // ------------------------------------------------------------------ connections (top of the pull request list)
   'Verbindungen: GitLab-URL, Token und Cookie': 'Connections: GitLab URL, token and cookie',
   'Verbindung einstellen': 'Set up the connection',
   'Code-Host verbinden': 'Connect a code host',
-  'Code-Hosts verbinden, ohne das Tool neu zu starten. Was hier gespeichert wird, gilt vor der Startkonfiguration (Umgebungsvariablen, application.properties), Feld für Feld; leere Felder behalten ihren Wert. «Auf Startkonfiguration zurücksetzen» verwirft alles von dieser Seite.':
-    'Connect code hosts without restarting the tool. What is saved here takes precedence over the startup configuration (environment variables, application.properties), field by field; empty fields keep their value. “Reset to startup configuration” discards everything from this page.',
+  '{host} verbinden': 'Connect {host}',
+  'Später': 'Later',
+  'Liegt {host} hinter einem SSO-Proxy? Cookie eintragen': 'Is {host} behind an SSO proxy? Enter its cookie',
+  'Einklappen; über die Zeile mit dem Host wieder öffnen': 'Collapse; reopen it from the line with the host',
+  '{host} ist eingerichtet, aber nicht erreichbar. Prüfe URL, Token und Cookie.':
+    '{host} is set up but cannot be reached. Check the URL, token and cookie.',
+  'Noch nicht eingerichtet: URL deines {host} und ein Token (Scope «api») eintragen. Danach stehen hier deine Merge Requests.':
+    'Not set up yet: enter the URL of your {host} and a token (scope “api”). Your merge requests will then be listed here.',
+  'Was hier gespeichert wird, gilt vor der Startkonfiguration (Umgebungsvariablen, application.properties), Feld für Feld; leere Felder behalten ihren Wert.':
+    'What is saved here takes precedence over the startup configuration (environment variables, application.properties), field by field; empty fields keep their value.',
   'Gespeichert wird in {file}. Token und Cookie stehen dort im Klartext und werden nie wieder angezeigt.':
     'It is saved in {file}. Token and cookie are stored there in plain text and are never shown again.',
-  'Lade Verbindungen …': 'Loading connections …',
-  'nur über die Startkonfiguration (GITHUB_TOKEN, GH_TOKEN oder gh)': 'only via the startup configuration (GITHUB_TOKEN, GH_TOKEN or gh)',
   'verbunden als {login}': 'connected as {login}',
   'URL': 'URL',
   'Token': 'Token',
@@ -146,15 +151,15 @@ export const EN: Record<string, string> = {
   'Speichern': 'Save',
   'Verbindung testen': 'Test connection',
   'Mit den Werten im Formular anmelden, ohne sie zu übernehmen': 'Sign in with the values in the form without applying them',
-  'Alles, was auf dieser Seite gesetzt wurde, verwerfen: es gilt wieder die Startkonfiguration ({url})':
-    'Discard everything set on this page: the startup configuration applies again ({url})',
+  'Alles, was hier gesetzt wurde, verwerfen: es gilt wieder die Startkonfiguration ({url})':
+    'Discard everything set here: the startup configuration applies again ({url})',
   'Auf Startkonfiguration zurücksetzen': 'Reset to startup configuration',
-  'Auf dieser Seite gespeichert. Startkonfiguration: {url}': 'Saved on this page. Startup configuration: {url}',
+  'Hier gespeichert. Startkonfiguration: {url}': 'Saved here. Startup configuration: {url}',
   'Aus der Startkonfiguration (SCR_GITLAB_URL).': 'From the startup configuration (SCR_GITLAB_URL).',
   'Standard. Für ein self-managed GitLab dessen Adresse eintragen.': 'Default. For a self-managed GitLab, enter its address.',
   'Andere URL: Token und Cookie gelten nur für die URL, für die sie eingetragen wurden. Trage sie für die neue mit ein.':
     'Another URL: token and cookie only apply to the URL they were entered for. Enter them for the new one as well.',
-  'Auf dieser Seite gespeichert.': 'Saved on this page.',
+  'Hier gespeichert.': 'Saved here.',
   'Aus der Startkonfiguration (GITLAB_TOKEN, GL_TOKEN oder glab).': 'From the startup configuration (GITLAB_TOKEN, GL_TOKEN or glab).',
   'Kein Token: Merge Requests lassen sich nicht auflisten und nicht kommentieren, öffentliche nur per URL öffnen. Scope «api».':
     'No token: merge requests can neither be listed nor commented on; public ones can only be opened by URL. Scope “api”.',

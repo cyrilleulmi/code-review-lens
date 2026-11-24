@@ -2,7 +2,6 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, HostListener, Injector, afterNextRender, computed, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
 import { AccountCookie } from './account-cookie';
-import { Connections } from './connections';
 import { isTestsView, prLabel } from './api';
 import { applyLang, lang, serverText, setLang, t } from './i18n';
 import { applyTheme, theme, toggleTheme } from './theme';
@@ -35,7 +34,7 @@ interface EditorContent {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, CoverageOverview, RuleCheckOverview, AccountCookie, Connections],
+  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, CoverageOverview, RuleCheckOverview, AccountCookie],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -162,6 +161,12 @@ export class App {
         untracked(() => this.tool.set('review'));
       }
       lastPr = id;
+    });
+    // The connections live at the top of the pull request tool window: opening them (toolbar, status bar) shows it.
+    effect(() => {
+      if (this.store.connectionsOpen()) {
+        untracked(() => this.tool.set('prs'));
+      }
     });
   }
 

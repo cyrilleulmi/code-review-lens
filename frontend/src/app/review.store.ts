@@ -103,7 +103,7 @@ export class ReviewStore {
   readonly me = signal<Me | null>(null);
   /** Connections the config page can change (GitLab), null until loaded. */
   readonly connections = signal<Connection[] | null>(null);
-  /** The config page «Verbindungen» is shown in the editor area. */
+  /** The connection form at the top of the pull request tool window is open (a host not connected shows it anyway). */
   readonly connectionsOpen = signal(false);
   readonly prs = signal<PullRequestSummary[]>([]);
   readonly prsLoading = signal(false);

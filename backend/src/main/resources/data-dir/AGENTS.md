@@ -10,7 +10,7 @@ AGENTS.md              this file (rewritten on every app start)
 rules.default.json     built-in classification rules (rewritten on start; reference only)
 rules.json             OPTIONAL custom rules; takes precedence; edits trigger re-analysis
 settings.json          switched-off categories {"disabledCategories": [...]}: hidden, their places need no ok
-connections.json       OPTIONAL connection settings from the UI page "Verbindungen" (GitLab URL, token, cookie).
+connections.json       OPTIONAL connection settings from the "Verbindungen" section of the UI (GitLab URL, token, cookie).
                        Contains SECRETS in plain text: never read, copy, log or print it
 reviews/<provider>/<owner>/<repo>/<number>/      provider: github | gitlab; nested GitLab groups: group~sub;
                                                    number 0 = the whole repository (every file counts as new)

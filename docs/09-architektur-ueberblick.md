@@ -24,7 +24,7 @@ Die Architektur folgt aus fünf Qualitätszielen, in dieser Rangfolge:
 | # | Qualitätsziel | Was es für die Architektur bedeutet |
 |---|---|---|
 | Q1 | **Nachvollziehbar und deterministisch** | Keine KI in der Analyse. Gleicher PR + gleiche Regeln = gleiches Ergebnis. Heuristiken stehen als Regeln in `rules.json`, nicht im Code verstreut. |
-| Q2 | **Lokal und privat** | Ein Prozess pro Person, keine Server-Datenbank, keine Telemetrie. Tokens kommen aus der Umgebung; gespeichert wird nur, was jemand auf der Seite «Verbindungen» einträgt (`connections.json`). Die API hört nur auf `127.0.0.1`. |
+| Q2 | **Lokal und privat** | Ein Prozess pro Person, keine Server-Datenbank, keine Telemetrie. Tokens kommen aus der Umgebung; gespeichert wird nur, was jemand im Bereich «Verbindungen» einträgt (`connections.json`). Die API hört nur auf `127.0.0.1`. |
 | Q3 | **Agentenfreundlich** | Der gesamte Zustand liegt als lesbare JSON-Dateien im Dateisystem. Feldnamen sind ein Vertrag; sie werden ergänzt, nie umbenannt. |
 | Q4 | **Schnell zur Hand** | Native-Binary (Start ca. 50 ms, Image ca. 120 MB). Analyse eines ganzen Repos mit 15'000 Zeilen in rund 2,5 s. |
 | Q5 | **Erweiterbar ohne Seiteneffekte** | Code-Hosts hinter `ReviewProvider`, Kategorien als unabhängige Module (`CategoryModule`). |
@@ -55,7 +55,7 @@ flowchart LR
 | Reviewer:in | Browser, eingebettetes Angular-UI | ein/aus | Ein Benutzer pro Prozess (Annahme A1). |
 | Agent | REST `/api/…` oder direkt die Dateien | ein/aus | Anleitung im Datenverzeichnis: `AGENTS.md`. |
 | GitHub | REST v3 (`api.github.com` oder Enterprise `…/api/v3`), GraphQL nur für Blame | aus | Token: `GITHUB_TOKEN` / `GH_TOKEN` / `gh auth token`. |
-| GitLab | REST v4 (gitlab.com oder self-managed, eine Instanz) | aus | Token: `GITLAB_TOKEN` / `GL_TOKEN` / `glab config get token`; öffentliche MRs auch ohne. Hinter einem SSO-Proxy zusätzlich dessen Session-Cookies (`SCR_GITLAB_COOKIE`). URL, Token und Cookie lassen sich auch im UI setzen (Seite «Verbindungen», `<data>/connections.json`). |
+| GitLab | REST v4 (gitlab.com oder self-managed, eine Instanz) | aus | Token: `GITLAB_TOKEN` / `GL_TOKEN` / `glab config get token`; öffentliche MRs auch ohne. Hinter einem SSO-Proxy zusätzlich dessen Session-Cookies (`SCR_GITLAB_COOKIE`). URL, Token und Cookie lassen sich auch im UI setzen (Bereich «Verbindungen», `<data>/connections.json`). |
 | Dateisystem | JSON + Quelltexte unter `<data>/reviews/…` | ein/aus | Der einzige echte Zustand ist `review.json`. |
 
 Was **nicht** zum Kontext gehört: keine Datenbank, kein Message-Broker, kein Identity-Provider, keine Cloud-Dienste ausser den Code-Hosts.
@@ -144,7 +144,7 @@ flowchart LR
 |---|---|---|---|
 | `api` | REST-Ressource, Fehler → `{"message"}` | `ReviewService`, `ConnectionService`, `model`, `provider.ProviderException`, `store` (nur Pfad des Datenverzeichnisses für `/api/me`) | Provider-Implementierungen, Analyse |
 | (Wurzel) `ReviewService` | Orchestrierung, Caching, Sperren, Markieren, Fortschritt | alles darunter | Host-Details (GitHub/GitLab) |
-| (Wurzel) `ConnectionService` | Verbindungen der Seite «Verbindungen»: `connections.json` beim Start lesen, bei jeder Änderung schreiben | `ReviewService` (Provider, Konto), `store`, `provider`, `model` | Host-Details |
+| (Wurzel) `ConnectionService` | Verbindungen des Bereichs «Verbindungen»: `connections.json` beim Start lesen, bei jeder Änderung schreiben | `ReviewService` (Provider, Konto), `store`, `provider`, `model` | Host-Details |
 | `provider` | Schnittstelle zu Code-Hosts, HTTP, Token-Suche, Verbindungswerte (`ConnectionSettings`: Startkonfiguration, Seite, Arbeitsspeicher) | `model` | Analyse, Speicher |
 | `github`, `gitlab` | je ein Host | `provider`, `model`, `diff`, `analysis.Languages`/`OpenApi` (Sprache, Vertragsdateien erkennen) | einander, `ReviewService` |
 | `diff` | Unified-Diff → Hunks und Zeilenschlüssel | `model` | — |
@@ -303,7 +303,7 @@ Die Reihenfolge ist die von `Analyzer.analyze`; die Nummern entsprechen den Absc
 | Thema | Umsetzung |
 |---|---|
 | Netz | Bindet an `127.0.0.1`; in Docker nur auf `127.0.0.1` veröffentlicht. Keine Authentifizierung der lokalen API (Annahme C4). |
-| Tokens | Aus Config → Env → CLI (`gh`/`glab`), nur im Speicher, nie in Logs. Ausnahme: Token und Cookie, die auf der Seite «Verbindungen» gespeichert werden, stehen im Klartext in `<data>/connections.json` (auf POSIX nur für den Besitzer lesbar, weil die Datei über `Files.createTempFile` entsteht); die API gibt sie nie zurück. Token und Cookie gelten nur für die URL, für die sie gesetzt wurden: die der Startkonfiguration gehen nie an eine auf der Seite eingetragene URL, eine neue URL verwirft die gespeicherten. Kommentare laufen unter dem Konto der Person, die das Tool startet. |
+| Tokens | Aus Config → Env → CLI (`gh`/`glab`), nur im Speicher, nie in Logs. Ausnahme: Token und Cookie, die im Bereich «Verbindungen» gespeichert werden, stehen im Klartext in `<data>/connections.json` (auf POSIX nur für den Besitzer lesbar, weil die Datei über `Files.createTempFile` entsteht); die API gibt sie nie zurück. Token und Cookie gelten nur für die URL, für die sie gesetzt wurden: die der Startkonfiguration gehen nie an eine im UI eingetragene URL, eine neue URL verwirft die gespeicherten. Kommentare laufen unter dem Konto der Person, die das Tool startet. |
 | Dateisystem | Alle Pfade aus PR-Daten gehen durch `DataStore.resolveInside` (kein Path-Traversal aus Dateinamen im Diff). |
 | Fremdinhalte | Code und Kommentare werden als Text bzw. durch highlight.js escaped angezeigt, Markdown wird nicht gerendert (A7). |
 
@@ -323,7 +323,7 @@ Alle Records tragen `@RegisterForReflection`; fremdes JSON wird als `JsonNode` g
 | `scr.gitlab.token` | `GITLAB_TOKEN`, `GL_TOKEN` | `glab config get token` |
 | `scr.gitlab.cookie` | `SCR_GITLAB_COOKIE` | — (kein `Cookie`-Header) |
 
-Die drei `scr.gitlab.*`-Werte sind die **Startkonfiguration**. Die Seite «Verbindungen» kann jeden davon im Betrieb überschreiben; was sie speichert, steht in `<data>/connections.json` und gilt Feld für Feld vor der Startkonfiguration, auch nach einem Neustart. Ohne diese Datei verhält sich das Tool wie vorher. «Auf Startkonfiguration zurücksetzen» löscht den Eintrag.
+Die drei `scr.gitlab.*`-Werte sind die **Startkonfiguration**. Der Bereich «Verbindungen» kann jeden davon im Betrieb überschreiben; was sie speichert, steht in `<data>/connections.json` und gilt Feld für Feld vor der Startkonfiguration, auch nach einem Neustart. Ohne diese Datei verhält sich das Tool wie vorher. «Auf Startkonfiguration zurücksetzen» löscht den Eintrag.
 | `quarkus.http.host` / `.port` | — | `127.0.0.1` / `8080` |
 
 Fachliche Konfiguration (Kategorien, Regeln, Aspekte, Querschnittsthemen) liegt in `rules.json`, nicht in Properties.
