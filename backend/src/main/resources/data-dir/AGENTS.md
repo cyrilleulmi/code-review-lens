@@ -12,6 +12,8 @@ rules.json             OPTIONAL custom rules; takes precedence; edits trigger re
 settings.json          switched-off categories {"disabledCategories": [...]}: hidden, their places need no ok
 connections.json       OPTIONAL connection settings from the "Verbindungen" section of the UI (URL, token, cookie per connection).
                        Contains SECRETS in plain text: never read, copy, log or print it
+certificates/          OPTIONAL certificates (PEM) trusted in addition to the default ones, e.g. a company CA
+tls.json               OPTIONAL hosts whose certificate is not checked {"insecureHosts": ["host:port"]}
 reviews/<provider>/<owner>/<repo>/<number>/      provider: github | gitlab, or github~host | gitlab~host
                                                    for further connections (port as host_port); nested GitLab groups: group~sub;
                                                    number 0 = the whole repository (every file counts as new)

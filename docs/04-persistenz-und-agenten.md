@@ -18,6 +18,9 @@ Alles, was SmartCodeReview lokal weiss, liegt als **lesbare Dateien** in einem V
 ├── settings.json             Ausgeschaltete Kategorien {"disabledCategories": [...]} (vom UI geschrieben)
 ├── connections.json          OPTIONAL: Verbindungen des Bereichs «Verbindungen» {"connections": {"gitlab": {"url", "token", "cookie"}, "gitlab~git.example.com": {…}}};
 │                             null = Startkonfiguration. Enthält Geheimnisse im Klartext: nicht lesen, kopieren oder ausgeben
+├── certificates/             OPTIONAL: Zertifikate (PEM), denen das Tool zusätzlich vertraut (z. B. Firmen-CA); vom UI geschrieben
+│                             oder von Hand abgelegt (*.pem, *.crt, *.cer, *.der)
+├── tls.json                  OPTIONAL: Hosts ohne Prüfung des Zertifikats {"insecureHosts": ["gitlab.firma.ch:443"]} (vom UI geschrieben)
 └── reviews/
     └── <provider>/<owner>/<repo>/<number>/      (provider: github | gitlab, weitere Verbindungen github~host | gitlab~host, Port als host_port; GitLab-Gruppen: gruppe~untergruppe; Nummer 0 = ganzes Repository)
         ├── snapshot.json     PR-Metadaten + Diff (eingefroren)

@@ -48,6 +48,7 @@ Alle PR-Endpunkte unter `/api/prs/{provider}/{owner}/{repo}/{number}`; `provider
 | Methode | Pfad | Zweck |
 |---|---|---|
 | GET / PUT | `/api/settings` | Ausgeschaltete Kategorien `{"disabledCategories":["fe-templates"]}` (global, `<data>/settings.json`) |
+| (alle) | Fehler | `{"message": …}`; scheitert eine Anfrage am Zertifikat des Code-Hosts zusätzlich `"certificate": {"host", "port"}` (Status 502, Meldung «Zertifikat von host:port wird nicht vertraut: …»). |
 | GET | `/api/me` | Konten pro Provider (User oder Grund, warum keiner; `cookie`: ob Session-Cookies eines SSO-Proxys gesetzt sind, `null` = der Host nimmt keine), Datenverzeichnis |
 | PUT | `/api/accounts/{provider}/cookie` | `{"cookie":"name=wert; name2=wert2"}` ersetzt die Session-Cookies eines SSO-Proxys vor dem Host (nur im Arbeitsspeicher, bis zum nächsten Start; war das ersetzte im Bereich «Verbindungen» gespeichert, wird das neue gespeichert; leer = entfernen). Antwort wie `/api/me`. Nur GitLab; sonst 400. |
 | GET | `/api/connections` | Alle Verbindungen (GitHub, GitLab; die der Startkonfiguration zuerst; `kind`, `added`): `url`, ob `token` und `cookie` gesetzt sind, woher jeder Wert kommt (`urlSource`, `tokenSource`, `cookieSource`: `saved` = Seite, `runtime` = nur im Arbeitsspeicher, `startup` = Startkonfiguration, `default`, `null`), `startupUrl`, `saved`, `account` (wie in `/api/me`). Nie Token oder Cookie selbst. |
@@ -56,6 +57,13 @@ Alle PR-Endpunkte unter `/api/prs/{provider}/{owner}/{repo}/{number}`; `provider
 | POST | `/api/connections` | `{"kind":"gitlab", "url":…, "token":…, "cookie":…, "saveCookie":…}` fügt eine Verbindung zu einem weiteren Host hinzu (ID `kind~host`), sofort in Betrieb und gespeichert; 409, wenn es zum Host schon eine gibt. |
 | POST | `/api/connections/test` | Wie `POST /api/connections`, aber nur anmelden und nichts übernehmen. |
 | POST | `/api/connections/{provider}/test` | Wie `PUT`, aber nur anmelden (`GET /user`) und nichts übernehmen: Antwort der User, sonst der Fehler (z. B. 401 «HTML statt JSON …»). |
+| GET | `/api/tls` | TLS: Zertifikate, denen das Tool zusätzlich zu den Standard-Zertifikaten vertraut (`certificates`: `fingerprint` SHA-256, `subject`, `issuer`, `notAfter`, `ca`, `source` `startup`/`saved`, `file`), Hosts ohne Prüfung (`insecureHosts`: `host` = host:port, `source`), `warnings` (nicht lesbare Dateien der Startkonfiguration), `directory` (`<data>/certificates`). |
+| POST | `/api/tls/certificates` | `{"pem":"-----BEGIN CERTIFICATE-----…"}` vertraut den Zertifikaten darin: gespeichert in `<data>/certificates`, sofort für alle Verbindungen. 400 ohne gültiges Zertifikat. Antwort wie `GET /api/tls`. |
+| DELETE | `/api/tls/certificates/{fingerprint}` | Gespeichertes Zertifikat nicht mehr vertrauen (Datei wird gelöscht); eines der Startkonfiguration → 409. |
+| POST | `/api/tls/reload` | Zertifikatdateien neu einlesen (z. B. von Hand nach `<data>/certificates` gelegte). |
+| GET | `/api/tls/probe?host=…&port=…` | Zertifikatskette, die der Host vorweist (Server zuerst, ohne Prüfung gelesen), `trusted`, `problem` (warum nicht), `insecure`. `host` auch als URL oder host:port. |
+| POST | `/api/tls/trust` | `{"host":…, "port":443, "fingerprint":…}` vertraut dem Zertifikat der Kette des Hosts mit diesem Fingerabdruck (wird erneut abgerufen, 409 wenn nicht mehr darin). |
+| PUT | `/api/tls/insecure` | `{"host":…, "port":443, "insecure":true}` schaltet die Prüfung des Zertifikats für den Host aus (unsicher) bzw. wieder ein; gespeichert in `<data>/tls.json`. |
 | GET | `/api/resolve?url=…` | PR-/MR-URL von GitHub oder GitLab → `{provider, owner, repo, number}`; Repository-URL → `number` 0 |
 | GET | `/api/prs?filter=all\|authored\|review-requested` | Offene PRs (mit lokalem Fortschritt, falls vorhanden) |
 | GET | `/api/local` | PRs mit lokalen Daten (offline) |

@@ -817,4 +817,60 @@ public final class Model {
     @RegisterForReflection
     public record Me(List<Account> accounts, String dataDir, String version) {
     }
+
+    // ---------------------------------------------------------------- TLS: certificates and hosts without check
+
+    /**
+     * A certificate the tool trusts in addition to the default ones of the runtime, or one of the chain a host
+     * presents. fingerprint: SHA-256, hex pairs separated by ":". notBefore/notAfter: ISO instants. ca: may sign other
+     * certificates. source: "startup" (scr.tls.ca-certs / SCR_TLS_CA_CERTS) or "saved" ({@code <data>/certificates/},
+     * added in the UI or put there by hand); null for a certificate of a host. file: where it was read from.
+     */
+    @RegisterForReflection
+    public record CertificateInfo(String fingerprint, String subject, String issuer, String notBefore, String notAfter,
+                                  boolean ca, boolean selfSigned, String source, String file) {
+    }
+
+    /** A host (host:port) whose certificate is not checked: "startup" (scr.tls.insecure-hosts) or "saved" (tls.json). */
+    @RegisterForReflection
+    public record InsecureHost(String host, String source) {
+    }
+
+    /**
+     * What the tool trusts besides the default certificates of the runtime. directory: where saved certificates live
+     * ({@code <data>/certificates}); warnings: files of the startup configuration that could not be read.
+     */
+    @RegisterForReflection
+    public record TlsSettings(List<CertificateInfo> certificates, List<InsecureHost> insecureHosts, List<String> warnings,
+                              String directory) {
+    }
+
+    /**
+     * A look at the certificate of a host: the chain it presents (server first), whether the tool trusts it now, and if
+     * not why. insecure: the host is on the list of hosts without check.
+     */
+    @RegisterForReflection
+    public record CertificateProbe(String host, int port, boolean trusted, boolean insecure, String problem,
+                                   List<CertificateInfo> chain) {
+    }
+
+    /** Trust a certificate of the chain of host (host, host:port or URL; port default 443), named by its fingerprint. */
+    @RegisterForReflection
+    public record TrustRequest(String host, Integer port, String fingerprint) {
+    }
+
+    /** Switch the certificate check for a host off (insecure = true) or on again. */
+    @RegisterForReflection
+    public record InsecureRequest(String host, Integer port, boolean insecure) {
+    }
+
+    /** One or more certificates in PEM (as exported by a browser or the IT), or Base64 DER. */
+    @RegisterForReflection
+    public record PemRequest(String pem) {
+    }
+
+    /** {@code <data>/tls.json}: hosts (host:port) whose certificate is not checked, switched off in the UI. */
+    @RegisterForReflection
+    public record SavedTls(List<String> insecureHosts) {
+    }
 }
