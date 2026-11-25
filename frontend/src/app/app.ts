@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, HostListener, Injector, afterNextRender, computed, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
 import { AccountCookie } from './account-cookie';
+import { CertificateDialog } from './certificates';
 import { isTestsView, prLabel } from './api';
 import { applyLang, lang, serverText, setLang, t } from './i18n';
 import { applyTheme, theme, toggleTheme } from './theme';
@@ -34,7 +35,7 @@ interface EditorContent {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, CoverageOverview, RuleCheckOverview, AccountCookie],
+  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, CoverageOverview, RuleCheckOverview, AccountCookie, CertificateDialog],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

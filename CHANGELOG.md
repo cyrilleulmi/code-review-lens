@@ -6,6 +6,9 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+### Neu
+- **Firmenzertifikate (z. B. self-managed GitLab hinter einer Firmen-CA):** Scheitert eine Anfrage an einen Code-Host am Zertifikat – beim Hinzufügen oder Testen einer Verbindung, beim Öffnen per Link, beim Laden –, meldet das Tool «Zertifikat von host:port wird nicht vertraut» mit dem Grund (unbekannte Zertifizierungsstelle, abgelaufen, falscher Hostname) und öffnet einen Dialog mit der Kette, die der Host vorweist, samt SHA-256-Fingerabdrücken. «Diesem Zertifikat vertrauen» vertraut dem gewählten Zertifikat – standardmässig dem obersten der Kette, meist der Firmen-CA – sofort für alle Verbindungen, ohne Neustart; gespeichert in `<data>/certificates`. Als Notlösung lässt sich die Prüfung für einen Host ausschalten («Ohne Prüfung verbinden (unsicher)», mit Warnung; `<data>/tls.json`). Unter den Verbindungen listet «Zertifikate», was zusätzlich vertraut wird, nimmt ein eingefügtes PEM (z. B. das Root-Zertifikat von der IT) entgegen und zeigt das Zertifikat eines beliebigen Hosts. Beim Start: `SCR_TLS_CA_CERTS` (PEM-Dateien oder Verzeichnisse, kommagetrennt), PEM-Dateien in `<data>/certificates` (in Docker `./data/certificates`), `SCR_TLS_INSECURE_HOSTS`. Die Standard-Zertifikate (und `javax.net.ssl.trustStore`) gelten weiter. API: `GET /api/tls`, `POST /api/tls/certificates`, `DELETE /api/tls/certificates/{fingerprint}`, `POST /api/tls/reload`, `GET /api/tls/probe`, `POST /api/tls/trust`, `PUT /api/tls/insecure`.
+
 ### Behoben
 - **Ganze Namen in den Diagrammen:** Lange Klassen- und Methodennamen wurden in den Knoten der Flow-Diagramme (alle drei Ebenen), in den Rahmenköpfen und im Komponentendiagramm mit «…» abgeschnitten, weil die Kästchen eine feste bzw. gedeckelte Breite hatten. Jetzt ist jedes Kästchen so breit, wie sein Name braucht; die Spalten der vorläufigen Anordnung richten sich nach dem breitesten Kästchen.
 
