@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FRAME_PADDING, Rect, curvePath, frameAround, layoutFlow, packRows, routeMiddle, routePath } from './flow-layout';
+import { FRAME_PADDING, Rect, columnStarts, curvePath, frameAround, layoutFlow, packRows, routeMiddle, routePath } from './flow-layout';
 
 const overlap = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 const inside = (inner: Rect, outer: Rect) =>
@@ -111,5 +111,17 @@ describe('packRows', () => {
     const at = packRows([{ w: 100, h: 50 }, { w: 100, h: 80 }, { w: 100, h: 40 }, { w: 400, h: 40 }], 250, 10);
 
     expect(at).toEqual([{ x: 0, y: 0 }, { x: 110, y: 0 }, { x: 0, y: 90 }, { x: 0, y: 140 }]);
+  });
+});
+
+describe('columnStarts', () => {
+  it('makes every column as wide as its widest box, so long names never reach into the next column', () => {
+    const starts = columnStarts([{ depth: 0, w: 236 }, { depth: 1, w: 480 }, { depth: 1, w: 236 }, { depth: 2, w: 300 }], 56);
+
+    expect(starts).toEqual([0, 236 + 56, 236 + 56 + 480 + 56]);
+  });
+
+  it('takes no room for a depth without boxes', () => {
+    expect(columnStarts([{ depth: 0, w: 100 }, { depth: 2, w: 100 }], 10)).toEqual([0, 110, 110]);
   });
 });

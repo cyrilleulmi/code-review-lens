@@ -18,7 +18,7 @@ import { CodeBlock, flashLine } from './code-block';
 import { WholeBlock, startOf, wholeBlock, wholeId } from './whole-class';
 import { FlowCodeLevel, FlowDiagramLevel, InlineStep, classLinks, codeLevelFor, inlineTree, classOf, classRuns, groupByClass, inFileOrder, intersect, weakest } from './flow-classes';
 import { outsideBranch, sameSet, withoutAreas } from './flow-focus';
-import { FRAME_PADDING, Layout, Point, curvePath, frameAround, layoutFlow, routeMiddle, routePath } from './flow-layout';
+import { FRAME_PADDING, Layout, Point, columnStarts, curvePath, frameAround, layoutFlow, routeMiddle, routePath } from './flow-layout';
 import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
@@ -142,8 +142,15 @@ interface Connector {
   http: boolean;
 }
 
+/** Smallest width of a box of the diagram; a longer name makes it wider, never cut off. */
 const NODE_W = 236;
 const NODE_H = 46;
+/** Room in a box beside its name: padding, number, badge, test icon, progress, hide and focus button. */
+const NODE_CHROME = 170;
+const MINI_CHROME = 158;
+/** Width of a character of the second line of a box (11px UI font, estimated) and of the layer tag in it. */
+const HINT_CHAR_W = 6.3;
+const TAG_CHAR_W = 6.5;
 /** Combined level of the diagram: the smaller boxes of the steps inside the frame of their class. */
 const MINI_H = 32;
 const MINI_GAP = 14;
@@ -293,9 +300,20 @@ export class FlowView {
    * here are a simple staircase by call depth: shown until the layout arrives, and kept if it cannot be loaded.
    */
   private readonly sketch = computed<{ frames: Box[]; boxes: Box[] }>(() => {
-    const at = (depth: number, row: number) => ({
-      depth, x: depth * (NODE_W + COL_GAP), y: row * (NODE_H + ROW_GAP), w: NODE_W, h: NODE_H, mini: false, frame: null,
-    });
+    const runs = this.hasRuns();
+    // a box as wide as its name (and, for a step, the class and file in its second line) needs: never cut off
+    const width = (name: string, hint: string | null, area: string | null) => {
+      const second = hint === null ? 0 : (areaLabel(area).length ? areaLabel(area).length * TAG_CHAR_W + 14 : 0) + hint.length * HINT_CHAR_W;
+      return Math.max(NODE_W, Math.round(NODE_CHROME + (runs ? 20 : 0) + Math.max(name.length * CHAR_W, second)));
+    };
+    // the staircase by call depth: each column as wide as its widest box
+    const staircase = <T extends { name: string; hint: string; area: string | null }>(items: { box: T; depth: number }[], withHint: boolean) => {
+      const sized = items.map(({ box, depth }) => ({ box, depth, w: width(box.name, withHint ? box.hint : null, box.area) }));
+      const columns = columnStarts(sized.map((b) => ({ depth: b.depth, w: b.w })), COL_GAP);
+      return sized.map(({ box, depth, w }, row) => ({
+        ...box, depth, x: columns[depth], y: row * (NODE_H + ROW_GAP), w, h: NODE_H, mini: false, frame: null,
+      }));
+    };
     const step = (n: Node) => ({
       key: n.step.segmentId, ids: [n.step.segmentId], no: n.no, name: this.nodeName(n.segment), kind: n.segment.symbolKind,
       hint: this.nodeHint(n.segment), area: this.areaOf(n.segment), quick: n.segment.category === 'quick-wins',
@@ -306,32 +324,36 @@ export class FlowView {
       quick: g.members.every((m) => m.segment.category === 'quick-wins'),
     });
     const level = this.level();
-    const runs = this.hasRuns();
     if (level === 'method') {
-      return { frames: [], boxes: this.nodes().map((n, row) => ({ ...step(n), ...at(n.depth, row) })) };
+      return { frames: [], boxes: staircase(this.nodes().map((n) => ({ box: step(n), depth: n.depth })), true) };
     }
     if (level === 'class') {
-      return { frames: [], boxes: this.classes().map((g, row) => ({ ...cls(g), ...at(g.depth, row) })) };
+      // the second line of a class lists its methods: it may be cut, the name of the class not
+      return { frames: [], boxes: staircase(this.classes().map((g) => ({ box: cls(g), depth: g.depth })), false) };
     }
-    const frames: Box[] = [];
-    const boxes: Box[] = [];
-    const column = 280 + FRAME_PADDING.left + FRAME_PADDING.right + COL_GAP;
-    let y = 0;
-    for (const g of this.classes()) {
-      const x = g.depth * column;
-      const h = FRAME_PADDING.top + g.members.length * (MINI_H + MINI_GAP) - MINI_GAP + FRAME_PADDING.bottom;
-      const minis = g.members.map((n, i) => {
+    const sized = this.classes().map((g) => {
+      const minis = g.members.map((n) => {
         const box = step(n);
         // one line: number, badge, name, test icon (with the test infos), progress, hide and focus button
-        const w = Math.min(340, Math.max(180, Math.round(158 + (runs ? 20 : 0) + box.name.length * CHAR_W)));
-        return { ...box, depth: g.depth, x: x + FRAME_PADDING.left, y: y + FRAME_PADDING.top + i * (MINI_H + MINI_GAP), w, h: MINI_H, mini: true, frame: g.key };
+        return { box, w: Math.max(180, Math.round(MINI_CHROME + (runs ? 20 : 0) + box.name.length * CHAR_W)) };
       });
       const frame = cls(g);
       // the head: badge, name of the class, layer, progress, hide and focus button
-      const head = Math.min(380, Math.round(134 + frame.name.length * CHAR_W + areaLabel(frame.area).length * 6.5));
+      const head = Math.round(134 + frame.name.length * CHAR_W + areaLabel(frame.area).length * TAG_CHAR_W);
       const w = Math.max(head, Math.max(...minis.map((m) => m.w)) + FRAME_PADDING.left + FRAME_PADDING.right);
+      return { g, frame, minis, w };
+    });
+    const columns = columnStarts(sized.map((c) => ({ depth: c.g.depth, w: c.w })), COL_GAP);
+    const frames: Box[] = [];
+    const boxes: Box[] = [];
+    let y = 0;
+    for (const { g, frame, minis, w } of sized) {
+      const x = columns[g.depth];
+      const h = FRAME_PADDING.top + g.members.length * (MINI_H + MINI_GAP) - MINI_GAP + FRAME_PADDING.bottom;
+      boxes.push(...minis.map(({ box, w: mw }, i) => ({
+        ...box, depth: g.depth, x: x + FRAME_PADDING.left, y: y + FRAME_PADDING.top + i * (MINI_H + MINI_GAP), w: mw, h: MINI_H, mini: true, frame: g.key,
+      })));
       frames.push({ ...frame, depth: g.depth, x, y, w, h, mini: false, frame: null });
-      boxes.push(...minis);
       y += h + ROW_GAP + 8;
     }
     return { frames, boxes };

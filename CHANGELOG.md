@@ -6,6 +6,9 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+### Behoben
+- **Ganze Namen in den Diagrammen:** Lange Klassen- und Methodennamen wurden in den Knoten der Flow-Diagramme (alle drei Ebenen), in den Rahmenköpfen und im Komponentendiagramm mit «…» abgeschnitten, weil die Kästchen eine feste bzw. gedeckelte Breite hatten. Jetzt ist jedes Kästchen so breit, wie sein Name braucht; die Spalten der vorläufigen Anordnung richten sich nach dem breitesten Kästchen.
+
 ## [0.10.1] – 2026-11-24
 
 ### Behoben

@@ -10,6 +10,8 @@ interface Box {
   c: Component;
   x: number;
   y: number;
+  /** as wide as the name of the component needs: never cut off */
+  w: number;
   file: string;
 }
 
@@ -17,6 +19,11 @@ interface Box {
 interface Frame extends Rect {
   id: string;
   label: string;
+}
+
+/** Width of a component: room for its whole name. */
+function boxWidth(name: string): number {
+  return Math.max(W, Math.round(CHROME + name.length * CHAR_W));
 }
 
 /** Room for the name of a layer in the head of its frame. */
@@ -38,8 +45,12 @@ const AREAS: { id: string; label: string }[] = [
   { id: 'data', label: 'Daten & Infrastruktur' },
   { id: 'domain', label: 'Domäne' },
 ];
+/** Smallest width of a component; a longer name makes it wider. */
 const W = 196;
 const H = 44;
+/** Room in a component beside its name: padding, progress and focus button; a character of the name (12px code font). */
+const CHROME = 84;
+const CHAR_W = 7.3;
 const GAP = 64;
 const ROW = 14;
 /** Distance between components side by side in a layer without connections, and between such layers. */
@@ -96,7 +107,7 @@ const LOOSE_GAP = 22;
           </svg>
           @for (b of boxes(); track b.c.id) {
             @let p = progress(b.c);
-            <div class="node" role="button" tabindex="0" [style.left.px]="b.x" [style.top.px]="b.y" [style.width.px]="w" [style.height.px]="h"
+            <div class="node" role="button" tabindex="0" [style.left.px]="b.x" [style.top.px]="b.y" [style.width.px]="b.w" [style.height.px]="h"
                  [style.--area]="areaColor(b.c.area)"
                  [class.done]="p.total > 0 && p.ok === p.total" [class.root]="focus() === b.c.id" [class.dim]="!!hovered() && !related(b.c.id)"
                  [title]="b.c.paths.join('\\n')" (mouseenter)="hovered.set(b.c.id)" (mouseleave)="hovered.set(null)"
@@ -164,7 +175,6 @@ const LOOSE_GAP = 22;
 export class ComponentDiagram {
   protected readonly store = inject(ReviewStore);
   protected readonly t = t;
-  protected readonly w = W;
   protected readonly h = H;
   protected readonly areaColor = areaColor;
   protected readonly showTests = signal(false);
@@ -205,8 +215,13 @@ export class ComponentDiagram {
 
   /** The layers that have a component shown, as columns of the sketch. */
   private readonly columns = computed(() => {
-    const step = W + FRAME_PADDING.left + FRAME_PADDING.right + GAP;
-    return AREAS.filter((a) => this.shown().comps.some((c) => c.area === a.id)).map((a, i) => ({ ...a, x: FRAME_PADDING.left + i * step }));
+    const comps = this.shown().comps;
+    let x = FRAME_PADDING.left;
+    return AREAS.filter((a) => comps.some((c) => c.area === a.id)).map((a) => {
+      const col = { ...a, x };
+      x += Math.max(...comps.filter((c) => c.area === a.id).map((c) => boxWidth(c.name))) + FRAME_PADDING.left + FRAME_PADDING.right + GAP;
+      return col;
+    });
   });
 
   /**
@@ -228,7 +243,7 @@ export class ComponentDiagram {
         row.set(c.id, i);
         const code = c.paths.find((p) => !/\.(html?|s?css|less)$/.test(p)) ?? c.paths[0];
         const file = c.paths.map((p) => p.substring(p.lastIndexOf('/') + 1)).join(' · ');
-        boxes.push({ c: { ...c, paths: [code, ...c.paths.filter((p) => p !== code)] }, x: col.x, y: FRAME_PADDING.top + i * (H + ROW), file });
+        boxes.push({ c: { ...c, paths: [code, ...c.paths.filter((p) => p !== code)] }, x: col.x, y: FRAME_PADDING.top + i * (H + ROW), w: boxWidth(c.name), file });
       });
     }
     return boxes;
@@ -263,7 +278,7 @@ export class ComponentDiagram {
       const frames = this.columns().filter((f) => !loose.has(f.id));
       untracked(() => {
         layoutFlow({
-          boxes: boxes.map((b) => ({ key: 'b:' + b.c.id, w: W, h: H, frame: 'f:' + b.c.area })),
+          boxes: boxes.map((b) => ({ key: 'b:' + b.c.id, w: b.w, h: H, frame: 'f:' + b.c.area })),
           // room for the name of the layer in the head of its frame
           frames: frames.map((f) => ({ key: 'f:' + f.id, minW: headWidth(f.label) })),
           edges: edges.map((e, i) => ({ id: 'e' + i, from: 'b:' + e.from, to: 'b:' + e.to })),
@@ -285,7 +300,7 @@ export class ComponentDiagram {
   private readonly arranged = computed<{ boxes: Box[]; frames: Frame[] }>(() => {
     const auto = this.auto();
     const sketch = this.sketch();
-    const around = (boxes: Box[]) => frameAround(boxes.map((b) => ({ x: b.x, y: b.y, w: W, h: H })));
+    const around = (boxes: Box[]) => frameAround(boxes.map((b) => ({ x: b.x, y: b.y, w: b.w, h: H })));
     if (!auto) {
       return {
         boxes: sketch,
@@ -306,20 +321,23 @@ export class ComponentDiagram {
       const members = sketch.filter((b) => b.c.area === col.id);
       const columns = Math.min(members.length, members.length <= 4 ? 2 : 3);
       const rows = Math.ceil(members.length / columns);
+      // every column as wide as its widest component
+      const widths = Array.from({ length: columns }, (_, n) => Math.max(...members.filter((_, i) => i % columns === n).map((b) => b.w)));
+      const starts = widths.map((_, n) => widths.slice(0, n).reduce((sum, w) => sum + w + LOOSE_GAP, 0));
       return {
-        col, members, columns,
-        w: Math.max(headWidth(col.label), columns * (W + LOOSE_GAP) - LOOSE_GAP + pad.left + pad.right),
+        col, members, columns, starts,
+        w: Math.max(headWidth(col.label), widths.reduce((sum, w) => sum + w + LOOSE_GAP, 0) - LOOSE_GAP + pad.left + pad.right),
         h: rows * (H + ROW) - ROW + pad.top + pad.bottom,
       };
     });
     const bottom = Math.max(0, ...frames.map((f) => f.y + f.h));
     const width = Math.max(900, ...frames.map((f) => f.x + f.w));
     packRows(packs, width, LOOSE_GAP).forEach((at, i) => {
-      const { col, members, columns, w, h } = packs[i];
+      const { col, members, columns, starts, w, h } = packs[i];
       const y = at.y + (bottom ? bottom + LOOSE_GAP + 6 : 0);
       frames.push({ id: col.id, label: col.label, x: at.x, y, w, h });
       members.forEach((b, n) => boxes.push({
-        ...b, x: at.x + pad.left + (n % columns) * (W + LOOSE_GAP), y: y + pad.top + Math.floor(n / columns) * (H + ROW),
+        ...b, x: at.x + pad.left + starts[n % columns], y: y + pad.top + Math.floor(n / columns) * (H + ROW),
       }));
     });
     return { boxes, frames };
@@ -337,7 +355,7 @@ export class ComponentDiagram {
         const a = byId.get(e.from)!;
         const b = byId.get(e.to)!;
         const route = auto?.routes.get('e' + i);
-        const d = route ? routePath(route) : curvePath({ x: a.x, y: a.y, w: W, h: H }, { x: b.x, y: b.y, w: W, h: H }).d;
+        const d = route ? routePath(route) : curvePath({ x: a.x, y: a.y, w: a.w, h: H }, { x: b.x, y: b.y, w: b.w, h: H }).d;
         const width = 1.3 + Math.min(2.5, Math.log2(e.calls));
         const title = `${a.c.name} → ${b.c.name}: ${t(e.calls === 1 ? '{n} Aufruf' : '{n} Aufrufe', { n: e.calls })}${e.http ? t(' (über REST/HTTP)') : ''}`;
         // a connection takes the colour of the calling layer: frontend -> backend reads cyan, backend calls orange/...
