@@ -335,7 +335,7 @@ export interface FlowEdge {
   via: string;
   /** "http" = frontend REST call matched to a backend endpoint (via = "PUT /api/x/{}") */
   kind: 'call' | 'http';
-  /** every line of the caller that references the callee, ascending (contains line); missing in older analyses */
+  /** every line of the caller that calls the callee, ascending (contains line; only line for what is not called); missing in older analyses */
   lines?: number[] | null;
 }
 

@@ -114,7 +114,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 30;
+    public static final int VERSION = 31;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -735,9 +735,11 @@ public final class Analyzer {
                     continue;
                 }
                 List<Integer> all = references(a, b, lines);
-                Integer line = preferred(a, all);
+                // where b is called, the edge shows a call: a line that only names it (a parameter of that name) comes second
+                List<Integer> calls = callLines(a, b, all);
+                Integer line = preferred(a, calls.isEmpty() ? all : calls);
                 if (line != null) {
-                    edges.add(new FlowEdge(a.id, b.id, line, b.symbol.name(), "call", callLines(a, b, all, line)));
+                    edges.add(new FlowEdge(a.id, b.id, line, b.symbol.name(), "call", calls.isEmpty() ? List.of(line) : calls));
                     a.refs.computeIfAbsent(line, k -> new ArrayList<>()).add(new LineRef(b.id, b.label()));
                 }
             }
@@ -1079,14 +1081,14 @@ public final class Analyzer {
     /**
      * 1-based lines of all references to b in a's search lines, ascending (a line counts once). A caller with the
      * name of the callee (update() delegating to service.update(), an overload) names it in its own declaration:
-     * that first match is not a reference, unless the name stands on the line a second time.
+     * the name at that place is not a reference ({@link #ownDeclaration}).
      */
     private static List<Integer> references(Work a, Work b, List<Integer> lines) {
         String name = b.symbol.name();
         boolean generic = GENERIC.contains(name) || name.length() < 5;
         Pattern p = generic ? callPattern(name)
                 : Pattern.compile("(?<![\\w$])<?" + Pattern.quote(name) + "(?![\\w$])(?!\\s*:(?!:))");
-        boolean declaration = a.symbol != null && a.symbol.isCallable() && a.symbol.name().equals(name);
+        int[] declaration = ownDeclaration(a, name);
         Set<Integer> found = new TreeSet<>();
         for (int idx : lines) {
             if (idx < 0 || idx >= a.ctx.text.code.size()) {
@@ -1096,19 +1098,67 @@ public final class Analyzer {
             if (b.ctx == a.ctx && ln == b.symbol.startLine()) {
                 continue;
             }
-            Matcher m = p.matcher(a.ctx.text.code.get(idx));
-            if (!m.find()) {
-                continue;
+            if (refers(p, a, idx, declaration)) {
+                found.add(ln);
             }
-            if (declaration) {
-                declaration = false;
-                if (!m.find()) {
-                    continue;
-                }
-            }
-            found.add(ln);
         }
         return List.copyOf(found);
+    }
+
+    /** The line (0-based) matches the pattern somewhere else than at the caller's own declaration of the name. */
+    private static boolean refers(Pattern p, Work a, int idx, int[] declaration) {
+        Matcher m = p.matcher(a.ctx.text.code.get(idx));
+        while (m.find()) {
+            if (declaration == null || declaration[0] != idx || declaration[1] < m.start() || declaration[1] >= m.end()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static final Pattern LEADING_ANNOTATIONS = Pattern.compile("^\\s*(?:@[\\w.]+(?:\\([^()]*\\))?\\s*)+");
+    /** How many lines of a symbol are searched for its own name: annotations, modifiers and a return type on a line of its own. */
+    private static final int MAX_DECLARATION_LINES = 12;
+
+    /**
+     * Where a function named like the callee writes that name in its own declaration: {line (0-based), column}, or
+     * null when the caller has another name or does not write its name as code (a test case: its name is a title).
+     * It is the first place the name stands on its own (not as a member, `x.name`) in the head of the symbol - the
+     * lines after its annotations up to the one that opens the body. Found by position, whatever follows the name:
+     * `update(…) {`, `save = (…) => {`, `archive: async (…) => {`, `fun update(…) =`.
+     */
+    private static int[] ownDeclaration(Work a, String name) {
+        Symbol own = a.symbol;
+        if (own == null || !own.isCallable() || own.isTestBlock() || !own.name().equals(name)) {
+            return null;
+        }
+        Pattern bare = Pattern.compile("(?<![\\w$.])" + Pattern.quote(name) + "(?![\\w$])");
+        List<String> code = a.ctx.text.code;
+        int open = 0; // parentheses of an annotation that continues on the next line
+        for (int idx = own.startLine() - 1; idx < own.endLine() && idx < code.size() && idx < own.startLine() - 1 + MAX_DECLARATION_LINES; idx++) {
+            String line = code.get(idx);
+            int from = 0;
+            if (open == 0) {
+                Matcher annotations = LEADING_ANNOTATIONS.matcher(line);
+                from = annotations.find() ? annotations.end() : 0;
+            }
+            boolean annotation = open > 0 || line.strip().startsWith("@") && from == 0;
+            if (annotation) {
+                for (int i = 0; i < line.length(); i++) {
+                    open += line.charAt(i) == '(' ? 1 : line.charAt(i) == ')' ? -1 : 0;
+                }
+                continue;
+            }
+            Matcher m = bare.matcher(line);
+            if (m.find(from)) {
+                return new int[]{idx, m.start()};
+            }
+            String rest = line.substring(from);
+            if (rest.contains("{") || rest.contains("=>") || rest.contains(";")) {
+                return null; // the head is over and did not name it
+            }
+        }
+        return null;
     }
 
     /** The name followed by an argument list: `name(`, `name<T>(`. */
@@ -1118,17 +1168,17 @@ public final class Analyzer {
 
     /**
      * The lines of a that call b, for the order of the calls (FlowEdge.lines): of the references those with call
-     * syntax - a line that only names b (a parameter or variable of the same name, a type) is not a second call -
-     * plus the line the edge shows. Something that is not called (a constant, a type) is used, not called again and
-     * again: only the line shown.
+     * syntax - a line that only names b (a parameter or variable of the same name, a type) is not a call. Empty for
+     * something that is not called (a constant, a type, a component in a template): it is used, not called again and
+     * again, and the edge keeps the one line it shows.
      */
-    private static List<Integer> callLines(Work a, Work b, List<Integer> references, int line) {
-        Set<Integer> result = new TreeSet<>(List.of(line));
-        if (b.symbol.isCallable() && !"component".equals(b.symbol.kind())) {
-            Pattern call = callPattern(b.symbol.name());
-            references.stream().filter(ln -> call.matcher(a.ctx.text.code.get(ln - 1)).find()).forEach(result::add);
+    private static List<Integer> callLines(Work a, Work b, List<Integer> references) {
+        if (!b.symbol.isCallable() || "component".equals(b.symbol.kind())) {
+            return List.of();
         }
-        return List.copyOf(result);
+        Pattern call = callPattern(b.symbol.name());
+        int[] declaration = ownDeclaration(a, b.symbol.name());
+        return references.stream().filter(ln -> refers(call, a, ln - 1, declaration)).toList();
     }
 
     // ------------------------------------------------------------------ flows

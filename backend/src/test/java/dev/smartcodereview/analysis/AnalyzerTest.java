@@ -180,6 +180,108 @@ class AnalyzerTest {
         assertEquals(List.of(6), delegation.lines());
     }
 
+    /** One caller in player.resource.ts (given as its class body) and a PlayerService with save/update/archive. */
+    private Model.FlowEdge delegation(String body, String callee) throws Exception {
+        String resource = "import { PlayerService } from './player.service';\n\nexport class PlayerResource {\n" + body + "}\n";
+        String service = """
+                export class PlayerService {
+                  save(player: Player): Player {
+                    player.version++;
+                    return player;
+                  }
+
+                  update(player: Player): Player {
+                    player.version++;
+                    return player;
+                  }
+
+                  archive(player: Player): Player {
+                    player.archived = true;
+                    return player;
+                  }
+                }
+                """;
+        Snapshot snapshot = new Snapshot(1, "now", info(), List.of(
+                added("src/app/player.resource.ts", resource), added("src/app/player.service.ts", service)));
+        Analysis analysis = new Analyzer(defaultRules()).analyze(snapshot, Map.of(
+                "src/app/player.resource.ts", resource, "src/app/player.service.ts", service));
+        Segment target = segment(analysis, "PlayerService." + callee);
+        return analysis.flows().stream().flatMap(f -> f.edges().stream())
+                .filter(e -> e.to().equals(target.id())).findFirst().orElse(null);
+    }
+
+    @Test
+    void anArrowFunctionNamedLikeItsCalleeKeepsItsCall() throws Exception {
+        // the declaration does not look like a call (`save = (…) =>`): the first `save(` is the real call
+        Model.FlowEdge arrow = delegation("""
+                  save = (player: Player): Player => {
+                    return this.players.save(player);
+                  };
+                """, "save");
+        assertEquals(5, arrow.line());
+        assertEquals(List.of(5), arrow.lines());
+
+        Model.FlowEdge oneLine = delegation("""
+                  update = (player: Player): Player => this.players.update(player);
+                """, "update");
+        assertEquals(4, oneLine.line());
+
+        Model.FlowEdge twice = delegation("""
+                  save = (player: Player): Player => {
+                    this.players.save(player);
+                    return this.players.save(player);
+                  };
+                """, "save");
+        assertEquals(List.of(5, 6), twice.lines());
+
+        // a name that needs no call syntax, declared with a colon after it
+        Model.FlowEdge typed = delegation("""
+                  archive: Handler = async (player: Player) => {
+                    return this.players.archive(player);
+                  };
+                """, "archive");
+        assertEquals(5, typed.line());
+    }
+
+    @Test
+    void anEdgeShowsACallRatherThanAParameterOfTheSameName() throws Exception {
+        Model.FlowEdge edge = delegation("""
+                  store(update: Player): Player {
+                    const checked = this.check(update);
+                    return this.players.update(checked);
+                  }
+                """, "update");
+        // line 5 only passes the parameter `update` on; line 6 calls PlayerService.update
+        assertEquals(6, edge.line());
+        assertEquals(List.of(6), edge.lines());
+    }
+
+    @Test
+    void aTestTitledLikeTheFunctionItCallsStillReachesIt() throws Exception {
+        String code = """
+                export function slugify(text: string): string {
+                  return text.toLowerCase().replace(/ /g, '-');
+                }
+                """;
+        String spec = """
+                import { slugify } from './slugify';
+
+                describe('text', () => {
+                  it('slugify', () => {
+                    expect(slugify('A b')).toBe('a-b');
+                  });
+                });
+                """;
+        Snapshot snapshot = new Snapshot(1, "now", info(), List.of(added("src/app/slugify.ts", code), added("src/app/slugify.spec.ts", spec)));
+
+        Analysis analysis = new Analyzer(defaultRules()).analyze(snapshot, Map.of("src/app/slugify.ts", code, "src/app/slugify.spec.ts", spec));
+
+        Segment function = segment(analysis, "slugify");
+        Model.TestInfo test = analysis.tests().getFirst();
+        assertEquals(List.of(function.id()), test.covers().stream().map(Model.TestCoverage::segmentId).toList());
+        assertEquals(5, test.covers().getFirst().line());
+    }
+
     @Test
     void onlyCallsCountAsFurtherCallSites() throws Exception {
         String service = """
