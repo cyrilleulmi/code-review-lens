@@ -25,6 +25,7 @@ import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorI
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
 import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
 import { FlowDiagramKind, Progress, ReviewStore } from './review.store';
+import { MethodDetail, methodText, methodTooltip } from './method-detail';
 import { comesLater, flowSequence, isUsedNotCalled, playbackOf, sequenceKey } from './flow-sequence';
 import { SequenceControls } from './sequence-controls';
 import { SequenceDiagram, SequenceTarget } from './sequence-diagram';
@@ -75,6 +76,13 @@ interface Box {
   mini: boolean;
   /** key of that frame; null for boxes without one */
   frame: string | null;
+  /**
+   * Lines below the name, from the signature level on: the data structures of a step (sub), or - in the box of a
+   * class - its methods with their signatures, each followed by its data structures (sub).
+   */
+  lines: { text: string; sub: boolean }[];
+  /** for the tooltip: the declarations as written and the types in full */
+  tip: string;
 }
 
 /** A connection of the diagram between two boxes (keys), with the steps at its ends for the highlighting. */
@@ -154,6 +162,10 @@ const MINI_H = 32;
 const MINI_GAP = 14;
 /** Width of a character of the code font in the diagram (12px), to size boxes and frames by their names. */
 const CHAR_W = 7.3;
+/** A line below the name of a box (signatures, data structures), the widest a box gets for them, a character of such a line. */
+const LINE_H = 14;
+const MAX_BOX_W = 560;
+const LINE_CHAR_W = 6.4;
 const COL_GAP = 56;
 const ROW_GAP = 12;
 /** Indentation of the code blocks per call level (the cards scroll horizontally when it gets deep). */
@@ -238,6 +250,12 @@ export class FlowView {
   protected readonly stepLabels = STEP_LABELS;
   protected readonly edgeLabels = EDGE_LABELS;
   protected readonly runLegend: StepRunStatus[] = ['tested', 'mocked', 'none'];
+  /** The levels of detail of the methods, with their names and what they show. */
+  protected readonly details: { id: MethodDetail; label: string; tip: string }[] = [
+    { id: 'name', label: 'Namen', tip: 'Nur der Name jeder Methode' },
+    { id: 'signature', label: 'Signatur', tip: 'Name mit Parametern und Rückgabetyp, in einer Schreibweise für alle Sprachen' },
+    { id: 'data', label: 'Daten', tip: 'Signatur und darunter die Datenstrukturen: die Felder der Typen, die die Methode nimmt und zurückgibt (soweit eine geänderte Datei sie deklariert)' },
+  ];
 
   /** The flow's place: each step needs an ok here (a step can be part of several flows). */
   protected readonly place = computed(() => 'flows/' + this.flow().id);
@@ -323,40 +341,77 @@ export class FlowView {
    * here are a simple staircase by call depth: shown until the layout arrives, and kept if it cannot be loaded.
    */
   private readonly sketch = computed<{ frames: Box[]; boxes: Box[] }>(() => {
-    const at = (depth: number, row: number) => ({
-      depth, x: depth * (NODE_W + COL_GAP), y: row * (NODE_H + ROW_GAP), w: NODE_W, h: NODE_H, mini: false, frame: null,
-    });
-    const step = (n: Node) => ({
-      key: n.step.segmentId, ids: [n.step.segmentId], no: n.no, name: this.nodeName(n.segment), kind: n.segment.symbolKind,
-      hint: this.nodeHint(n.segment), area: this.areaOf(n.segment), quick: n.segment.category === 'quick-wins',
-    });
-    const cls = (g: { key: string; name: string; members: Node[] }) => ({
-      key: g.key, ids: g.members.map((m) => m.step.segmentId), no: g.members[0].no, name: g.name, kind: 'class',
-      hint: g.members.map((m) => this.nodeName(m.segment)).join(', '), area: this.areaOf(g.members[0].segment),
-      quick: g.members.every((m) => m.segment.category === 'quick-wins'),
-    });
+    // how much of a method the boxes show: its name; from the signature level on its signature, and the data structures below
+    const detail = this.store.methodDetail();
+    const types = this.store.typesById();
+    const text = (n: Node) => methodText(this.nodeName(n.segment), false, n.segment.signature, detail, types);
+    const step = (n: Node) => {
+      const { label, data } = text(n);
+      return {
+        key: n.step.segmentId, ids: [n.step.segmentId], no: n.no, name: label, kind: n.segment.symbolKind,
+        hint: this.nodeHint(n.segment), area: this.areaOf(n.segment), quick: n.segment.category === 'quick-wins',
+        lines: data.map((line) => ({ text: line, sub: true })), tip: methodTooltip(n.segment.signature, types),
+      };
+    };
+    const cls = (g: { key: string; name: string; members: Node[] }) => {
+      // the box of a class: at the name level its methods in one line, else a line per method with its signature
+      const lines = detail === 'name' ? [] : g.members.flatMap((m) => {
+        const { label, data } = text(m);
+        return [{ text: label, sub: false }, ...data.map((line) => ({ text: line, sub: true }))];
+      });
+      return {
+        key: g.key, ids: g.members.map((m) => m.step.segmentId), no: g.members[0].no, name: g.name, kind: 'class',
+        hint: detail === 'name' ? g.members.map((m) => this.nodeName(m.segment)).join(', ') : '', area: this.areaOf(g.members[0].segment),
+        quick: g.members.every((m) => m.segment.category === 'quick-wins'), lines,
+        tip: g.members.map((m) => methodTooltip(m.segment.signature, types)).filter((x) => x).join('\n\n'),
+      };
+    };
+    // a box grows with its lines: higher by a line each, as wide as the longest (up to a limit, then it is cut off)
+    const linesHeight = (b: { lines: unknown[] }) => (b.lines.length ? b.lines.length * LINE_H + 4 : 0);
+    const widthFor = (b: { name: string; lines: { text: string; sub: boolean }[] }, chrome: number, least: number) => {
+      const chars = Math.max(detail === 'name' ? 0 : b.name.length * CHAR_W, ...b.lines.map((l) => (l.sub ? 12 : 0) + l.text.length * LINE_CHAR_W));
+      return Math.min(MAX_BOX_W, Math.max(least, Math.round(chrome + chars)));
+    };
+    /** A staircase by call depth: every column as wide as the widest box, the rows one below the other. */
+    const staircase = <T extends { name: string; lines: { text: string; sub: boolean }[] }>(items: (T & { depth: number })[]) => {
+      // beside the texts: number, badge, progress, hide and focus button
+      const sized = items.map((b) => ({ ...b, w: widthFor(b, 160, NODE_W), h: NODE_H + linesHeight(b) }));
+      const column = Math.max(NODE_W, ...sized.map((b) => b.w)) + COL_GAP;
+      let y = 0;
+      return sized.map((b) => {
+        const box = { ...b, x: b.depth * column, y, mini: false, frame: null };
+        y += b.h + ROW_GAP;
+        return box;
+      });
+    };
     const level = this.level();
     const runs = this.hasRuns();
     if (level === 'method') {
-      return { frames: [], boxes: this.nodes().map((n, row) => ({ ...step(n), ...at(n.depth, row) })) };
+      return { frames: [], boxes: staircase(this.nodes().map((n) => ({ ...step(n), depth: n.depth }))) };
     }
     if (level === 'class') {
-      return { frames: [], boxes: this.classes().map((g, row) => ({ ...cls(g), ...at(g.depth, row) })) };
+      return { frames: [], boxes: staircase(this.classes().map((g) => ({ ...cls(g), depth: g.depth }))) };
     }
     const frames: Box[] = [];
     const boxes: Box[] = [];
-    const column = 280 + FRAME_PADDING.left + FRAME_PADDING.right + COL_GAP;
+    const column = (detail === 'name' ? 280 : MAX_BOX_W) + FRAME_PADDING.left + FRAME_PADDING.right + COL_GAP;
     let y = 0;
     for (const g of this.classes()) {
       const x = g.depth * column;
-      const h = FRAME_PADDING.top + g.members.length * (MINI_H + MINI_GAP) - MINI_GAP + FRAME_PADDING.bottom;
-      const minis = g.members.map((n, i) => {
+      let top = y + FRAME_PADDING.top;
+      const minis = g.members.map((n) => {
         const box = step(n);
         // one line: number, badge, name, test icon (with the test infos), progress, hide and focus button
-        const w = Math.min(340, Math.max(180, Math.round(158 + (runs ? 20 : 0) + box.name.length * CHAR_W)));
-        return { ...box, depth: g.depth, x: x + FRAME_PADDING.left, y: y + FRAME_PADDING.top + i * (MINI_H + MINI_GAP), w, h: MINI_H, mini: true, frame: g.key };
+        const w = detail === 'name'
+          ? Math.min(340, Math.max(180, Math.round(158 + (runs ? 20 : 0) + box.name.length * CHAR_W)))
+          : widthFor(box, 158 + (runs ? 20 : 0), 180);
+        const mini = { ...box, depth: g.depth, x: x + FRAME_PADDING.left, y: top, w, h: MINI_H + linesHeight(box), mini: true, frame: g.key };
+        top += mini.h + MINI_GAP;
+        return mini;
       });
-      const frame = cls(g);
+      const h = top - MINI_GAP - y + FRAME_PADDING.bottom;
+      // the frame of a class shows its name only: its methods stand inside it
+      const frame = { ...cls(g), lines: [] };
       // the head: badge, name of the class, layer, progress, hide and focus button
       const head = Math.min(380, Math.round(134 + frame.name.length * CHAR_W + areaLabel(frame.area).length * 6.5));
       const w = Math.max(head, Math.max(...minis.map((m) => m.w)) + FRAME_PADDING.left + FRAME_PADDING.right);
@@ -716,6 +771,16 @@ export class FlowView {
   /** Level of the diagram; the code follows unless it has its own level. */
   protected setLevel(level: FlowDiagramLevel): void {
     this.store.setFlowPage(this.flow().id, { level });
+  }
+
+  /** How much of a method the diagrams show (for all flows, kept per browser). */
+  protected setDetail(detail: MethodDetail): void {
+    this.store.setMethodDetail(detail);
+  }
+
+  /** Tooltip of a box: what the tests run in it, and the declarations of its methods with their types. */
+  protected boxTitle(box: Box): string {
+    return [this.runTitle(box.ids), this.store.methodDetail() === 'name' ? '' : box.tip].filter((x) => x).join('\n\n');
   }
 
   /** Call graph or sequence. */

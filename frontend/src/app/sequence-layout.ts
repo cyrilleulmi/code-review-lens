@@ -27,7 +27,10 @@ export interface Message {
   to: string;
   /** index of the row, from 0 */
   row: number;
-  /** vertical centre of the row */
+  /** top and height of the row: higher than SEQUENCE_ROW when it has lines of detail */
+  top: number;
+  h: number;
+  /** vertical centre of the part of the row with the label and the arrow (its first SEQUENCE_ROW) */
   y: number;
   /** start and end of the arrow */
   x1: number;
@@ -39,6 +42,10 @@ export interface Message {
   lx: number;
   /** baseline of the label */
   ly: number;
+  /** lines of detail below the arrow (the data structures of the call), at `dx`, the first with its baseline at `dy` */
+  details: string[];
+  dx: number;
+  dy: number;
   /** the arrow as an SVG path */
   d: string;
 }
@@ -68,8 +75,10 @@ export interface SequenceLayout {
   height: number;
 }
 
-/** Height of a row: the list of calls beside the diagram uses the same, so its rows line up with the arrows. */
+/** Height of a row without details: the list of calls beside the diagram uses the same, so its rows line up with the arrows. */
 export const SEQUENCE_ROW = 32;
+/** Height of a line of detail in a row. */
+export const SEQUENCE_DETAIL = 13;
 /** Room above the first row: the heads of the lifelines. */
 export const SEQUENCE_HEAD = 46;
 /** Height of the head of a lifeline. */
@@ -82,8 +91,9 @@ const BAR = 10;
 const NEST = 5;
 /** How far the loop of a call within a class reaches out. */
 const LOOP = 26;
-/** Width of a character of the label font (11px code font) and of the head font (12px code font). */
+/** Width of a character of the label font (11px code font), the detail font (10px) and the head font (12px). */
 const LABEL_CHAR = 6.7;
+const DETAIL_CHAR = 6.1;
 const HEAD_CHAR = 7.3;
 /** Air between a label and the lifelines beside it, and between two heads. */
 const LABEL_AIR = 26;
@@ -99,14 +109,20 @@ export function labelWidth(label: string): number {
   return SEQUENCE_BUBBLE + 5 + Math.ceil(label.length * LABEL_CHAR);
 }
 
+/** Width of the text of a row: its label, or the longest of its lines of detail (they start below the text of the label). */
+export function textWidth(label: string, details: readonly string[]): number {
+  return Math.max(labelWidth(label), ...details.map((d) => SEQUENCE_BUBBLE + 5 + Math.ceil(d.length * DETAIL_CHAR)));
+}
+
 /**
  * Places the sequence. participantOf: the class of a step; labelOf: the text of a row - what is called (call null:
- * the entry point itself).
+ * the entry point itself); detailsOf: further lines for the row, shown below its arrow (the row gets higher).
  */
 export function sequenceLayout(
   sequence: FlowSequence,
   participantOf: (segmentId: string) => Participant,
   labelOf: (segmentId: string, call: SequenceCall | null) => string,
+  detailsOf: (segmentId: string, call: SequenceCall | null) => string[] = () => [],
 ): SequenceLayout {
   // the rows: every entry point, followed by its calls
   const rows: { call: SequenceCall | null; to: string }[] = [];
@@ -117,7 +133,12 @@ export function sequenceLayout(
   });
   const rowOf = new Map<number, number>();
   rows.forEach((r, i) => r.call && rowOf.set(r.call.no, i));
-  const yOf = (row: number) => SEQUENCE_HEAD + row * SEQUENCE_ROW + SEQUENCE_ROW / 2;
+  const details = rows.map((r) => detailsOf(r.to, r.call));
+  const heights = details.map((d) => SEQUENCE_ROW + (d.length ? d.length * SEQUENCE_DETAIL + 5 : 0));
+  const tops: number[] = [];
+  heights.reduce((top, h) => (tops.push(top), top + h), SEQUENCE_HEAD);
+  const yOf = (row: number) => tops[row] + SEQUENCE_ROW / 2;
+  const bottomOf = (row: number) => tops[row] + heights[row];
 
   // the lifelines, in the order their classes come up
   const order: Participant[] = [];
@@ -142,7 +163,7 @@ export function sequenceLayout(
   const right = order.map(() => 0);
   rows.forEach((r, n) => {
     const { from, to } = ends[n];
-    const need = labelWidth(labels[n]) + LABEL_AIR;
+    const need = textWidth(labels[n], details[n]) + LABEL_AIR;
     if (!r.call) {
       left[to] = Math.max(left[to], need + 12);
     } else if (from === to) {
@@ -175,7 +196,7 @@ export function sequenceLayout(
     const y1 = yOf(row) + ARROW_DY - 4;
     const last = rowOf.get(end) ?? row;
     // a step inside another ends a little earlier, so the ends of nested bars stay apart
-    const y2 = Math.max(y1 + 11, yOf(last) + SEQUENCE_ROW / 2 - 3 * Math.min(depth + 1, 3));
+    const y2 = Math.max(y1 + 11, bottomOf(last) - 3 * Math.min(depth + 1, 3));
     activations.push({ key: order[line].key, no, start, end, row, x: xs[line] + level * NEST - BAR / 2, y1, y2 });
     open.push({ line, level, end });
   };
@@ -184,14 +205,20 @@ export function sequenceLayout(
     const label = labels[row];
     const { from, to } = ends[row];
     const ly = y + LABEL_DY;
+    const width = textWidth(label, details[row]);
+    /** the common part of a message: its row and its lines of detail, below the arrow and under the text of the label */
+    const base = (lx: number) => ({
+      to: r.to, row, top: tops[row], h: heights[row], y, label, lx,
+      details: details[row], dx: lx + SEQUENCE_BUBBLE + 5, dy: y + ARROW_DY + SEQUENCE_DETAIL + 3,
+    });
     if (!r.call) {
       // an entry point: everything before it is over; the arrow comes from outside
       open = [];
       const entry = sequence.entries.find((e) => e.id === r.to)!;
       const next = sequence.entries[sequence.entries.indexOf(entry) + 1];
       const x2 = xs[to] - BAR / 2;
-      const x1 = Math.max(4, x2 - labelWidth(label) - 18);
-      messages.push({ call: null, to: r.to, row, y, x1, x2, self: false, label, lx: x1 + 8, ly, d: `M ${x1} ${y + ARROW_DY} H ${x2}` });
+      const x1 = Math.max(4, x2 - width - 18);
+      messages.push({ ...base(x1 + 8), call: null, x1, x2, self: false, ly, d: `M ${x1} ${y + ARROW_DY} H ${x2}` });
       bar(to, 0, 0, entry.after + 1, next?.after ?? sequence.calls.length, row, -1);
       return;
     }
@@ -203,19 +230,15 @@ export function sequenceLayout(
       const x1 = xs[from] + fromLevel * NEST + BAR / 2;
       const x2 = xs[to] + toLevel * NEST + BAR / 2;
       const out = x1 + LOOP;
-      messages.push({
-        call, to: r.to, row, y, x1, x2, self: true, label, lx: out + 6, ly: y + 4,
-        d: `M ${x1} ${y - 6} H ${out} V ${y + ARROW_DY} H ${x2}`,
-      });
+      messages.push({ ...base(out + 6), call, x1, x2, self: true, ly: y + 4, d: `M ${x1} ${y - 6} H ${out} V ${y + ARROW_DY} H ${x2}` });
     } else {
       const dir = xs[to] > xs[from] ? 1 : -1;
       const x1 = xs[from] + fromLevel * NEST + (dir * BAR) / 2;
       const x2 = xs[to] + toLevel * NEST - (dir * BAR) / 2;
       // in the middle of the arrow; on a long arrow near its start, where the call is made (the middle may be far away)
-      const width = labelWidth(label);
       const long = Math.abs(x2 - x1) > width + LONG_ARROW;
       const lx = Math.round(long ? (dir > 0 ? x1 + 14 : x1 - 14 - width) : (x1 + x2) / 2 - width / 2);
-      messages.push({ call, to: r.to, row, y, x1, x2, self: false, label, lx, ly, d: `M ${x1} ${y + ARROW_DY} H ${x2}` });
+      messages.push({ ...base(lx), call, x1, x2, self: false, ly, d: `M ${x1} ${y + ARROW_DY} H ${x2}` });
     }
     bar(to, toLevel, call.no, call.no, call.end, row, call.depth);
   });
@@ -224,6 +247,6 @@ export function sequenceLayout(
   return {
     lifelines, messages, activations,
     width: Math.round(rightmost + 10),
-    height: SEQUENCE_HEAD + rows.length * SEQUENCE_ROW + 12,
+    height: (rows.length ? bottomOf(rows.length - 1) : SEQUENCE_HEAD) + 12,
   };
 }

@@ -125,6 +125,14 @@ Für den PoC wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **
 * Ganzes Repository (`#/github/cyrilleulmi/smart-code-review/0`), Flow `App → …`: 162 Aufrufe, 23 Lebenslinien – Liste und Köpfe bleiben beim Scrollen stehen, beim Abspielen bleibt der aktuelle Aufruf im Bild.
 * Übersicht von smart-code-review#11 → Komponenten → «Abfolge» → `resolve → resolveThread (+4)`: `CodeBlock`, `ReviewStore` und `Api` bleiben, der Rest tritt zurück; der Punkt läuft `CodeBlock` → `Api`, `CodeBlock` → `ReviewStore`, `ReviewStore` → `Api`; die Aufrufe innerhalb von `ReviewStore` und `CodeBlock` lassen die jeweilige Komponente aufleuchten.
 
+**Detail der Methoden (FR-UI-24, FR-ANA-28)** – an smart-code-review#11, Flow `resolve → resolveThread (+4)`:
+
+* «Signatur», Ebene «Klassen + Methoden»: `resolve(thread: Thread): void`, `resolveThread(pr: PrKey, thread: string, …): Observable<Comment[]>` (gekürzt, der Tooltip zeigt die ganze Deklaration), `loadStatus(): void`.
+* «Daten»: unter `resolve` steht `Thread { root: Comment, replies: Comment[] }`, unter `Api.resolveThread` stehen `PrKey { provider: string, owner: string, repo: string, number: number }` und `Comment { id: number, kind: 'review' | 'issue', path: string | null, +11 }`. `PrKey` und `Comment` sind in `api.ts` deklariert, `Thread` in `code-block.ts`.
+* Ebene «Klassen» mit «Signatur» oder «Daten»: Der Knoten `CodeBlock` listet `resolve(…)` und `toggleThread(…)` zeilenweise, `ReviewStore` seine drei Methoden.
+* «Abfolge» mit «Daten»: Die Zeilen mit Datenstrukturen sind höher, die Liste links bleibt Zeile für Zeile daneben; `CodeBlock` und `Api` stehen weiter auseinander, damit die Signatur Platz hat.
+* Im Backend-Flow `approve → approve → requirePullRequest (+2)` (Java): `ReviewResource.approve(@PathParam("provider") String provider, …)` erscheint als `approve(provider: String, owner: String, …): PrStatus`, darunter die Records `ApprovalRequest { approved: boolean }` und `PrStatus` aus `Model.java` mit ihren Komponenten; `ReviewService.approve(PrRef ref, boolean approved)` gibt `Model.PrStatus` zurück und zeigt `PrRef` und `PrStatus` (der qualifizierte Name wird aufgelöst).
+
 ## Ports & Adapters
 
 [thombergs/buckpal#41](https://github.com/thombergs/buckpal/pull/41) (öffentliches Beispielprojekt für Hexagonal Architecture, 47 Dateien, nur gelesen): erkannt über `adapter`, `application`, `application/domain`, `application/port`. Kategorien *Domäne* (Account, Activity, Money …), *Use Cases* (SendMoneyUseCase, GetAccountBalanceUseCase), *Application Layer* (SendMoneyService, LoadAccountPort …), *Adapter* (eingehend: SendMoneyController; ausgehend: AccountPersistenceAdapter, AccountMapper …). 38 Komponenten im Diagramm.

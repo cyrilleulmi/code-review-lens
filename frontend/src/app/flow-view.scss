@@ -257,6 +257,25 @@
     text-overflow: ellipsis;
   }
 
+  .name + .more,
+  .file + .more {
+    margin-top: 3px;
+  }
+
+  /* from the signature level on: the methods of a class with their signatures, and (sub) the data structures */
+  .more {
+    color: var(--fg);
+    font: 400 10.5px/14px var(--font-code);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &.sub {
+      padding-left: 12px;
+      color: var(--fg-muted);
+    }
+  }
+
   .cnt {
     color: var(--fg-muted);
     font-size: 11px;
@@ -338,6 +357,12 @@
   .lbl {
     color: var(--fg-muted);
     font-weight: 600;
+  }
+
+  /* a second setting in the same bar */
+  .lbl.sub {
+    margin-left: 6px;
+    font-weight: 500;
   }
 
   .hint {

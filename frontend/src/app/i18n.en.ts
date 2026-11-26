@@ -813,6 +813,15 @@ export const EN: Record<string, string> = {
   'Flow öffnen': 'Open flow',
   'Abfolge schliessen': 'Close the sequence',
 
+  // ------------------------------------------------------------------ level of detail of the methods
+  'Detail der Methoden': 'Detail of the methods',
+  'Namen': 'Names',
+  'Signatur': 'Signature',
+  'Nur der Name jeder Methode': 'Only the name of every method',
+  'Name mit Parametern und Rückgabetyp, in einer Schreibweise für alle Sprachen': 'Name with parameters and return type, in one notation for all languages',
+  'Signatur und darunter die Datenstrukturen: die Felder der Typen, die die Methode nimmt und zurückgibt (soweit eine geänderte Datei sie deklariert)':
+    'Signature and below it the data structures: the fields of the types the method takes and returns (as far as a changed file declares them)',
+
   // ------------------------------------------------------------------ code block
   "Ausklappen": "Expand",
   "Einklappen": "Collapse",

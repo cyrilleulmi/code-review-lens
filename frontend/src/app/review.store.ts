@@ -33,6 +33,7 @@ import { LineBoxes, everywhereTargets, lineBoxes } from './accept-boxes';
 import { AcceptStatus, Acceptance, accept, statusOf } from './acceptance';
 import { laterExpectationsByTest } from './commit-findings';
 import { FlowCodeLevel, FlowDiagramLevel } from './flow-classes';
+import { METHOD_DETAILS, MethodDetail } from './method-detail';
 import { groupWarnings, testNamer } from './mock-boundaries';
 import { reloadMessage } from './reload-message';
 import { serverText, t } from './i18n';
@@ -164,6 +165,8 @@ export class ReviewStore {
    * code left and new code right. Stored per browser.
    */
   readonly diffMode = signal<DiffMode>(readChoice('scr.diffMode', ['unified', 'split'] as const) ?? 'unified');
+  /** How much of a method the diagrams of the flows show: name, signature, or signature with data structures. Kept per browser. */
+  readonly methodDetail = signal<MethodDetail>(readChoice('scr.methodDetail', METHOD_DETAILS) ?? 'name');
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
   readonly blames = signal<ReadonlyMap<string, Blame | 'loading' | null>>(new Map());
   /** Whole files by path (code view "Ganze Klassen" of a flow): loaded on demand; null = could not be loaded. */
@@ -340,6 +343,9 @@ export class ReviewStore {
     }
     return map;
   });
+
+  /** The types the signatures of the segments name, by id (Analysis.types; empty for older analyses). */
+  readonly typesById = computed(() => new Map((this.bundle()?.analysis.types ?? []).map((t) => [t.id, t])));
 
   /** Component (class, module) of each segment. */
   readonly componentBySegment = computed(() => {
@@ -747,6 +753,11 @@ export class ReviewStore {
     const on = !this.testInfo();
     this.testInfo.set(on);
     writeFlag('scr.testInfo', on);
+  }
+
+  setMethodDetail(detail: MethodDetail): void {
+    this.methodDetail.set(detail);
+    writeChoice('scr.methodDetail', detail);
   }
 
   setDiffMode(mode: DiffMode): void {

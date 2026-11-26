@@ -90,6 +90,17 @@
   </div>
 }
 
+<!-- how much of a method the diagram shows: for the call graph and the sequence alike -->
+<ng-template #methodDetail>
+  <span class="lbl sub">{{ t('Methoden') }}</span>
+  <div class="seg-switch text" role="group" [attr.aria-label]="t('Detail der Methoden')">
+    @for (d of details; track d.id) {
+      <button type="button" [class.on]="store.methodDetail() === d.id" [attr.aria-pressed]="store.methodDetail() === d.id" (click)="setDetail(d.id)"
+              [title]="t(d.tip)">{{ t(d.label) }}</button>
+    }
+  </div>
+</ng-template>
+
 <div class="level-bar">
   <span class="lbl">{{ t('Diagramm') }}</span>
   <div class="seg-switch text" role="group" [attr.aria-label]="t('Art des Diagramms')">
@@ -107,6 +118,7 @@
       <button type="button" [class.on]="level() === 'method'" [attr.aria-pressed]="level() === 'method'" (click)="setLevel('method')"
               [title]="t('Ein Knoten pro Methode bzw. Funktion')">{{ t('Methoden') }}</button>
     </div>
+    <ng-container [ngTemplateOutlet]="methodDetail" />
     @let classCount = level() === 'class' ? boxes().length : frames().length;
     @let methodCount = level() === 'class' ? 0 : boxes().length;
     <span class="hint">
@@ -128,6 +140,7 @@
     }
     <span class="hint">{{ t('Knoten und Klassen lassen sich ziehen') }}</span>
   } @else {
+    <ng-container [ngTemplateOutlet]="methodDetail" />
     <span class="spacer"></span>
     <span class="hint">{{ t('Klick auf einen Aufruf zeigt ihn; die Zeilennummer springt zur Aufrufstelle') }}</span>
   }
@@ -165,6 +178,7 @@
 
 @if (diagramKind() === 'sequence') {
   <app-sequence-diagram [sequence]="sequence()" [current]="player.index()" [duration]="player.duration()" [stepOf]="stepOf()"
+                        [detail]="store.methodDetail()"
                         (pick)="pickCall($event)" (open)="openTarget($event)" />
 }
 
@@ -251,7 +265,7 @@
             [class.seq-from]="pb?.from === b.key" [class.seq-to]="pb?.to === b.key" [class.seq-even]="!!pb && pb.no % 2 === 0"
             [class.seq-later]="boxLater(b.key)"
             [class.run-tested]="run === 'tested'" [class.run-mocked]="run === 'mocked'" [class.run-none]="run === 'none'"
-            [title]="runTitle(b.ids)"
+            [title]="boxTitle(b)"
             (mouseenter)="hover(b.ids)" (mouseleave)="hover(null)"
             (pointerdown)="dragStart($event, [b.key])" (pointermove)="dragMove($event)" (pointerup)="dragEnd($event)" (pointercancel)="dragEnd($event)"
             (click)="openBox(b)" (keydown.enter)="openBox(b)">
@@ -264,6 +278,9 @@
               <b class="area">{{ a }}</b>
             }
             {{ b.hint }}</span>
+        }
+        @for (line of b.lines; track $index) {
+          <span class="more" [class.sub]="line.sub">{{ line.text }}</span>
         }
       </span>
       @if (run) {

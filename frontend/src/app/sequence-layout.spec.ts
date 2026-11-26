@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SequenceEdge, flowSequence } from './flow-sequence';
-import { SEQUENCE_HEAD, SEQUENCE_ROW, labelWidth, sequenceLayout } from './sequence-layout';
+import { SEQUENCE_DETAIL, SEQUENCE_HEAD, SEQUENCE_ROW, labelWidth, sequenceLayout, textWidth } from './sequence-layout';
 
 const steps = (...list: [string, string | null][]) => list.map(([segmentId, parentSegmentId]) => ({ segmentId, parentSegmentId }));
 const call = (from: string, to: string, lines: number | number[]): SequenceEdge => {
@@ -103,6 +103,39 @@ describe('sequenceLayout', () => {
     const entries = l.activations.filter((a) => a.no === 0);
     expect(entries.map((a) => a.key)).toEqual(['A', 'C']);
     expect(entries[0].y2).toBeLessThan(entries[1].y1);
+  });
+
+  it('makes a row with lines of detail higher and moves the rows below it down', () => {
+    const data = ['PlayerUpdate { jerseyNumber: number | null }', 'PlayerDetail { id: string, name: string }'];
+    const detailed = sequenceLayout(sequence, byPrefix, method, (id) => (id === 'Api.set' ? data : []));
+    const [entry, set, update] = detailed.messages;
+
+    expect(entry.h).toBe(SEQUENCE_ROW);
+    expect(set.details).toEqual(data);
+    expect(set.h).toBeGreaterThanOrEqual(SEQUENCE_ROW + 2 * SEQUENCE_DETAIL);
+    expect(set.top).toBe(layout.messages[1].top);
+    expect(set.y).toBe(layout.messages[1].y);
+    // the details stand below the arrow, inside the row
+    expect(set.dy).toBeGreaterThan(set.y);
+    expect(set.dy + SEQUENCE_DETAIL).toBeLessThan(set.top + set.h);
+    expect(update.top).toBe(set.top + set.h);
+    expect(update.y - layout.messages[2].y).toBe(set.h - SEQUENCE_ROW);
+    expect(detailed.height - layout.height).toBe(set.h - SEQUENCE_ROW);
+  });
+
+  it('leaves room between the lifelines for the widest line of detail, and runs the bars to the end of the rows', () => {
+    const wide = 'PlayerDetail { id: string, name: string, jerseyNumber: number | null, team: Team }';
+    const detailed = sequenceLayout(sequence, byPrefix, method, (id) => (id === 'Api.set' ? [wide] : id === 'Player.isTaken' ? ['x'] : []));
+    const set = detailed.messages[1];
+
+    expect(textWidth('set', [wide])).toBeGreaterThan(labelWidth('set'));
+    expect(Math.abs(set.x2 - set.x1)).toBeGreaterThanOrEqual(textWidth('set', [wide]));
+    expect(set.dx).toBeGreaterThan(Math.min(set.x1, set.x2));
+    // update runs until isTaken is over: its bar reaches below the details of that row
+    const isTaken = detailed.messages[4];
+    const bar = detailed.activations.find((a) => a.no === 2)!;
+    expect(bar.y2).toBeGreaterThan(isTaken.dy);
+    expect(bar.y2).toBeLessThanOrEqual(isTaken.top + isTaken.h);
   });
 
   it('is empty for an empty sequence', () => {

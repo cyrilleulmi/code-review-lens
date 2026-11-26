@@ -5,9 +5,13 @@ import { FlowSequence, SequenceCall, callStack } from './flow-sequence';
 import { Icon } from './icon';
 import { t } from './i18n';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColorIndex } from './look';
+import { MethodDetail, MethodText, methodText, methodTooltip } from './method-detail';
 import { ReviewStore } from './review.store';
-import { Message, SEQUENCE_BUBBLE, SEQUENCE_HEAD, SEQUENCE_HEAD_BOX, SEQUENCE_ROW, sequenceLayout } from './sequence-layout';
+import { Message, SEQUENCE_BUBBLE, SEQUENCE_DETAIL, SEQUENCE_HEAD, SEQUENCE_HEAD_BOX, SEQUENCE_ROW, sequenceLayout } from './sequence-layout';
 import { scrollToShow } from './sequence-player';
+
+/** The longest texts of a row: they set how far the lifelines stand apart, so they are shorter than in the flow diagram. */
+const ROOM = { signature: 56, data: 60 };
 
 /** Where a row of the sequence leads in the code: a step, at a line when one is known. */
 export interface SequenceTarget {
@@ -36,13 +40,13 @@ export interface SequenceTarget {
         </div>
         @for (m of l.messages; track m.row) {
           @let no = m.call?.no ?? 0;
-          <div class="row" role="button" tabindex="0" [style.height.px]="row" [class.entry]="!m.call"
+          <div class="row" role="button" tabindex="0" [style.height.px]="m.h" [class.entry]="!m.call"
                [class.current]="!!m.call && no === now" [class.later]="now > 0 && no > now" [class.running]="running().has(no) && no !== now"
                [title]="rowTitle(m)" (click)="pick.emit(no)" (keydown.enter)="rowKey($event, no)" (keydown.space)="rowKey($event, no)">
             <span class="idx">{{ m.call ? no : '' }}</span>
             <span class="indent" [style.width.px]="indent(m)"></span>
             <span class="no" [style.background]="color(m.call)">{{ stepOf()[m.to] ?? '' }}</span>
-            <span class="name">{{ fullName(m.to) }}</span>
+            <span class="name">{{ listName(m.to) }}</span>
             @if (!m.call) {
               <span class="tag">{{ t('Einstieg') }}</span>
             } @else {
@@ -103,6 +107,9 @@ export interface SequenceTarget {
                 <text class="bubble-no" [attr.x]="bubble / 2" y="0" text-anchor="middle">{{ stepOf()[m.to] ?? '' }}</text>
                 <text class="label" [attr.x]="bubble + 5" y="0">{{ m.label }}</text>
               </g>
+              @for (line of m.details; track $index) {
+                <text class="detail" [attr.x]="m.dx" [attr.y]="m.dy + $index * detailLine">{{ line }}</text>
+              }
             </g>
           }
         </svg>
@@ -129,8 +136,11 @@ export interface SequenceTarget {
     .list-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 7px; box-sizing: border-box; padding: 0 12px;
       background: var(--bg-panel); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--fg); }
     .list-head .dim { color: var(--fg-dim); font-size: 11.5px; }
-    .row { display: flex; align-items: center; gap: 6px; box-sizing: border-box; padding: 0 6px 0 4px; border-left: 3px solid transparent;
-      cursor: pointer; font-size: 12px; transition: opacity 0.2s, background 0.15s; }
+    /* a row is as high as its row of the diagram; its texts stand in the first part, beside the arrow */
+    .row { display: flex; align-items: flex-start; gap: 6px; box-sizing: border-box; padding: 0 6px 0 4px; border-left: 3px solid transparent;
+      cursor: pointer; font-size: 12px; line-height: 32px; transition: opacity 0.2s, background 0.15s; }
+    .row > .no, .row > .tag { margin-top: 8px; }
+    .row > .jump { margin-top: 6px; }
     .row:hover { background: var(--bg-hover); }
     .row:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
     .row.running { border-left-color: color-mix(in srgb, var(--accent) 45%, transparent); }
@@ -139,8 +149,9 @@ export interface SequenceTarget {
     .idx { flex: none; width: 22px; text-align: right; color: var(--fg-dim); font-size: 10.5px; font-variant-numeric: tabular-nums; }
     .indent { flex: none; }
     .no { flex: none; display: inline-grid; place-items: center; min-width: 18px; height: 16px; border-radius: 8px; color: var(--on-fill);
-      font-size: 10px; font-weight: 700; }
+      font-size: 10px; font-weight: 700; line-height: 1; }
     .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px var(--font-code); color: var(--fg); }
+    .name, .idx { line-height: 32px; }
     .row.entry .name { font-weight: 700; }
     .tag { flex: none; padding: 0 5px; border: 1px solid var(--border-strong); border-radius: 4px; color: var(--fg-muted); font-size: 10px; line-height: 14px; }
     .tag.http { border-color: color-mix(in srgb, var(--cat-violet) 55%, transparent); color: var(--cat-violet); font-weight: 600; letter-spacing: 0.04em; }
@@ -177,6 +188,7 @@ export interface SequenceTarget {
     .bubble-no { fill: var(--on-fill); font: 700 10px var(--font-ui); }
     .label { fill: var(--fg); font: 500 11px var(--font-code); paint-order: stroke; stroke: var(--bg-panel-2); stroke-width: 4px; stroke-linejoin: round; }
     .msg.current .label { font-weight: 700; }
+    .detail { fill: var(--fg-muted); font: 400 10px var(--font-code); paint-order: stroke; stroke: var(--bg-panel-2); stroke-width: 3px; stroke-linejoin: round; }
     @media (prefers-reduced-motion: reduce) { .run { animation: none; } }
   `,
 })
@@ -187,6 +199,8 @@ export class SequenceDiagram {
   readonly current = input(0);
   /** how long a call is shown while playing, in ms (the arrow is drawn in a part of it) */
   readonly duration = input(1300);
+  /** how much of a method the rows show: its name, its signature, or the signature with its data structures */
+  readonly detail = input<MethodDetail>('name');
   /** step number of every segment in the flow (the number in the bubbles, as in the flow diagram and the code) */
   readonly stepOf = input.required<Record<string, number>>();
   /** a row was clicked: the number of its call (0 = the row of an entry point) */
@@ -197,10 +211,10 @@ export class SequenceDiagram {
   private readonly scroll = viewChild.required<ElementRef<HTMLElement>>('scroll');
   protected readonly t = t;
   protected readonly areaColor = areaColor;
-  protected readonly row = SEQUENCE_ROW;
   protected readonly head = SEQUENCE_HEAD;
   protected readonly headBox = SEQUENCE_HEAD_BOX;
   protected readonly bubble = SEQUENCE_BUBBLE;
+  protected readonly detailLine = SEQUENCE_DETAIL;
   /** arrow heads: one per colour of a connection, 0 = neutral */
   protected readonly markers = Array.from({ length: EDGE_COLORS + 1 }, (_, i) => i);
 
@@ -215,6 +229,7 @@ export class SequenceDiagram {
         return seg ? { ...classOf(seg, components.get(id)), area: areaOfSegment(seg, areas) } : { key: id, name: id, area: null };
       },
       (id, call) => this.label(segs.get(id), call),
+      (id) => this.textOf(segs.get(id)).data,
     );
   });
 
@@ -240,9 +255,8 @@ export class SequenceDiagram {
       }
       untracked(() => {
         const el = this.scroll().nativeElement;
-        const top = message.y - SEQUENCE_ROW / 2;
         // the heads cover the top of the view: the rows are seen below them; a row above and below stay in view
-        const seen = scrollToShow(el.scrollTop + SEQUENCE_HEAD, el.clientHeight - SEQUENCE_HEAD, top, top + SEQUENCE_ROW, SEQUENCE_ROW);
+        const seen = scrollToShow(el.scrollTop + SEQUENCE_HEAD, el.clientHeight - SEQUENCE_HEAD, message.top, message.top + message.h, SEQUENCE_ROW);
         el.scrollTop = Math.max(0, seen - SEQUENCE_HEAD);
       });
     });
@@ -279,20 +293,34 @@ export class SequenceDiagram {
     return stepName(this.store.segments().get(segmentId), segmentId);
   }
 
-  /** The label of an arrow: what is called - "update()", for REST with the request. */
+  /** The texts of a step at the level of detail chosen: "update()", its signature, and the lines of its data structures. */
+  private textOf(seg: Segment | undefined): MethodText {
+    const symbol = seg ? seg.symbol ?? seg.path.substring(seg.path.lastIndexOf('/') + 1) : '';
+    const callable = seg?.symbolKind === 'method' || seg?.symbolKind === 'function';
+    return methodText(symbol.substring(symbol.lastIndexOf('.') + 1), callable, seg?.signature, this.detail(), this.store.typesById(), ROOM);
+  }
+
+  /** The label of an arrow: what is called, for REST with the request. */
   private label(seg: Segment | undefined, call: SequenceCall | null): string {
-    if (!seg) {
-      return '';
+    const label = this.textOf(seg).label;
+    return call?.http ? `${label} · ${call.via}` : label;
+  }
+
+  /** The step in the list: "PlayerResource.update", from the signature level on with its parameters and return type. */
+  protected listName(segmentId: string): string {
+    const full = this.fullName(segmentId);
+    const seg = this.store.segments().get(segmentId);
+    if (this.detail() === 'name' || !seg?.signature) {
+      return full;
     }
-    const symbol = seg.symbol ?? seg.path.substring(seg.path.lastIndexOf('/') + 1);
-    const name = symbol.substring(symbol.lastIndexOf('.') + 1) + (seg.symbolKind === 'method' || seg.symbolKind === 'function' ? '()' : '');
-    return call?.http ? `${name} · ${call.via}` : name;
+    const dot = full.lastIndexOf('.');
+    return full.substring(0, dot + 1) + this.textOf(seg).label;
   }
 
   protected rowTitle(m: Message): string {
     const call = m.call;
     if (!call) {
-      return t('Einstiegspunkt: {name}', { name: this.fullName(m.to) });
+      return [t('Einstiegspunkt: {name}', { name: this.fullName(m.to) }), this.signatureOf(m.to)].filter((x) => x).join('\n');
     }
     return [
       t('Aufruf {no} von {total}: {from} ruft {to} auf', { no: call.no, total: this.sequence().calls.length, from: this.fullName(call.from), to: this.fullName(call.to) })
@@ -303,7 +331,13 @@ export class SequenceDiagram {
         : t('Erneuter Aufruf des Einstiegspunkts: Was daraus folgt, steht oben')) : '',
       call.back ? t('Rückruf in einen Schritt, der noch läuft (Rekursion): wird nicht weiter verfolgt') : '',
       call.bridged ? t('Über entfernte Bereiche hinweg') : '',
+      this.signatureOf(call.to),
     ].filter((x) => x).join('\n');
+  }
+
+  /** For the tooltip of a row: the declaration of the step as written and the types it names, in full. */
+  private signatureOf(segmentId: string): string {
+    return methodTooltip(this.store.segments().get(segmentId)?.signature, this.store.typesById());
   }
 
   protected jumpTitle(m: Message): string {

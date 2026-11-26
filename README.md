@@ -75,6 +75,23 @@ mark moves from arrow to arrow.
 
 The sequence is static: it knows the order of the call sites, not conditions, loops or asynchronous calls.
 
+### How much of a method: names, signatures, data
+
+*Methods: Names | Signature | Data* above the diagram sets how much of every method the call graph and the sequence
+show. *Signature* adds parameters and return type, in one notation for all languages
+(`update(id: string, change: PlayerUpdate): Observable<PlayerDetail>`). *Data* adds the data structures below: a line
+per type the method takes or returns, with its fields. On the *Classes* level the node of a class then lists its
+methods one per line – a class diagram of the change:
+
+![Classes with the signatures and data structures of their methods](docs/img/method-detail-classes.png)
+
+In the sequence the signature stands at the arrow and the data below it:
+
+![Sequence diagram with signatures and data structures](docs/img/method-detail-sequence.png)
+
+Signatures and fields are read from the declarations. A type declared in a file the pull request does not change
+shows its name only.
+
 ### Overview diagrams
 
 The overview of a pull request shows the categories with their progress, the commits, the test situation and – for
@@ -245,6 +262,7 @@ cd frontend && npm start              # UI on :4200, /api is proxied to :8080
 | Follow a call | Coloured bubble around the call in the code (`② saveEvent`), a click jumps to the called block; «← called by …» in the block header |
 | Classes or methods | Switches above the diagram (*Classes \| Classes + methods \| Methods*) and the code (*Whole classes \| Classes \| Methods \| Line*) |
 | Call sequence | Switch *Call graph \| Sequence* above the diagram of a flow: list of calls and sequence diagram; a click on a call shows it, the line number jumps to the call site |
+| Detail of the methods | Switch *Methods: Names \| Signature \| Data* above the diagram of a flow (call graph and sequence); stored per browser |
 | Play a flow back | Bar *Sequence* in a flow (play / pause, ⏮ ⏭, speed 0.5× / 1× / 2×); on the overview: *Components* → *Sequence* → choose a data flow |
 | Arrange the diagram | Automatic layout (ELK); drag nodes and whole classes, «Reset layout» undoes it |
 | Split view | Toolbar button (two columns): old code on the left, new on the right; stored per browser |
