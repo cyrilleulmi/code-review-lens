@@ -6,6 +6,9 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+### Behoben
+- **Aufrufstelle bei gleichnamigen Methoden:** Delegiert eine Methode an eine gleichnamige (`update()` ruft `service.update()` auf, eine Überladung), galt ihre eigene Deklarationszeile als Aufrufstelle: Die Markierung des Aufrufs im Code sass auf der Signatur statt auf dem Aufruf, und eine Methode, die eine gleichnamige gar nicht aufruft, wurde trotzdem mit ihr verbunden. Die Deklaration zählt nicht mehr; solche falschen Verbindungen fallen weg, wodurch sich einzelne Flüsse anders zusammensetzen können.
+
 ## [0.10.1] – 2026-11-24
 
 ### Behoben

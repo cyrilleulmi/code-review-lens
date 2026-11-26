@@ -114,7 +114,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 28;
+    public static final int VERSION = 29;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -1065,13 +1065,28 @@ public final class Analyzer {
 
     /** 1-based line of the first reference to b in a's search lines; references on changed lines win. */
     private static Integer firstReference(Work a, Work b, List<Integer> lines) {
+        return preferred(a, references(a, b, lines));
+    }
+
+    /** The reference an edge shows: the first one on a changed line of a, else the first one; null without any. */
+    private static Integer preferred(Work a, List<Integer> references) {
+        Set<Integer> changedNew = a.changed.stream().map(DiffLine::newLine).filter(n -> n != null).collect(Collectors.toSet());
+        return references.stream().filter(changedNew::contains).findFirst()
+                .orElse(references.isEmpty() ? null : references.get(0));
+    }
+
+    /**
+     * 1-based lines of all references to b in a's search lines, ascending (a line counts once). A caller with the
+     * name of the callee (update() delegating to service.update(), an overload) names it in its own declaration:
+     * that first match is not a reference, unless the name stands on the line a second time.
+     */
+    private static List<Integer> references(Work a, Work b, List<Integer> lines) {
         String name = b.symbol.name();
         boolean generic = GENERIC.contains(name) || name.length() < 5;
-        Pattern p = generic
-                ? Pattern.compile("(?<![\\w$])" + Pattern.quote(name) + "\\s*(?:<[^>]*>)?\\(")
+        Pattern p = generic ? callPattern(name)
                 : Pattern.compile("(?<![\\w$])<?" + Pattern.quote(name) + "(?![\\w$])(?!\\s*:(?!:))");
-        Set<Integer> changedNew = a.changed.stream().map(DiffLine::newLine).filter(n -> n != null).collect(Collectors.toSet());
-        Integer first = null;
+        boolean declaration = a.symbol != null && a.symbol.isCallable() && a.symbol.name().equals(name);
+        Set<Integer> found = new TreeSet<>();
         for (int idx : lines) {
             if (idx < 0 || idx >= a.ctx.text.code.size()) {
                 continue;
@@ -1081,16 +1096,23 @@ public final class Analyzer {
                 continue;
             }
             Matcher m = p.matcher(a.ctx.text.code.get(idx));
-            if (m.find()) {
-                if (changedNew.contains(ln)) {
-                    return ln;
-                }
-                if (first == null) {
-                    first = ln;
+            if (!m.find()) {
+                continue;
+            }
+            if (declaration) {
+                declaration = false;
+                if (!m.find()) {
+                    continue;
                 }
             }
+            found.add(ln);
         }
-        return first;
+        return List.copyOf(found);
+    }
+
+    /** The name followed by an argument list: `name(`, `name<T>(`. */
+    private static Pattern callPattern(String name) {
+        return Pattern.compile("(?<![\\w$])" + Pattern.quote(name) + "\\s*(?:<[^>]*>)?\\(");
     }
 
     // ------------------------------------------------------------------ flows

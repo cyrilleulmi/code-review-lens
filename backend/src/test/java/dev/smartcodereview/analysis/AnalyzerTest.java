@@ -103,6 +103,46 @@ class AnalyzerTest {
     }
 
     @Test
+    void aCallerNamedLikeItsCalleeDoesNotCallItInItsOwnDeclaration() throws Exception {
+        String resource = """
+                import { PlayerService } from './player.service';
+
+                export class PlayerResource {
+                  update(player: Player): Player {
+                    this.audit(player);
+                    return this.players.update(player);
+                  }
+
+                  audit(player: Player): void {
+                    this.log.push(player.id);
+                  }
+                }
+                """;
+        String service = """
+                export class PlayerService {
+                  update(player: Player): Player {
+                    player.version++;
+                    return player;
+                  }
+                }
+                """;
+        Snapshot snapshot = new Snapshot(1, "now", info(), List.of(
+                added("src/app/player.resource.ts", resource),
+                added("src/app/player.service.ts", service)));
+
+        Analysis analysis = new Analyzer(defaultRules()).analyze(snapshot, Map.of(
+                "src/app/player.resource.ts", resource,
+                "src/app/player.service.ts", service));
+
+        Segment caller = segment(analysis, "PlayerResource.update");
+        Segment callee = segment(analysis, "PlayerService.update");
+        Model.FlowEdge delegation = analysis.flows().getFirst().edges().stream()
+                .filter(e -> e.from().equals(caller.id()) && e.to().equals(callee.id())).findFirst().orElseThrow();
+        // line 6 calls the service, not line 4 where the resource declares its own update()
+        assertEquals(6, delegation.line());
+    }
+
+    @Test
     void everyCategoryDescribesItselfAndFlowsKeepTheirOwnView() throws Exception {
         String service = """
                 export class EventService {

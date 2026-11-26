@@ -281,7 +281,7 @@ Die Reihenfolge ist die von `Analyzer.analyze`; die Nummern entsprechen den Absc
 | `settings.json` | Zustand (global) | UI | beim Umschalten einer Kategorie | ja (alle Kategorien wieder an) |
 | `rules.json` | Konfiguration (optional) | Benutzer:in | — | ja (dann gelten die Standardregeln) |
 
-**Versionen:** `Model.SCHEMA_VERSION` = 1 (Dateiformat), `Analyzer.VERSION` = 14 (Analyse-Ergebnis), `Attribution.VERSION` = 1 (Commit-Zuordnung). Eine Änderung am Ergebnis erhöht die jeweilige Version; Caches werden dann automatisch neu berechnet. Das Dateiformat wird nur ergänzt; ein umbenanntes oder entferntes Feld wäre ein Major-Release.
+**Versionen:** `Model.SCHEMA_VERSION` = 1 (Dateiformat), `Analyzer.VERSION` = 29 (Analyse-Ergebnis), `Attribution.VERSION` = 1 (Commit-Zuordnung). Eine Änderung am Ergebnis erhöht die jeweilige Version; Caches werden dann automatisch neu berechnet. Das Dateiformat wird nur ergänzt; ein umbenanntes oder entferntes Feld wäre ein Major-Release.
 
 **Zeilenschlüssel:** `N<n>` = Zeile n der neuen Datei, `O<n>` = Zeile n der alten Datei. Sie sind nur innerhalb eines Snapshots stabil. Neue Commits verschieben sie; «Neu laden» überträgt die Markierungen darum auf die neuen Schlüssel (`review/MarkCarry`, Annahme A4).
 
