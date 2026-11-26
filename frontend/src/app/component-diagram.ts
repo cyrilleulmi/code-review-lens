@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component as NgComponent, DestroyRef, ElementRef, computed, effect, inject, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component as NgComponent, DestroyRef, ElementRef, computed, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
 import { Component } from './api';
 import { FRAME_PADDING, Layout, Rect, curvePath, frameAround, layoutFlow, packRows, routePath } from './flow-layout';
-import { FlowSequence, flowSequence, sequenceKey } from './flow-sequence';
+import { stepName } from './flow-classes';
+import { FlowSequence, comesLater, flowSequence, playbackOf, sequenceKey } from './flow-sequence';
 import { Icon } from './icon';
 import { serverText, t } from './i18n';
 import { areaColor } from './look';
@@ -132,7 +133,7 @@ const LOOSE_GAP = 22;
             </defs>
             @for (l of lines(); track l.key) {
               <path [attr.d]="l.d" class="edge" [class.http]="l.http" [class.hot]="hovered() === l.from || hovered() === l.to" [style.stroke]="l.color"
-                    [class.seq-off]="!!flowId() && !flowEdges().has(l.key)" [class.seq-later]="!!pb && !pb.played.has(l.key)"
+                    [class.seq-off]="!!flowId() && !flowPlayback().playedAt.has(l.key)" [class.seq-later]="edgeLater(l.key)"
                     [class.dim]="!!hovered() && hovered() !== l.from && hovered() !== l.to" [style.stroke-width]="l.width" marker-end="url(#cd-arrow)">
                 <title>{{ l.title }}</title>
               </path>
@@ -144,14 +145,14 @@ const LOOSE_GAP = 22;
           </svg>
           <!-- playback: a dot runs along the connection of the current call, from the caller to the component called -->
           @for (r of playbackRuns(); track r.no) {
-            <span class="seq-dot" aria-hidden="true" [style.offset-path]="r.motion" [style.background]="r.color"></span>
+            <span class="seq-dot" aria-hidden="true" [style.offset-path]="r.motion" [style.color]="r.color"></span>
           }
           @for (b of boxes(); track b.c.id) {
             @let p = progress(b.c);
             <div class="node" role="button" tabindex="0" [style.left.px]="b.x" [style.top.px]="b.y" [style.width.px]="w" [style.height.px]="h"
                  [style.--area]="areaColor(b.c.area)"
                  [class.done]="p.total > 0 && p.ok === p.total" [class.root]="focus() === b.c.id" [class.dim]="!!hovered() && !related(b.c.id)"
-                 [class.seq-off]="!!flowId() && !flowComponents().has(b.c.id)" [class.seq-later]="!!pb && !pb.reached.has(b.c.id)"
+                 [class.seq-off]="!!flowId() && !flowPlayback().reachedAt.has(b.c.id)" [class.seq-later]="boxLater(b.c.id)"
                  [class.seq-from]="pb?.from === b.c.id" [class.seq-to]="pb?.to === b.c.id" [class.seq-even]="!!pb && pb.no % 2 === 0"
                  [title]="b.c.paths.join('\\n')" (mouseenter)="hovered.set(b.c.id)" (mouseleave)="hovered.set(null)"
                  (click)="open(b)" (keydown.enter)="open(b)">
@@ -222,9 +223,6 @@ const LOOSE_GAP = 22;
     .pick select:focus-visible { outline: 1px solid var(--accent); }
     .seq-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 5px 10px; background: var(--bg-panel); border-bottom: 1px solid var(--border); font-size: 12px; }
     .seq-bar app-sequence-controls { flex: 1; }
-    .seq-bar .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 500 11.5px var(--font-code); }
-    .seq-bar b.who { flex: none; color: var(--fg); font-weight: 700; }
-    .seq-bar .via { flex: none; color: var(--cat-violet); font-size: 11px; }
     /* a flow is chosen: the rest of the diagram steps back; playing: what the flow has not reached yet is faded */
     .sequence .node { transition: opacity 0.25s, border-color 0.15s, box-shadow 0.15s; }
     .sequence .seq-off { opacity: 0.22; }
@@ -232,19 +230,9 @@ const LOOSE_GAP = 22;
     .playing .seq-off { opacity: 0.15; }
     .node.seq-from { border-color: var(--accent); border-left-color: var(--area); }
     .node.seq-to { border-color: var(--accent); border-left-color: var(--area); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
-      animation: cd-arrive-a var(--seq-dur) ease-out; }
+      animation: seq-arrive-a var(--seq-dur) ease-out; }
     /* two names for the same animation: it starts again when the next call arrives at the same component */
-    .node.seq-to.seq-even { animation-name: cd-arrive-b; }
-    .seq-run { fill: none; stroke-width: 4.5; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; pointer-events: none;
-      animation: cd-draw calc(var(--seq-dur) * 0.6) ease-in-out; }
-    .seq-dot { position: absolute; left: 0; top: 0; width: 12px; height: 12px; border-radius: 50%; pointer-events: none;
-      box-shadow: 0 0 0 3px var(--bg-panel-2); offset-rotate: 0deg; offset-distance: 100%; opacity: 0;
-      animation: cd-travel calc(var(--seq-dur) * 0.6) ease-in-out; }
-    @keyframes cd-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-    @keyframes cd-travel { from { offset-distance: 0%; opacity: 1; } 90% { opacity: 1; } to { offset-distance: 100%; opacity: 0; } }
-    @keyframes cd-arrive-a { from { box-shadow: 0 0 0 0 transparent; } 60% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent); } }
-    @keyframes cd-arrive-b { from { box-shadow: 0 0 0 0 transparent; } 60% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent); } }
-    @media (prefers-reduced-motion: reduce) { .seq-run, .seq-dot, .node.seq-to { animation: none; } }
+    .node.seq-to.seq-even { animation-name: seq-arrive-b; }
   `,
 })
 export class ComponentDiagram {
@@ -262,8 +250,17 @@ export class ComponentDiagram {
   private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
   protected readonly flows = computed(() =>
     (this.store.bundle()?.analysis.flows ?? []).map((f) => ({ ...f, title: serverText(f.title) })));
-  /** The data flow chosen for the playback; null = none. */
-  protected readonly flowId = signal<string | null>(null);
+  /**
+   * The data flow chosen for the playback; null = none. The choice holds for one analysis of one pull request: the
+   * ids of the flows are numbered per analysis, the same id means another flow elsewhere (and after analysing anew).
+   */
+  protected readonly flowId = linkedSignal<string, string | null>({
+    source: () => {
+      const bundle = this.store.bundle();
+      return bundle ? `${bundle.pr.provider}/${bundle.pr.owner}/${bundle.pr.repo}/${bundle.pr.number}@${bundle.analysis.generatedAt}` : '';
+    },
+    computation: () => null,
+  });
   private readonly flow = computed(() => this.flows().find((f) => f.id === this.flowId()) ?? null);
   /** Its calls one after the other (flow-sequence.ts). */
   protected readonly sequence = computed(() => {
@@ -275,31 +272,20 @@ export class ComponentDiagram {
   private componentOf(segmentId: string): string | null {
     return this.store.componentBySegment().get(segmentId)?.id ?? null;
   }
-  /** The components the chosen flow runs through, and its connections between them ("from>to"). */
-  protected readonly flowComponents = computed(() =>
-    new Set((this.flow()?.steps ?? []).map((s) => this.componentOf(s.segmentId)).filter((id): id is string => id != null)));
-  protected readonly flowEdges = computed(() =>
-    new Set((this.flow()?.edges ?? []).map((e) => this.componentOf(e.from) + '>' + this.componentOf(e.to))));
+  /** The chosen flow as the diagram plays it back: the components it runs through, its connections, and when it reaches them. */
+  protected readonly flowPlayback = computed(() => playbackOf(this.sequence(), (id) => this.componentOf(id)));
   /**
-   * The playback: the components the current call runs between, the connection it runs along (null: a call within
-   * a component, or a connection that is not shown) and what was reached so far.
+   * The current call: the components it runs between and the connection it runs along (line undefined: a call
+   * within a component, or a connection that is not shown).
    */
   protected readonly playback = computed(() => {
     const call = this.currentCall();
-    if (!call) {
+    const ends = call ? this.flowPlayback().ends[call.no - 1] : undefined;
+    if (!call || !ends) {
       return null;
     }
-    const { entries, calls } = this.sequence();
-    const from = this.componentOf(call.from);
-    const to = this.componentOf(call.to);
-    const reached = new Set<string | null>(entries.filter((e) => e.after < call.no).map((e) => this.componentOf(e.id)));
-    const played = new Set<string>();
-    for (const c of calls.slice(0, call.no)) {
-      reached.add(this.componentOf(c.to));
-      played.add(this.componentOf(c.from) + '>' + this.componentOf(c.to));
-    }
-    const line = from !== to ? this.lines().find((l) => l.from === from && l.to === to) : undefined;
-    return { no: call.no, from, to, line, reached, played };
+    const { from, to } = ends;
+    return { no: call.no, from, to, line: from !== to ? this.lines().find((l) => l.from === from && l.to === to) : undefined };
   });
   /** The connection the current call runs along, as a list of none or one: a new call draws a new line (and dot). */
   protected readonly playbackRuns = computed(() => {
@@ -390,17 +376,12 @@ export class ComponentDiagram {
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.player.destroy());
-    // Another flow (or another pull request): the playback starts over; a flow that is gone is no longer chosen.
+    // Another flow (or another pull request, where none is chosen): the playback starts over.
     // The same calls computed again (the review was loaded anew) leave it where it is.
     const playing = computed(() => this.flowId() + '|' + sequenceKey(this.sequence()));
     effect(() => {
       playing();
-      untracked(() => {
-        this.player.reset();
-        if (this.flowId() && !this.flow()) {
-          this.flowId.set(null);
-        }
-      });
+      untracked(() => this.player.reset());
     });
     // Playing: a new call brings the component it goes to into view (scrolls the diagram, not the page).
     effect(() => {
@@ -556,11 +537,16 @@ export class ComponentDiagram {
 
   /** "PlayerResource.update": a step with its class, for the line that says which call is played. */
   protected stepName(segmentId: string): string {
-    const seg = this.store.segments().get(segmentId);
-    if (!seg) {
-      return segmentId;
-    }
-    const parts = (seg.symbol ?? seg.path.substring(seg.path.lastIndexOf('/') + 1)).split('.');
-    return parts.length > 1 && parts[parts.length - 1] ? parts.slice(-2).join('.') : parts.join('.');
+    return stepName(this.store.segments().get(segmentId), segmentId);
+  }
+
+  /** Playing: the sequence comes to this component only later. */
+  protected boxLater(id: string): boolean {
+    return comesLater(this.flowPlayback().reachedAt, id, this.player.index());
+  }
+
+  /** Playing: no call has run along this connection ("from>to") yet. */
+  protected edgeLater(key: string): boolean {
+    return comesLater(this.flowPlayback().playedAt, key, this.player.index());
   }
 }

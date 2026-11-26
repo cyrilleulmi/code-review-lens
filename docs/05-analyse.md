@@ -95,7 +95,7 @@ Ein Flow ist ein Graph: jeder Schritt einmal, eine Kante pro Aufrufer und Ziel. 
 2. Beim ersten Aufruf eines Schritts wird dieser **aufgeklappt**: Seine eigenen Aufrufe folgen sofort, eine Ebene tiefer, bevor es beim Aufrufer mit der nächsten Zeile weitergeht.
 3. Jeder weitere Aufruf desselben Schritts (zweite Zeile, anderer Aufrufer) steht als eigener Aufruf da, aber ohne Folgeaufrufe: `repeatOf` nennt den Aufruf, bei dem sie stehen («erneut»). So hat die Abfolge höchstens einen Eintrag pro Aufrufzeile.
 4. Ein Aufruf in einen Schritt, der gerade läuft (Rekursion, Zyklus), ist ein **Rückruf** und wird nicht weiter verfolgt.
-5. Aus dem Flow entfernte Bereiche (FR-UI-18) werden überbrückt: Was ein entfernter Schritt aufruft, zählt als Aufruf des nächsten gezeigten Schritts darüber («überbrückt», ohne Zeile). Ist der Einstiegspunkt entfernt, beginnt die Abfolge bei den ersten gezeigten Schritten darunter.
+5. Aus dem Flow entfernte Bereiche (FR-UI-18) werden überbrückt: Was ein entfernter Schritt aufruft, zählt als Aufruf des nächsten gezeigten Schritts darüber («überbrückt», ohne Zeile) – jedes Mal, wenn der entfernte Schritt erreicht wird; beim zweiten Mal stehen die Schritte dahinter als «erneut» da. Ist der Einstiegspunkt entfernt, beginnt die Abfolge bei den ersten gezeigten Schritten darunter.
 6. «Nur Aufrufe» lässt auf dieselbe Weise weg, was verwendet und nicht aufgerufen wird: Schritte der Symbolarten `const`, `type`, `interface` und `enum`.
 
 Jeder Aufruf kennt Aufrufer, Ziel, Zeile, Tiefe, den Aufruf, in dem er steht (`parent`), und den letzten Aufruf, der während des Ziels läuft (`end`). Daraus entstehen die Liste, das Sequenzdiagramm (Lebenslinie pro Klasse, Balken von `no` bis `end`) und das Abspielen in den Diagrammen.

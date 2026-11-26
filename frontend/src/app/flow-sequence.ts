@@ -30,7 +30,7 @@ export interface SequenceCall {
   /** what the calling line names: the function, or for REST the request ("PUT /api/players/{}") */
   via: string;
   http: boolean;
-  /** index of the edge of the flow (its colour); -1 never occurs for a call listed */
+  /** index of the edge of the flow the call belongs to (its colour) */
   edge: number;
   /** nesting: 0 = called by an entry point */
   depth: number;
@@ -62,6 +62,9 @@ export interface FlowSequence {
   calls: SequenceCall[];
 }
 
+/** Beyond this many calls a hidden step is passed only once more: flows with many paths through removed areas stay bounded. */
+const MAX_CALLS = 2000;
+
 interface Site {
   edge: number;
   to: string;
@@ -72,8 +75,8 @@ interface Site {
 
 /**
  * The calls of a flow in the order of the code. steps: in flow order with their caller (null = an entry point).
- * hidden: steps left out (removed areas) - what they call counts as called by the nearest step shown above them, and
- * a step shown below a hidden entry point starts the sequence itself.
+ * hidden: steps left out (removed areas) - what they call counts as called by the nearest step shown above them,
+ * every time one of them is reached, and a step shown below a hidden entry point starts the sequence itself.
  *
  * Every step is unfolded once, at its first call; later calls of it are listed without what follows from them
  * (`repeatOf`), so the sequence has at most one entry per calling line and never runs in circles.
@@ -103,7 +106,7 @@ export function flowSequence(
   const calls: SequenceCall[] = [];
   /** steps unfolded so far -> the call that unfolded them (0 = an entry point) */
   const unfolded = new Map<string, number>();
-  /** hidden steps walked so far: their calls are passed on once */
+  /** hidden steps walked so far (an entry point among them is not walked again on its own) */
   const passed = new Set<string>();
 
   const start = (id: string, running: readonly string[]): void => {
@@ -116,7 +119,10 @@ export function flowSequence(
   const walk = (id: string, actor: string | null, depth: number, parent: number | null, running: readonly string[], bridged: boolean): void => {
     for (const site of sites.get(id) ?? []) {
       if (hidden.has(site.to)) {
-        if (!passed.has(site.to)) {
+        // left out: what it calls is called by the actor - also when it was passed before (from another caller, or
+        // on another line); the steps behind it are unfolded by then, so they are listed as repeated. Only a hidden
+        // step that is still running is not entered again, and a sequence that got very long stops passing twice.
+        if (!running.includes(site.to) && (!passed.has(site.to) || calls.length < MAX_CALLS)) {
           passed.add(site.to);
           walk(site.to, actor, depth, parent, [...running, site.to], true);
         }
@@ -188,13 +194,45 @@ export function callStack(calls: readonly SequenceCall[], no: number): SequenceC
   return stack;
 }
 
-/** The entry point a call belongs to: the last one that started before it. */
-export function entryOf(sequence: FlowSequence, no: number): SequenceEntry | null {
-  let found: SequenceEntry | null = null;
-  for (const entry of sequence.entries) {
-    if (entry.after < no) {
-      found = entry;
+/**
+ * A sequence as a diagram plays it back. The diagram draws boxes (steps, classes, components) and connections
+ * between them; `keyOf` says which box a step is in (null: none). For every box and connection the playback knows
+ * the first call that reaches it, so a diagram can tell what the sequence has reached at a call, what comes later,
+ * and what is not part of it at all.
+ */
+export interface Playback {
+  /** per call (index `no - 1`) the boxes it runs between */
+  ends: readonly { from: string | null; to: string | null }[];
+  /** box -> the first call at which it is reached (an entry point: the first call after it started) */
+  reachedAt: ReadonlyMap<string, number>;
+  /** connection "from>to" -> the first call that runs along it */
+  playedAt: ReadonlyMap<string, number>;
+}
+
+export function playbackOf(sequence: FlowSequence, keyOf: (segmentId: string) => string | null): Playback {
+  const reachedAt = new Map<string, number>();
+  const playedAt = new Map<string, number>();
+  const first = (map: Map<string, number>, key: string | null, no: number) => {
+    if (key != null && !map.has(key)) {
+      map.set(key, no);
     }
-  }
-  return found;
+  };
+  let entry = 0;
+  const ends = sequence.calls.map((call) => {
+    // the entry points that have started by this call
+    for (; entry < sequence.entries.length && sequence.entries[entry].after < call.no; entry++) {
+      first(reachedAt, keyOf(sequence.entries[entry].id), call.no);
+    }
+    const from = keyOf(call.from);
+    const to = keyOf(call.to);
+    first(reachedAt, to, call.no);
+    first(playedAt, from != null && to != null ? from + '>' + to : null, call.no);
+    return { from, to };
+  });
+  return { ends, reachedAt, playedAt };
+}
+
+/** Playing at call `no` (0 = not playing): the sequence comes to this box or connection only later. */
+export function comesLater(at: ReadonlyMap<string, number>, key: string, no: number): boolean {
+  return no > 0 && (at.get(key) ?? 0) > no;
 }

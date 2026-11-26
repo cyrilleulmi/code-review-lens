@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, input, output, untracked, viewChild } from '@angular/core';
 import { Segment } from './api';
-import { classOf } from './flow-classes';
+import { classOf, stepName } from './flow-classes';
 import { FlowSequence, SequenceCall, callStack } from './flow-sequence';
 import { Icon } from './icon';
 import { t } from './i18n';
@@ -27,7 +27,7 @@ export interface SequenceTarget {
   template: `
     @let l = layout();
     @let now = current();
-    <div class="seq" #scroll [class.playing]="now > 0" [style.--seq-dur]="duration() + 'ms'">
+    <div class="seq" #scroll [style.--seq-dur]="duration() + 'ms'">
       <div class="list" [style.min-height.px]="l.height">
         <div class="list-head" [style.height.px]="head">
           <app-icon name="sequence" [size]="14" />
@@ -38,7 +38,7 @@ export interface SequenceTarget {
           @let no = m.call?.no ?? 0;
           <div class="row" role="button" tabindex="0" [style.height.px]="row" [class.entry]="!m.call"
                [class.current]="!!m.call && no === now" [class.later]="now > 0 && no > now" [class.running]="running().has(no) && no !== now"
-               [title]="rowTitle(m)" (click)="pick.emit(no)" (keydown.enter)="pick.emit(no)">
+               [title]="rowTitle(m)" (click)="pick.emit(no)" (keydown.enter)="rowKey($event, no)" (keydown.space)="rowKey($event, no)">
             <span class="idx">{{ m.call ? no : '' }}</span>
             <span class="indent" [style.width.px]="indent(m)"></span>
             <span class="no" [style.background]="color(m.call)">{{ stepOf()[m.to] ?? '' }}</span>
@@ -177,7 +177,6 @@ export interface SequenceTarget {
     .bubble-no { fill: var(--on-fill); font: 700 10px var(--font-ui); }
     .label { fill: var(--fg); font: 500 11px var(--font-code); paint-order: stroke; stroke: var(--bg-panel-2); stroke-width: 4px; stroke-linejoin: round; }
     .msg.current .label { font-weight: 700; }
-    @keyframes seq-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
     @media (prefers-reduced-motion: reduce) { .run { animation: none; } }
   `,
 })
@@ -249,6 +248,14 @@ export class SequenceDiagram {
     });
   }
 
+  /** Enter or Space on a row shows its call - on the row itself, not on the button inside it (that one jumps to the code). */
+  protected rowKey(event: Event, no: number): void {
+    if (event.target === event.currentTarget) {
+      event.preventDefault();
+      this.pick.emit(no);
+    }
+  }
+
   /** Colour of a call: that of its connection in the flow (1..8); 0 = neutral, for entry points and calls around steps left out. */
   protected colorIndex(call: SequenceCall | null): number {
     return call && !call.bridged ? edgeColorIndex(call.edge) : 0;
@@ -269,13 +276,7 @@ export class SequenceDiagram {
 
   /** "PlayerResource.update": the step with its class. */
   protected fullName(segmentId: string): string {
-    const seg = this.store.segments().get(segmentId);
-    if (!seg) {
-      return segmentId;
-    }
-    const name = seg.symbol ?? seg.path.substring(seg.path.lastIndexOf('/') + 1);
-    const parts = name.split('.');
-    return parts.length > 1 && parts[parts.length - 1] ? parts.slice(-2).join('.') : name;
+    return stepName(this.store.segments().get(segmentId), segmentId);
   }
 
   /** The label of an arrow: what is called - "update()", for REST with the request. */

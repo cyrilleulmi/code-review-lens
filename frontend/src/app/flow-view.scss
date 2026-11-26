@@ -957,44 +957,6 @@
     flex: 1;
   }
 
-  .who {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-family: var(--font-code);
-    font-size: 11.5px;
-    white-space: nowrap;
-  }
-
-  /* what is called stays readable, the caller gives way */
-  b.who {
-    flex: none;
-    color: var(--fg);
-  }
-
-  .no,
-  .via,
-  .ftool {
-    flex: none;
-  }
-
-  .no {
-    display: inline-grid;
-    place-items: center;
-    min-width: 18px;
-    height: 16px;
-    border-radius: 8px;
-    color: var(--on-fill);
-    font-size: 10px;
-    font-weight: 700;
-  }
-
-  .via {
-    color: var(--cat-violet);
-    font-size: 11px;
-    white-space: nowrap;
-  }
-
   .hint {
     display: inline-flex;
     align-items: center;
@@ -1033,17 +995,6 @@
   }
 }
 
-/* the connection of the current call, drawn from the caller to the step called */
-.seq-run {
-  fill: none;
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 0;
-  pointer-events: none;
-  animation: seq-draw calc(var(--seq-dur) * 0.6) ease-in-out;
-}
-
 /* the layer of the dot lies over the diagram at the origin of its boxes and lines */
 .seq-layer {
   position: absolute;
@@ -1052,72 +1003,4 @@
   width: 0;
   height: 0;
   pointer-events: none;
-}
-
-.seq-dot {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  box-shadow: 0 0 0 3px var(--bg-panel-2), 0 0 10px 2px currentColor;
-  offset-rotate: 0deg;
-  offset-distance: 100%;
-  opacity: 0;
-  animation: seq-travel calc(var(--seq-dur) * 0.6) ease-in-out;
-}
-
-@keyframes seq-draw {
-  from {
-    stroke-dashoffset: 1;
-  }
-
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes seq-travel {
-  from {
-    offset-distance: 0%;
-    opacity: 1;
-  }
-
-  90% {
-    opacity: 1;
-  }
-
-  to {
-    offset-distance: 100%;
-    opacity: 0;
-  }
-}
-
-@keyframes seq-arrive-a {
-  from {
-    box-shadow: 0 0 0 0 transparent;
-  }
-
-  60% {
-    box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 45%, transparent);
-  }
-}
-
-@keyframes seq-arrive-b {
-  from {
-    box-shadow: 0 0 0 0 transparent;
-  }
-
-  60% {
-    box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 45%, transparent);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .seq-run,
-  .seq-dot,
-  .diagram.playing .node.seq-to {
-    animation: none;
-  }
 }

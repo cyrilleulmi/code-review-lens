@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SequenceEdge, callStack, entryOf, flowSequence, isUsedNotCalled, sequenceKey } from './flow-sequence';
+import { SequenceEdge, callStack, comesLater, flowSequence, isUsedNotCalled, playbackOf, sequenceKey } from './flow-sequence';
 
 /** Steps as [id, caller]; edges as [from, to, line(s)]. */
 const steps = (...list: [string, string | null][]) => list.map(([segmentId, parentSegmentId]) => ({ segmentId, parentSegmentId }));
@@ -94,7 +94,29 @@ describe('flowSequence', () => {
 
     expect(seq.entries).toEqual([{ id: 'api', after: 0 }, { id: 'other', after: 1 }]);
     expect(brief(seq.calls)).toEqual(['1 api>resource@9']);
-    expect(entryOf(seq, 1)?.id).toBe('api');
+  });
+
+  it('passes the calls of a step left out on to every caller that reaches it', () => {
+    const flow = steps(['a', null], ['b', 'a'], ['h', 'b'], ['repo', 'h'], ['c', 'a']);
+    const edges = [call('a', 'b', 1), call('b', 'h', 5), call('a', 'c', 2), call('c', 'h', 7), call('h', 'repo', 9)];
+
+    // shown, h is called by b and again by c
+    expect(brief(flowSequence(flow, edges).calls)).toEqual(['1 a>b@1', '2 b>h@5', '3 h>repo@9', '4 a>c@2', '5 c>h@7']);
+
+    const seq = flowSequence(flow, edges, new Set(['h']));
+    // left out, both reach what is behind it: c calls repo too, as a repeated call
+    expect(brief(seq.calls)).toEqual(['1 a>b@1', '2 b>repo@-', '3 a>c@2', '4 c>repo@-']);
+    expect(seq.calls.map((c) => [c.bridged, c.repeatOf])).toEqual([[false, null], [true, null], [false, null], [true, 2]]);
+  });
+
+  it('ends in a cycle of steps left out', () => {
+    const seq = flowSequence(
+      steps(['a', null], ['h1', 'a'], ['h2', 'h1'], ['b', 'h2']),
+      [call('a', 'h1', 1), call('h1', 'h2', 2), call('h2', 'h1', 3), call('h2', 'b', 4)],
+      new Set(['h1', 'h2']),
+    );
+
+    expect(brief(seq.calls)).toEqual(['1 a>b@-']);
   });
 
   it('is empty for a flow without calls between the steps shown', () => {
@@ -143,5 +165,41 @@ describe('callStack', () => {
     expect(callStack(calls, 3).map((c) => c.no)).toEqual([3]);
     expect(callStack(calls, 0)).toEqual([]);
     expect(callStack(calls, 9)).toEqual([]);
+  });
+});
+
+describe('playbackOf', () => {
+  /** "View.save" is in the box View */
+  const box = (id: string) => (id.startsWith('?') ? null : id.split('.')[0]);
+  const seq = flowSequence(
+    steps(['View.save', null], ['Api.set', 'View.save'], ['Api.url', 'Api.set'], ['Store.put', 'View.save'], ['?.x', 'Store.put']),
+    [call('View.save', 'Api.set', 3), call('Api.set', 'Api.url', 7), call('View.save', 'Store.put', 4), call('Store.put', '?.x', 9)],
+  );
+  const playback = playbackOf(seq, box);
+
+  it('says between which boxes every call runs', () => {
+    expect(playback.ends).toEqual([
+      { from: 'View', to: 'Api' }, { from: 'Api', to: 'Api' }, { from: 'View', to: 'Store' }, { from: 'Store', to: null },
+    ]);
+  });
+
+  it('knows the first call that reaches a box and that runs along a connection', () => {
+    expect([...playback.reachedAt]).toEqual([['View', 1], ['Api', 1], ['Store', 3]]);
+    expect([...playback.playedAt]).toEqual([['View>Api', 1], ['Api>Api', 2], ['View>Store', 3]]);
+  });
+
+  it('tells what comes later from what is reached, and leaves alone what is not part of the sequence', () => {
+    expect(comesLater(playback.reachedAt, 'Store', 2)).toBe(true);
+    expect(comesLater(playback.reachedAt, 'Store', 3)).toBe(false);
+    expect(comesLater(playback.reachedAt, 'View', 1)).toBe(false);
+    // not playing, and a box the sequence never reaches (a constant with "calls only")
+    expect(comesLater(playback.reachedAt, 'Store', 0)).toBe(false);
+    expect(comesLater(playback.reachedAt, 'Constants', 2)).toBe(false);
+    expect(comesLater(playback.playedAt, 'View>Store', 1)).toBe(true);
+  });
+
+  it('reaches a second entry point when its calls begin', () => {
+    const two = flowSequence(steps(['A.one', null], ['B.x', 'A.one'], ['C.two', null], ['B.y', 'C.two']), [call('A.one', 'B.x', 1), call('C.two', 'B.y', 1)]);
+    expect([...playbackOf(two, box).reachedAt]).toEqual([['A', 1], ['B', 1], ['C', 2]]);
   });
 });

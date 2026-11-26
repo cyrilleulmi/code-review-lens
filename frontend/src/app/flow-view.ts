@@ -17,7 +17,7 @@ import { EdgeRunStatus, Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from 
 import { NgTemplateOutlet } from '@angular/common';
 import { CodeBlock, flashLine } from './code-block';
 import { WholeBlock, startOf, wholeBlock, wholeId } from './whole-class';
-import { FlowCodeLevel, FlowDiagramLevel, InlineStep, classLinks, codeLevelFor, inlineTree, classOf, classRuns, groupByClass, inFileOrder, intersect, weakest } from './flow-classes';
+import { FlowCodeLevel, FlowDiagramLevel, InlineStep, classLinks, codeLevelFor, inlineTree, classOf, classRuns, groupByClass, inFileOrder, intersect, shortName, stepName, weakest } from './flow-classes';
 import { outsideBranch, sameSet, withoutAreas } from './flow-focus';
 import { FRAME_PADDING, Layout, Point, curvePath, frameAround, layoutFlow, routeMiddle, routePath } from './flow-layout';
 import { Icon, SymbolBadge } from './icon';
@@ -25,7 +25,7 @@ import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorI
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
 import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
 import { FlowDiagramKind, Progress, ReviewStore } from './review.store';
-import { flowSequence, isUsedNotCalled, sequenceKey } from './flow-sequence';
+import { comesLater, flowSequence, isUsedNotCalled, playbackOf, sequenceKey } from './flow-sequence';
 import { SequenceControls } from './sequence-controls';
 import { SequenceDiagram, SequenceTarget } from './sequence-diagram';
 import { SequencePlayer, scrollToShow } from './sequence-player';
@@ -305,14 +305,6 @@ export class FlowView {
   protected readonly callsOnly = computed(() => this.page().callsOnly);
   /** Constants and types among the steps shown: what "only calls" would leave out. */
   protected readonly usedSteps = computed(() => this.nodes().filter((n) => isUsedNotCalled(n.segment.symbolKind)).length);
-  /** Lifelines of the sequence diagram: the classes of the steps in the sequence. */
-  protected readonly sequenceClasses = computed(() => {
-    const { entries, calls } = this.sequence();
-    const segs = this.store.segments();
-    const components = this.store.componentBySegment();
-    const ids = [...entries.map((e) => e.id), ...calls.flatMap((c) => [c.from, c.to])].filter((id) => segs.has(id));
-    return new Set(ids.map((id) => classOf(segs.get(id)!, components.get(id)).key)).size;
-  });
   /** Plays the sequence back, call by call: the sequence diagram and the call graph both show the call it is at. */
   protected readonly player = new SequencePlayer(() => this.sequence().calls.length);
   /** The call the playback is at; null = none (all calls are shown alike). */
@@ -508,31 +500,24 @@ export class FlowView {
     return { edges, width, height };
   });
 
+  /** The sequence as the call graph plays it back: which box a step is in, and when the sequence reaches it. */
+  private readonly graphPlayback = computed(() => {
+    const boxOf = new Map(this.boxes().flatMap((b) => b.ids.map((id) => [id, b.key] as const)));
+    return playbackOf(this.sequence(), (id) => boxOf.get(id) ?? null);
+  });
   /**
-   * The playback in the call graph: the boxes the current call runs between and the connection it runs along (null:
-   * a call within one box, or a connection that is not drawn), and what was reached so far - the rest is faded.
+   * The current call in the call graph: the boxes it runs between and the connection it runs along (path null: a
+   * call within one box, or a connection that is not drawn).
    */
   protected readonly playback = computed(() => {
     const call = this.currentCall();
-    if (!call) {
+    const ends = call ? this.graphPlayback().ends[call.no - 1] : undefined;
+    if (!call || !ends) {
       return null;
     }
-    const boxes = this.boxes();
-    const keyOf = (id: string) => boxes.find((b) => b.ids.includes(id))?.key ?? null;
-    const from = keyOf(call.from);
-    const to = keyOf(call.to);
-    const edges = this.diagram().edges;
-    const edge = from && to && from !== to ? edges.find((e) => e.from === from && e.to === to) : undefined;
-    const reached = new Set<string>();
-    const played = new Set<string>();
-    this.sequence().entries.filter((e) => e.after < call.no).forEach((e) => reached.add(keyOf(e.id) ?? ''));
-    for (const c of this.sequence().calls.slice(0, call.no)) {
-      const a = keyOf(c.from);
-      const b = keyOf(c.to);
-      reached.add(b ?? '');
-      played.add(a + '>' + b);
-    }
-    return { no: call.no, from, to, path: edge?.d ?? null, c: edge?.c ?? edgeColorIndex(call.edge), reached, played };
+    const { from, to } = ends;
+    const edge = from && to && from !== to ? this.diagram().edges.find((e) => e.from === from && e.to === to) : undefined;
+    return { no: call.no, from, to, path: edge?.d ?? null, c: edge?.c ?? edgeColorIndex(call.edge) };
   });
   /** The connection the current call runs along, as a list of none or one: a new call draws a new line (and dot). */
   protected readonly playbackRuns = computed(() => {
@@ -757,14 +742,24 @@ export class FlowView {
 
   /** "PlayerResource.update": a step with its class, for the line that says which call is played. */
   protected stepName(segmentId: string): string {
-    const seg = this.store.segments().get(segmentId);
-    return seg ? shortName(seg.symbol ?? this.fileOf(seg)) : segmentId;
+    return stepName(this.store.segments().get(segmentId), segmentId);
   }
 
-  /** Playing: none of these steps was reached yet (the frame of their class is faded like the boxes). */
-  protected notYetPlayed(ids: readonly string[]): boolean {
-    const reached = this.playback()?.reached;
-    return !!reached && !ids.some((id) => reached.has(id));
+  /** Playing: the sequence comes to this box only later (it is faded). A box that is not part of the sequence stays as it is. */
+  protected boxLater(key: string): boolean {
+    return comesLater(this.graphPlayback().reachedAt, key, this.player.index());
+  }
+
+  /** Playing: no call has run along this connection yet. */
+  protected edgeLater(from: string, to: string): boolean {
+    return comesLater(this.graphPlayback().playedAt, from + '>' + to, this.player.index());
+  }
+
+  /** Playing: the frame of a class is faded while none of its steps is reached and at least one will be. */
+  protected frameLater(ids: readonly string[]): boolean {
+    const at = this.graphPlayback().reachedAt;
+    const no = this.player.index();
+    return ids.some((id) => comesLater(at, id, no)) && !ids.some((id) => at.has(id) && !comesLater(at, id, no));
   }
 
   /** An own level for the code, whatever the diagram shows. */
@@ -1275,9 +1270,4 @@ function edgeId(index: number): string {
 /** The block of a segment is shown side by side when that view is on (it has removed and added lines). */
 function splits(seg: Segment): boolean {
   return diffSides(seg.lines) === 'both';
-}
-
-function shortName(name: string): string {
-  const parts = name.split('.');
-  return parts.length > 1 && parts[parts.length - 1] ? parts.slice(-2).join('.') : name;
 }

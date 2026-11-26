@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InlineStep, classLinks, classOf, classRuns, codeLevelFor, groupByClass, inFileOrder, inlineTree, intersect, weakest } from './flow-classes';
+import { InlineStep, classLinks, classOf, classRuns, codeLevelFor, groupByClass, inFileOrder, inlineTree, intersect, shortName, stepName, weakest } from './flow-classes';
 
 /** "View.save" -> class View; steps given as [id, depth, caller]. */
 const step = (id: string, depth: number, caller: string | null) => ({ step: { segmentId: id }, depth, caller });
@@ -14,6 +14,16 @@ describe('classOf', () => {
   it('falls back to the file without its extension', () => {
     expect(classOf({ path: 'api/PlayerResource.java' }, undefined)).toEqual({ key: 'api/PlayerResource', name: 'PlayerResource' });
     expect(classOf({ path: 'Makefile' }, undefined)).toEqual({ key: 'Makefile', name: 'Makefile' });
+  });
+});
+
+describe('shortName and stepName', () => {
+  it('keep the class and the name of a step', () => {
+    expect(shortName('api.PlayerResource.update')).toBe('PlayerResource.update');
+    expect(shortName('byName')).toBe('byName');
+    expect(stepName({ symbol: 'PlayerResource.update', path: 'api/PlayerResource.java' }, 's1')).toBe('PlayerResource.update');
+    expect(stepName({ symbol: null, path: 'app/player-view.html' }, 's2')).toBe('player-view.html');
+    expect(stepName(undefined, 's3')).toBe('s3');
   });
 });
 

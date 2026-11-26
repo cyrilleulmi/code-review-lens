@@ -714,3 +714,129 @@ kbd {
     }
   }
 }
+
+/* ------------------------------------------------------------- playback of a call sequence (Abfolge) in a diagram */
+
+/* what is played now, in the bar of the playback: caller -> step called, the request of a REST call */
+app-sequence-controls {
+  .who {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font: 500 11.5px var(--font-code);
+    white-space: nowrap;
+  }
+
+  /* what is called stays readable, the caller gives way */
+  b.who {
+    flex: none;
+    color: var(--fg);
+    font-weight: 700;
+  }
+
+  .no {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 16px;
+    border-radius: 8px;
+    color: var(--on-fill);
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .via {
+    flex: none;
+    color: var(--cat-violet);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .ftool {
+    flex: none;
+  }
+}
+
+/* the connection of the current call, drawn again from the caller to what is called (an SVG path with pathLength 1) */
+.seq-run {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  pointer-events: none;
+  animation: seq-draw calc(var(--seq-dur, 1300ms) * 0.6) ease-in-out;
+}
+
+/* the dot that runs along it: placed at the origin of the drawing, moved by its offset-path; its colour is `color` */
+.seq-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px var(--bg-panel-2), 0 0 10px 2px currentColor;
+  pointer-events: none;
+  offset-rotate: 0deg;
+  offset-distance: 100%;
+  opacity: 0;
+  animation: seq-travel calc(var(--seq-dur, 1300ms) * 0.6) ease-in-out;
+}
+
+@keyframes seq-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes seq-travel {
+  from {
+    offset-distance: 0%;
+    opacity: 1;
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  to {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+/* the box a call arrives at lights up; two names for the same animation, so it starts again for the next call there */
+@keyframes seq-arrive-a {
+  from {
+    box-shadow: 0 0 0 0 transparent;
+  }
+
+  60% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+}
+
+@keyframes seq-arrive-b {
+  from {
+    box-shadow: 0 0 0 0 transparent;
+  }
+
+  60% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seq-run,
+  .seq-dot,
+  .seq-to {
+    animation: none !important;
+  }
+}
