@@ -87,6 +87,21 @@ Jede Kategorie ist ein eigenes **Modul** (`CategoryModule`) mit derselben Schnit
 
 **Später von aussen (noch nicht umgesetzt):** Das Modul bekommt nur `SegmentFacts` und liefert nur `Group`s, ohne gemeinsamen Zustand. Damit kann ein Modul von ausserhalb der Anwendung geliefert werden. `CategoryModules.build(rules, additional)` nimmt dafür bereits zusätzliche Module entgegen (Ids dürfen nicht doppelt vergeben werden); Gruppen-Ids beginnen mit `<id>/`. Es gibt noch keine Quelle für solche Module und nichts, das sie lädt.
 
+## 3f. Abfolge der Aufrufe
+
+Ein Flow ist ein Graph: jeder Schritt einmal, eine Kante pro Aufrufer und Ziel. Die **Abfolge** legt ihn in die Reihenfolge, in der die Aufrufe im Code stehen. Sie wird im UI aus `flows[].steps` und `flows[].edges` berechnet (`frontend/src/app/flow-sequence.ts`), steht also nicht in `analysis.json` und gilt auch für ältere Analysen.
+
+1. Start beim Einstiegspunkt (Schritt ohne Aufrufer). Seine Aufrufstellen (`edges[].lines`, ohne das Feld nur `line`) werden nach Zeile sortiert; jede ist ein **Aufruf** mit laufender Nummer.
+2. Beim ersten Aufruf eines Schritts wird dieser **aufgeklappt**: Seine eigenen Aufrufe folgen sofort, eine Ebene tiefer, bevor es beim Aufrufer mit der nächsten Zeile weitergeht.
+3. Jeder weitere Aufruf desselben Schritts (zweite Zeile, anderer Aufrufer) steht als eigener Aufruf da, aber ohne Folgeaufrufe: `repeatOf` nennt den Aufruf, bei dem sie stehen («erneut»). So hat die Abfolge höchstens einen Eintrag pro Aufrufzeile.
+4. Ein Aufruf in einen Schritt, der gerade läuft (Rekursion, Zyklus), ist ein **Rückruf** und wird nicht weiter verfolgt.
+5. Aus dem Flow entfernte Bereiche (FR-UI-18) werden überbrückt: Was ein entfernter Schritt aufruft, zählt als Aufruf des nächsten gezeigten Schritts darüber («überbrückt», ohne Zeile). Ist der Einstiegspunkt entfernt, beginnt die Abfolge bei den ersten gezeigten Schritten darunter.
+6. «Nur Aufrufe» lässt auf dieselbe Weise weg, was verwendet und nicht aufgerufen wird: Schritte der Symbolarten `const`, `type`, `interface` und `enum`.
+
+Jeder Aufruf kennt Aufrufer, Ziel, Zeile, Tiefe, den Aufruf, in dem er steht (`parent`), und den letzten Aufruf, der während des Ziels läuft (`end`). Daraus entstehen die Liste, das Sequenzdiagramm (Lebenslinie pro Klasse, Balken von `no` bis `end`) und das Abspielen in den Diagrammen.
+
+**Grenzen:** Die Abfolge ist statisch. Sie kennt die Reihenfolge der Aufrufzeilen, aber keine Bedingungen, Schleifen, Callbacks oder asynchronen Aufrufe: Ob und wie oft ein Aufruf läuft, sagt sie nicht (`subscribe({ next: … })` steht an der Stelle im Code, nicht an der Stelle der Ausführung). Zwei Aufrufe desselben Ziels auf **einer** Zeile sind ein Aufruf. Die Ungenauigkeiten der Kanten (B2: gleichnamige Funktionen) gelten auch hier.
+
 ## 4. Orte
 
 Jede Gruppe, die ein Segment zeigt, ist ein **Ort** (`segments[].places`): die Gruppe seiner Kategorie (ausser Logik, die in einem Flow liegt – die steht nur dort) und jeder Flow, der es enthält. Beispiel: `PlayerApiService.setJerseyNumber` ist ein banaler REST-Aufruf *und* der letzte Schritt von `saveJerseyNumber → setJerseyNumber` → zwei Orte, zwei Oks.

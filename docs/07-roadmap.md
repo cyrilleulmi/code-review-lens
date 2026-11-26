@@ -48,6 +48,8 @@ Mögliche zukünftige Funktionen, grob nach Nutzen geordnet. Verbesserungen am B
 | F-15 | **Laufzeit-Coverage** | `lcov.info` / JaCoCo-XML aus der CI einlesen und pro Zeile «von Tests ausgeführt» zeigen. (Umgesetzt: HTTP-Aufrufe in Tests wie `given().put("/api/…")` werden statisch über die REST-Pfade mit den Endpunkten verbunden, HTTP-Tests, FR-ANA-26.) | ★★ | M |
 | F-16 | **REST-Verbindung erweitern** | URLs aus Konstanten und Environment-Dateien auflösen, GraphQL-Operationen, WebSockets. | ★★ | M |
 | F-17 | **Weitere Sprachen** | Python (Funktionen, pytest), Rust, PHP, Ruby: Symbole, Testfälle, Aufrufe. | ★★ | M pro Sprache |
+| F-18 | **Abfolge: Bedingungen und Schleifen** | Die Abfolge (FR-UI-22) kennt nur die Reihenfolge der Aufrufzeilen. Aus der Einrückung bzw. den Klammern um die Aufrufstelle erkennen, ob sie in `if`/`else`, `for`/`while`, `try`/`catch` oder einem Callback (`subscribe`, `then`, Lambda) steht, und im Sequenzdiagramm als Rahmen (`alt`, `loop`, `opt`) bzw. als asynchronen Pfeil zeigen. Braucht die Blockstruktur der Funktion (heute nur Zeilen), am besten mit F-14. | ★★ | M |
+| F-19 | **Abfolge exportieren** | Sequenzdiagramm eines Flows als Mermaid (`sequenceDiagram`) oder PlantUML kopieren – für PR-Beschreibung, Kommentar oder Doku (passt zu F-23 und F-07). Die Daten liefert `flow-sequence.ts` bereits. | ★★ | S |
 
 ## Repository-Modus
 

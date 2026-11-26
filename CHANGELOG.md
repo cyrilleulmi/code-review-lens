@@ -6,6 +6,10 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+### Neu
+- **Abfolge der Aufrufe (Liste und Sequenzdiagramm):** Jeder Datenfluss lässt sich über dem Diagramm von «Aufrufgraph» auf «Abfolge» umschalten. Statt «wer ruft wen auf» steht dann da, **in welcher Reihenfolge**: links die Aufrufe als nummerierte Liste, eingerückt nach Aufrufer, rechts – Zeile für Zeile daneben – ein Sequenzdiagramm mit einer Lebenslinie pro Klasse, einem Pfeil pro Aufruf (REST-Aufrufe gestrichelt mit der Anfrage) und einem Balken, solange ein Schritt läuft. Die Abfolge folgt dem Code: ab dem Einstiegspunkt, jeder Aufrufer Zeile für Zeile; wird ein Schritt an zwei Stellen aufgerufen, steht er zweimal da («erneut»), Rekursion ist als «Rückruf» markiert. Ein Klick auf die Zeilennummer springt zur Aufrufstelle im Code; «Nur Aufrufe» nimmt Konstanten und Typen heraus, die nur verwendet werden. Die Abfolge ist statisch aus dem Code gelesen: Bedingungen, Schleifen und asynchrone Aufrufe kennt sie nicht.
+- **Abfolge abspielen – im Flow und im Komponentendiagramm:** Die neue Leiste «Abfolge» in jedem Datenfluss spielt die Aufrufe der Reihe nach ab (Abspielen / Pause, einen Aufruf vor oder zurück, Tempo 0.5× / 1× / 2×). Im Aufrufgraph läuft ein Punkt vom Aufrufer zum aufgerufenen Schritt, die Verbindung wird nachgezeichnet, und was noch nicht erreicht ist, bleibt abgeblendet; im Sequenzdiagramm wandert die Markierung von Pfeil zu Pfeil. Im Komponentendiagramm der Übersicht wählt man unter «Abfolge» einen Datenfluss: Seine Komponenten bleiben stehen, der Rest tritt zurück, und beim Abspielen läuft der Punkt von Komponente zu Komponente.
+
 ### Geändert
 - **Analyse: alle Aufrufstellen (`flows[].edges[].lines`):** Eine Verbindung im Flow kennt neu alle Zeilen, an denen der Aufrufer das Ziel aufruft, nicht nur die eine gezeigte. Das Feld ist neu in `analysis.json` (`Analyzer.VERSION` 30, bestehende Analysen werden beim nächsten Öffnen neu berechnet); `line` bleibt.
 

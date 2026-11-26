@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   afterRenderEffect,
   computed,
@@ -23,7 +24,11 @@ import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
 import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
-import { Progress, ReviewStore } from './review.store';
+import { FlowDiagramKind, Progress, ReviewStore } from './review.store';
+import { flowSequence, isUsedNotCalled, sequenceKey } from './flow-sequence';
+import { SequenceControls } from './sequence-controls';
+import { SequenceDiagram, SequenceTarget } from './sequence-diagram';
+import { SequencePlayer, scrollToShow } from './sequence-player';
 import { acceptLevel } from './accept-boxes';
 import { serverText, t } from './i18n';
 import { diffSides } from './split-diff';
@@ -173,7 +178,7 @@ const EDGE_RUNS: EdgeRunStatus[] = ['none', 'partial', 'separate', 'tested'];
 @Component({
   selector: 'app-flow-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CodeBlock, Icon, NgTemplateOutlet, SymbolBadge],
+  imports: [CodeBlock, Icon, NgTemplateOutlet, SequenceControls, SequenceDiagram, SymbolBadge],
   templateUrl: './flow-view.html',
   styleUrl: './flow-view.scss',
 })
@@ -182,6 +187,7 @@ export class FlowView {
   readonly flow = input.required<Flow>();
 
   private readonly cards = viewChild.required<ElementRef<HTMLElement>>('cards');
+  private readonly graph = viewChild.required<ElementRef<HTMLElement>>('graph');
   protected readonly connectors = signal<Connector[]>([]);
   protected readonly railHeight = signal(0);
   protected readonly railWidth = signal(0);
@@ -215,6 +221,8 @@ export class FlowView {
   protected readonly codeFollows = computed(() => this.page().code == null);
   /** Areas taken out of this flow. */
   private readonly hiddenAreas = computed(() => this.page().hiddenAreas);
+  /** What the diagram shows: the call graph, or the calls one after the other (list and sequence diagram). */
+  protected readonly diagramKind = computed(() => this.page().diagram);
 
   /** Mock-Grenzen: what the tests really execute, per step (segment id) and per edge ("from>to"). */
   /** What the tests run in this flow; nothing while the test enrichments are switched off. */
@@ -279,6 +287,36 @@ export class FlowView {
       bridged: s.skipped.map((area) => (area ? areaLabel(area) : t('ohne Schicht'))),
     }));
   });
+
+  /**
+   * Abfolge: the calls of the flow one after the other, line by line from the entry point (flow-sequence.ts). Steps of
+   * removed areas are left out; what they call counts for the step shown above them. "Only calls" also leaves out
+   * the constants and types of the flow: they are used, not called.
+   */
+  protected readonly sequence = computed(() => {
+    const removed = this.hiddenAreas();
+    const callsOnly = this.callsOnly();
+    const hidden = new Set(this.allSteps()
+      .filter((s) => removed.has(s.area) || (callsOnly && isUsedNotCalled(s.segment.symbolKind)))
+      .map((s) => s.step.segmentId));
+    return flowSequence(this.flow().steps, this.flow().edges, hidden);
+  });
+  /** The sequence shows only calls of functions and methods (no constants and types). */
+  protected readonly callsOnly = computed(() => this.page().callsOnly);
+  /** Constants and types among the steps shown: what "only calls" would leave out. */
+  protected readonly usedSteps = computed(() => this.nodes().filter((n) => isUsedNotCalled(n.segment.symbolKind)).length);
+  /** Lifelines of the sequence diagram: the classes of the steps in the sequence. */
+  protected readonly sequenceClasses = computed(() => {
+    const { entries, calls } = this.sequence();
+    const segs = this.store.segments();
+    const components = this.store.componentBySegment();
+    const ids = [...entries.map((e) => e.id), ...calls.flatMap((c) => [c.from, c.to])].filter((id) => segs.has(id));
+    return new Set(ids.map((id) => classOf(segs.get(id)!, components.get(id)).key)).size;
+  });
+  /** Plays the sequence back, call by call: the sequence diagram and the call graph both show the call it is at. */
+  protected readonly player = new SequencePlayer(() => this.sequence().calls.length);
+  /** The call the playback is at; null = none (all calls are shown alike). */
+  protected readonly currentCall = computed(() => this.sequence().calls[this.player.index() - 1] ?? null);
 
   /** The steps combined by class, in the order the classes are first reached. */
   private readonly classes = computed(() => {
@@ -471,6 +509,38 @@ export class FlowView {
   });
 
   /**
+   * The playback in the call graph: the boxes the current call runs between and the connection it runs along (null:
+   * a call within one box, or a connection that is not drawn), and what was reached so far - the rest is faded.
+   */
+  protected readonly playback = computed(() => {
+    const call = this.currentCall();
+    if (!call) {
+      return null;
+    }
+    const boxes = this.boxes();
+    const keyOf = (id: string) => boxes.find((b) => b.ids.includes(id))?.key ?? null;
+    const from = keyOf(call.from);
+    const to = keyOf(call.to);
+    const edges = this.diagram().edges;
+    const edge = from && to && from !== to ? edges.find((e) => e.from === from && e.to === to) : undefined;
+    const reached = new Set<string>();
+    const played = new Set<string>();
+    this.sequence().entries.filter((e) => e.after < call.no).forEach((e) => reached.add(keyOf(e.id) ?? ''));
+    for (const c of this.sequence().calls.slice(0, call.no)) {
+      const a = keyOf(c.from);
+      const b = keyOf(c.to);
+      reached.add(b ?? '');
+      played.add(a + '>' + b);
+    }
+    return { no: call.no, from, to, path: edge?.d ?? null, c: edge?.c ?? edgeColorIndex(call.edge), reached, played };
+  });
+  /** The connection the current call runs along, as a list of none or one: a new call draws a new line (and dot). */
+  protected readonly playbackRuns = computed(() => {
+    const p = this.playback();
+    return p?.path ? [{ no: p.no, d: p.path, c: p.c, motion: `path('${p.path}')` }] : [];
+  });
+
+  /**
    * The cards of the code. Class level: a class each, with its steps in file order. Method level: the steps in call
    * order, consecutive steps of one class in one card under the name of the class.
    */
@@ -572,6 +642,25 @@ export class FlowView {
   protected readonly hiddenCount = computed(() => this.nodes().length - this.visible().size);
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => this.player.destroy());
+    // Another flow, or other calls (an area removed): the playback starts over. The same calls computed again (the
+    // review was loaded anew) leave it where it is.
+    const playing = computed(() => this.flow().id + '|' + sequenceKey(this.sequence()));
+    effect(() => {
+      playing();
+      untracked(() => this.player.reset());
+    });
+    // Playing in the call graph: a new call brings the box it goes to into view (scrolls the diagram, not the page).
+    effect(() => {
+      const call = this.currentCall();
+      const box = call ? untracked(() => this.boxes().find((b) => b.ids.includes(call.to))) : undefined;
+      if (box && untracked(() => this.diagramKind()) === 'graph') {
+        const el = this.graph().nativeElement;
+        const pad = 16; // padding of the diagram: the boxes start that much further in
+        el.scrollLeft = scrollToShow(el.scrollLeft, el.clientWidth, box.x + pad, box.x + pad + box.w);
+        el.scrollTop = scrollToShow(el.scrollTop, el.clientHeight, box.y + pad, box.y + pad + box.h);
+      }
+    });
     // Let the layout engine place the diagram whenever its boxes or connections change.
     effect(() => {
       const key = this.layoutKey();
@@ -642,6 +731,40 @@ export class FlowView {
   /** Level of the diagram; the code follows unless it has its own level. */
   protected setLevel(level: FlowDiagramLevel): void {
     this.store.setFlowPage(this.flow().id, { level });
+  }
+
+  /** Call graph or sequence. */
+  protected setDiagram(diagram: FlowDiagramKind): void {
+    this.store.setFlowPage(this.flow().id, { diagram });
+  }
+
+  protected toggleCallsOnly(): void {
+    this.store.setFlowPage(this.flow().id, { callsOnly: !this.callsOnly() });
+  }
+
+  /** A call of the sequence was clicked: the playback goes there (and stops). */
+  protected pickCall(no: number): void {
+    this.player.go(no);
+  }
+
+  /** From the sequence to the code: a step of this flow, at a line when one is given (the calling line). */
+  protected openTarget(target: SequenceTarget): void {
+    if (target.line != null) {
+      this.store.focusLine.set({ segmentId: target.segmentId, line: target.line });
+    }
+    this.scrollTo(target.segmentId);
+  }
+
+  /** "PlayerResource.update": a step with its class, for the line that says which call is played. */
+  protected stepName(segmentId: string): string {
+    const seg = this.store.segments().get(segmentId);
+    return seg ? shortName(seg.symbol ?? this.fileOf(seg)) : segmentId;
+  }
+
+  /** Playing: none of these steps was reached yet (the frame of their class is faded like the boxes). */
+  protected notYetPlayed(ids: readonly string[]): boolean {
+    const reached = this.playback()?.reached;
+    return !!reached && !ids.some((id) => reached.has(id));
   }
 
   /** An own level for the code, whatever the diagram shows. */

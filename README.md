@@ -57,15 +57,37 @@ along the call instead of finishing a method first:
 
 ![Code line by line](docs/img/flow-line.png)
 
+### Call sequences
+
+A flow diagram shows who calls whom. *Sequence* (switch above the diagram) shows **in which order**: the calls of the
+flow one after the other, read from the code – from the entry point, every caller line by line, each step unfolded at
+its first call. On the left the calls as a list, on the right, row for row, a sequence diagram: a lifeline per class, an
+arrow per call (REST calls dashed, with the request), a bar while a step runs. A step called from two lines is there
+twice (*again*); the line number jumps to the call site in the code, *Calls only* leaves out constants and types.
+
+![The calls of a flow as a list and as a sequence diagram](docs/img/sequence.png)
+
+The *Sequence* bar of every flow plays the calls back (play / pause, one call back or forward, speed): in the call graph
+a dot runs from the caller to the step called and what has not been reached yet stays faded, in the sequence diagram the
+mark moves from arrow to arrow.
+
+![A call played back in the call graph](docs/img/flow-playback.png)
+
+The sequence is static: it knows the order of the call sites, not conditions, loops or asynchronous calls.
+
 ### Overview diagrams
 
 The overview of a pull request shows the categories with their progress, the commits, the test situation and – for
 GitLab – the state of the merge request. The **component diagram** shows every changed component, each layer as a frame
-around its components, laid out like the flow diagrams; ⌖ shows only one component and its dependencies.
+around its components, laid out like the flow diagrams; ⌖ shows only one component and its dependencies. Choose a data flow
+under *Sequence* to play it back there: its components stay, the rest steps back, and a dot runs from component to
+component, call by call.
 
 ![Overview](docs/img/overview.png)
 
 ![Component diagram](docs/img/components.png)
+
+![A data flow played back in the component diagram](docs/img/components-playback.png)
 
 ### Code review: unified and split (side by side)
 
@@ -222,6 +244,8 @@ cd frontend && npm start              # UI on :4200, /api is proxied to :8080
 | Approve / merge (GitLab) | Overview of the merge request: «Approve», «Revoke approval», «Merge …» (squash, delete source branch) |
 | Follow a call | Coloured bubble around the call in the code (`② saveEvent`), a click jumps to the called block; «← called by …» in the block header |
 | Classes or methods | Switches above the diagram (*Classes \| Classes + methods \| Methods*) and the code (*Whole classes \| Classes \| Methods \| Line*) |
+| Call sequence | Switch *Call graph \| Sequence* above the diagram of a flow: list of calls and sequence diagram; a click on a call shows it, the line number jumps to the call site |
+| Play a flow back | Bar *Sequence* in a flow (play / pause, ⏮ ⏭, speed 0.5× / 1× / 2×); on the overview: *Components* → *Sequence* → choose a data flow |
 | Arrange the diagram | Automatic layout (ELK); drag nodes and whole classes, «Reset layout» undoes it |
 | Split view | Toolbar button (two columns): old code on the left, new on the right; stored per browser |
 | Hide what is done | Toolbar button: collapse fully checked blocks |

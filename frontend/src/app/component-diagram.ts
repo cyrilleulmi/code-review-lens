@@ -1,10 +1,15 @@
-import { ChangeDetectionStrategy, Component as NgComponent, computed, effect, inject, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component as NgComponent, DestroyRef, ElementRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Component } from './api';
 import { FRAME_PADDING, Layout, Rect, curvePath, frameAround, layoutFlow, packRows, routePath } from './flow-layout';
+import { FlowSequence, flowSequence, sequenceKey } from './flow-sequence';
 import { Icon } from './icon';
-import { t } from './i18n';
+import { serverText, t } from './i18n';
 import { areaColor } from './look';
 import { ReviewStore } from './review.store';
+import { SequenceControls } from './sequence-controls';
+import { SequencePlayer, scrollToShow } from './sequence-player';
+
+const NO_SEQUENCE: FlowSequence = { entries: [], calls: [] };
 
 interface Box {
   c: Component;
@@ -51,12 +56,16 @@ const LOOSE_GAP = 22;
  * components. Like the flow diagrams it is placed by the layout engine (flow-layout.ts): callers left of what they
  * call, few crossings, connections at right angles around the boxes - the components of a layer need not stand in
  * one column. The focus button of a component shows only it and everything it depends on.
+ *
+ * Abfolge: a data flow can be chosen and played back in the diagram - call by call a dot runs along the connection
+ * from the calling component to the one called (flow-sequence.ts, sequence-player.ts).
  */
 @NgComponent({
   selector: 'app-component-diagram',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon],
+  imports: [Icon, SequenceControls],
   template: `
+    @let pb = playback();
     <div class="bar">
       <span class="count">{{ t('{n} von {total} Komponenten · {edges} Verbindungen', { n: boxes().length, total: all().length, edges: lines().length }) }}</span>
       @if (focusName(); as f) {
@@ -64,6 +73,17 @@ const LOOSE_GAP = 22;
         <button type="button" class="ftool" (click)="focus.set(null)"><app-icon name="close" [size]="12" /> {{ t('Fokus aufheben') }}</button>
       }
       <span class="spacer"></span>
+      @if (flows().length) {
+        <label class="pick" [class.on]="!!flowId()" [title]="t('Einen Datenfluss im Diagramm abspielen: Aufruf für Aufruf von Komponente zu Komponente')">
+          <app-icon name="sequence" [size]="13" /> {{ t('Abfolge') }}
+          <select [value]="flowId() ?? ''" (change)="pickFlow($event)" [attr.aria-label]="t('Datenfluss für die Abfolge')">
+            <option value="">{{ t('– Datenfluss wählen –') }}</option>
+            @for (f of flows(); track f.id) {
+              <option [value]="f.id" [selected]="f.id === flowId()">{{ f.title }}</option>
+            }
+          </select>
+        </label>
+      }
       @if (hasTests()) {
         <button type="button" class="ftool" [class.on]="showTests()" (click)="showTests.set(!showTests())"><app-icon name="test" [size]="12" /> Tests</button>
       }
@@ -71,10 +91,33 @@ const LOOSE_GAP = 22;
               [title]="t('Komponenten ohne Aufrufbeziehung ausblenden')"><app-icon name="eyeOff" [size]="12" /> {{ t('Ohne Verbindung ausblenden') }}</button>
       <span class="legend"><i class="l-call"></i> {{ t('Aufruf') }} <i class="l-http"></i> REST/HTTP</span>
     </div>
+    @if (flowId()) {
+      <div class="seq-bar">
+        <app-sequence-controls [player]="player" [length]="sequence().calls.length">
+          @if (currentCall(); as c) {
+            <span class="who">{{ stepName(c.from) }}</span>
+            <app-icon name="arrowRight" [size]="12" />
+            <b class="who">{{ stepName(c.to) }}</b>
+            @if (c.http) {
+              <span class="via">HTTP {{ c.via }}</span>
+            }
+            @if (pb?.from && pb?.from === pb?.to) {
+              <span class="via">{{ t('innerhalb der Komponente') }}</span>
+            }
+          }
+        </app-sequence-controls>
+        <button type="button" class="ftool" (click)="openFlow()" [title]="t('Den Datenfluss mit Diagramm, Abfolge und Code öffnen')">
+          <app-icon name="flow" [size]="12" /> {{ t('Flow öffnen') }}
+        </button>
+        <button type="button" class="ftool" (click)="closeFlow()" [title]="t('Abfolge schliessen')" [attr.aria-label]="t('Abfolge schliessen')">
+          <app-icon name="close" [size]="12" />
+        </button>
+      </div>
+    }
     @if (boxes().length === 0) {
       <p class="empty">{{ t('Keine Komponenten mit Code-Änderungen.') }}</p>
     } @else {
-      <div class="scroll">
+      <div class="scroll" [class.sequence]="!!flowId()" [class.playing]="!!pb" [style.--seq-dur]="player.duration() + 'ms'">
         <div class="canvas" [style.width.px]="size().w" [style.height.px]="size().h">
           @for (f of frames(); track f.id) {
             <div class="frame" [style.left.px]="f.x" [style.top.px]="f.y" [style.width.px]="f.w" [style.height.px]="f.h" [style.--area]="areaColor(f.id)">
@@ -89,16 +132,27 @@ const LOOSE_GAP = 22;
             </defs>
             @for (l of lines(); track l.key) {
               <path [attr.d]="l.d" class="edge" [class.http]="l.http" [class.hot]="hovered() === l.from || hovered() === l.to" [style.stroke]="l.color"
+                    [class.seq-off]="!!flowId() && !flowEdges().has(l.key)" [class.seq-later]="!!pb && !pb.played.has(l.key)"
                     [class.dim]="!!hovered() && hovered() !== l.from && hovered() !== l.to" [style.stroke-width]="l.width" marker-end="url(#cd-arrow)">
                 <title>{{ l.title }}</title>
               </path>
             }
+            <!-- playback: the connection of the current call is drawn again, on top -->
+            @for (r of playbackRuns(); track r.no) {
+              <path [attr.d]="r.d" class="seq-run" pathLength="1" [style.stroke]="r.color" />
+            }
           </svg>
+          <!-- playback: a dot runs along the connection of the current call, from the caller to the component called -->
+          @for (r of playbackRuns(); track r.no) {
+            <span class="seq-dot" aria-hidden="true" [style.offset-path]="r.motion" [style.background]="r.color"></span>
+          }
           @for (b of boxes(); track b.c.id) {
             @let p = progress(b.c);
             <div class="node" role="button" tabindex="0" [style.left.px]="b.x" [style.top.px]="b.y" [style.width.px]="w" [style.height.px]="h"
                  [style.--area]="areaColor(b.c.area)"
                  [class.done]="p.total > 0 && p.ok === p.total" [class.root]="focus() === b.c.id" [class.dim]="!!hovered() && !related(b.c.id)"
+                 [class.seq-off]="!!flowId() && !flowComponents().has(b.c.id)" [class.seq-later]="!!pb && !pb.reached.has(b.c.id)"
+                 [class.seq-from]="pb?.from === b.c.id" [class.seq-to]="pb?.to === b.c.id" [class.seq-even]="!!pb && pb.no % 2 === 0"
                  [title]="b.c.paths.join('\\n')" (mouseenter)="hovered.set(b.c.id)" (mouseleave)="hovered.set(null)"
                  (click)="open(b)" (keydown.enter)="open(b)">
               <span class="txt">
@@ -159,6 +213,38 @@ const LOOSE_GAP = 22;
     .focus { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--fg-dim); cursor: pointer; flex: none; }
     .focus:hover { background: var(--bg-hover); color: var(--fg); }
     .focus.on { color: var(--accent-fg); background: rgba(53, 116, 240, 0.18); }
+
+    /* Abfolge: a data flow played back in the diagram */
+    .pick { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 4px 0 8px; border: 1px solid transparent; border-radius: 5px; color: var(--fg-muted); }
+    .pick.on { border-color: var(--accent); color: var(--fg); }
+    .pick select { max-width: 280px; height: 20px; padding: 0 4px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-editor);
+      color: var(--fg); font: inherit; text-overflow: ellipsis; cursor: pointer; }
+    .pick select:focus-visible { outline: 1px solid var(--accent); }
+    .seq-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 5px 10px; background: var(--bg-panel); border-bottom: 1px solid var(--border); font-size: 12px; }
+    .seq-bar app-sequence-controls { flex: 1; }
+    .seq-bar .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 500 11.5px var(--font-code); }
+    .seq-bar b.who { flex: none; color: var(--fg); font-weight: 700; }
+    .seq-bar .via { flex: none; color: var(--cat-violet); font-size: 11px; }
+    /* a flow is chosen: the rest of the diagram steps back; playing: what the flow has not reached yet is faded */
+    .sequence .node { transition: opacity 0.25s, border-color 0.15s, box-shadow 0.15s; }
+    .sequence .seq-off { opacity: 0.22; }
+    .playing .seq-later { opacity: 0.4; }
+    .playing .seq-off { opacity: 0.15; }
+    .node.seq-from { border-color: var(--accent); border-left-color: var(--area); }
+    .node.seq-to { border-color: var(--accent); border-left-color: var(--area); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+      animation: cd-arrive-a var(--seq-dur) ease-out; }
+    /* two names for the same animation: it starts again when the next call arrives at the same component */
+    .node.seq-to.seq-even { animation-name: cd-arrive-b; }
+    .seq-run { fill: none; stroke-width: 4.5; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; pointer-events: none;
+      animation: cd-draw calc(var(--seq-dur) * 0.6) ease-in-out; }
+    .seq-dot { position: absolute; left: 0; top: 0; width: 12px; height: 12px; border-radius: 50%; pointer-events: none;
+      box-shadow: 0 0 0 3px var(--bg-panel-2); offset-rotate: 0deg; offset-distance: 100%; opacity: 0;
+      animation: cd-travel calc(var(--seq-dur) * 0.6) ease-in-out; }
+    @keyframes cd-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+    @keyframes cd-travel { from { offset-distance: 0%; opacity: 1; } 90% { opacity: 1; } to { offset-distance: 100%; opacity: 0; } }
+    @keyframes cd-arrive-a { from { box-shadow: 0 0 0 0 transparent; } 60% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent); } }
+    @keyframes cd-arrive-b { from { box-shadow: 0 0 0 0 transparent; } 60% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent); } }
+    @media (prefers-reduced-motion: reduce) { .seq-run, .seq-dot, .node.seq-to { animation: none; } }
   `,
 })
 export class ComponentDiagram {
@@ -171,6 +257,55 @@ export class ComponentDiagram {
   protected readonly hideIsolated = signal(false);
   protected readonly focus = signal<string | null>(null);
   protected readonly hovered = signal<string | null>(null);
+
+  // ------------------------------------------------------------------ Abfolge: a data flow played back
+  private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
+  protected readonly flows = computed(() =>
+    (this.store.bundle()?.analysis.flows ?? []).map((f) => ({ ...f, title: serverText(f.title) })));
+  /** The data flow chosen for the playback; null = none. */
+  protected readonly flowId = signal<string | null>(null);
+  private readonly flow = computed(() => this.flows().find((f) => f.id === this.flowId()) ?? null);
+  /** Its calls one after the other (flow-sequence.ts). */
+  protected readonly sequence = computed(() => {
+    const flow = this.flow();
+    return flow ? flowSequence(flow.steps, flow.edges) : NO_SEQUENCE;
+  });
+  protected readonly player = new SequencePlayer(() => this.sequence().calls.length);
+  protected readonly currentCall = computed(() => this.sequence().calls[this.player.index() - 1] ?? null);
+  private componentOf(segmentId: string): string | null {
+    return this.store.componentBySegment().get(segmentId)?.id ?? null;
+  }
+  /** The components the chosen flow runs through, and its connections between them ("from>to"). */
+  protected readonly flowComponents = computed(() =>
+    new Set((this.flow()?.steps ?? []).map((s) => this.componentOf(s.segmentId)).filter((id): id is string => id != null)));
+  protected readonly flowEdges = computed(() =>
+    new Set((this.flow()?.edges ?? []).map((e) => this.componentOf(e.from) + '>' + this.componentOf(e.to))));
+  /**
+   * The playback: the components the current call runs between, the connection it runs along (null: a call within
+   * a component, or a connection that is not shown) and what was reached so far.
+   */
+  protected readonly playback = computed(() => {
+    const call = this.currentCall();
+    if (!call) {
+      return null;
+    }
+    const { entries, calls } = this.sequence();
+    const from = this.componentOf(call.from);
+    const to = this.componentOf(call.to);
+    const reached = new Set<string | null>(entries.filter((e) => e.after < call.no).map((e) => this.componentOf(e.id)));
+    const played = new Set<string>();
+    for (const c of calls.slice(0, call.no)) {
+      reached.add(this.componentOf(c.to));
+      played.add(this.componentOf(c.from) + '>' + this.componentOf(c.to));
+    }
+    const line = from !== to ? this.lines().find((l) => l.from === from && l.to === to) : undefined;
+    return { no: call.no, from, to, line, reached, played };
+  });
+  /** The connection the current call runs along, as a list of none or one: a new call draws a new line (and dot). */
+  protected readonly playbackRuns = computed(() => {
+    const p = this.playback();
+    return p?.line ? [{ no: p.no, d: p.line.d, color: p.line.color, motion: `path('${p.line.d}')` }] : [];
+  });
 
   protected readonly all = computed(() => this.store.bundle()?.analysis.components ?? []);
   protected readonly hasTests = computed(() => this.all().some((c) => c.area === 'test'));
@@ -254,6 +389,30 @@ export class ComponentDiagram {
   });
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => this.player.destroy());
+    // Another flow (or another pull request): the playback starts over; a flow that is gone is no longer chosen.
+    // The same calls computed again (the review was loaded anew) leave it where it is.
+    const playing = computed(() => this.flowId() + '|' + sequenceKey(this.sequence()));
+    effect(() => {
+      playing();
+      untracked(() => {
+        this.player.reset();
+        if (this.flowId() && !this.flow()) {
+          this.flowId.set(null);
+        }
+      });
+    });
+    // Playing: a new call brings the component it goes to into view (scrolls the diagram, not the page).
+    effect(() => {
+      const call = this.currentCall();
+      const box = call ? untracked(() => this.boxes().find((b) => b.c.id === this.componentOf(call.to))) : undefined;
+      const el = this.host.nativeElement.querySelector<HTMLElement>('.scroll');
+      if (box && el) {
+        const canvas = 14; // margin of the canvas: the components start that much further in
+        el.scrollLeft = scrollToShow(el.scrollLeft, el.clientWidth, box.x + canvas, box.x + canvas + W);
+        el.scrollTop = scrollToShow(el.scrollTop, el.clientHeight, box.y + canvas, box.y + canvas + H);
+      }
+    });
     // Let the layout engine place the connected part of the diagram whenever the components or connections shown change.
     effect(() => {
       const key = this.layoutKey();
@@ -372,5 +531,36 @@ export class ComponentDiagram {
 
   protected open(b: Box): void {
     this.store.select({ kind: 'file', path: b.c.paths[0] });
+  }
+
+  /** Chooses the data flow to play back (none: the diagram as it was). Its components must be in view: no focus. */
+  protected pickFlow(event: Event): void {
+    const id = (event.target as HTMLSelectElement).value || null;
+    this.flowId.set(id);
+    if (id) {
+      this.focus.set(null);
+    }
+  }
+
+  protected closeFlow(): void {
+    this.flowId.set(null);
+  }
+
+  /** Opens the chosen data flow: its diagram, its sequence and its code. */
+  protected openFlow(): void {
+    const id = this.flowId();
+    if (id) {
+      this.store.select({ kind: 'flow', id });
+    }
+  }
+
+  /** "PlayerResource.update": a step with its class, for the line that says which call is played. */
+  protected stepName(segmentId: string): string {
+    const seg = this.store.segments().get(segmentId);
+    if (!seg) {
+      return segmentId;
+    }
+    const parts = (seg.symbol ?? seg.path.substring(seg.path.lastIndexOf('/') + 1)).split('.');
+    return parts.length > 1 && parts[parts.length - 1] ? parts.slice(-2).join('.') : parts.join('.');
   }
 }

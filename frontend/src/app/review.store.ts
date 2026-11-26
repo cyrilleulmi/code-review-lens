@@ -80,8 +80,15 @@ const SEP = '\u0000';
 /** How code blocks show a diff: in one column or side by side. */
 export type DiffMode = 'unified' | 'split';
 
+/** The diagram of a data flow: its calls as a graph, or one after the other as a sequence (list and sequence diagram). */
+export type FlowDiagramKind = 'graph' | 'sequence';
+
 /** The settings of the page of one flow (see ReviewStore.flowPage). */
 export interface FlowPage {
+  /** what the diagram shows: the call graph (who calls whom), or the sequence (which call comes after which) */
+  diagram: FlowDiagramKind;
+  /** the sequence leaves out what is used rather than called (constants, types): only calls of functions and methods */
+  callsOnly: boolean;
   /** level of the diagram; the default shows classes as frames with their methods inside */
   level: FlowDiagramLevel;
   /** own level of the code; null = the code follows the diagram (codeLevelFor) */
@@ -90,7 +97,7 @@ export interface FlowPage {
   hiddenAreas: ReadonlySet<string>;
 }
 
-const FLOW_PAGE_DEFAULT: FlowPage = { level: 'combined', code: null, hiddenAreas: new Set() };
+const FLOW_PAGE_DEFAULT: FlowPage = { diagram: 'graph', callsOnly: false, level: 'combined', code: null, hiddenAreas: new Set() };
 
 /** Commit filter value for "new or changed since my last review" (also in the URL: …/c/since-review). */
 export const SINCE_REVIEW = 'since-review';

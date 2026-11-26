@@ -92,42 +92,93 @@
 
 <div class="level-bar">
   <span class="lbl">{{ t('Diagramm') }}</span>
-  <div class="seg-switch text" role="group" [attr.aria-label]="t('Ebene des Diagramms')">
-    <button type="button" [class.on]="level() === 'class'" [attr.aria-pressed]="level() === 'class'" (click)="setLevel('class')"
-            [title]="t('Ein Knoten pro Klasse: ihre Methoden des Flows zusammengefasst, Verbindungen zwischen den Klassen')">{{ t('Klassen') }}</button>
-    <button type="button" [class.on]="level() === 'combined'" [attr.aria-pressed]="level() === 'combined'" (click)="setLevel('combined')"
-            [title]="t('Klassen als Rahmen, ihre Methoden als kleinere Knoten darin; Verbindungen zwischen den Methoden')">{{ t('Klassen + Methoden') }}</button>
-    <button type="button" [class.on]="level() === 'method'" [attr.aria-pressed]="level() === 'method'" (click)="setLevel('method')"
-            [title]="t('Ein Knoten pro Methode bzw. Funktion')">{{ t('Methoden') }}</button>
+  <div class="seg-switch text" role="group" [attr.aria-label]="t('Art des Diagramms')">
+    <button type="button" [class.on]="diagramKind() === 'graph'" [attr.aria-pressed]="diagramKind() === 'graph'" (click)="setDiagram('graph')"
+            [title]="t('Aufrufgraph: wer wen aufruft, jeder Schritt einmal')">{{ t('Aufrufgraph') }}</button>
+    <button type="button" [class.on]="diagramKind() === 'sequence'" [attr.aria-pressed]="diagramKind() === 'sequence'" (click)="setDiagram('sequence')"
+            [title]="t('Abfolge: die Aufrufe der Reihe nach als Liste und als Sequenzdiagramm – eine Lebenslinie pro Klasse, ein Pfeil pro Aufruf')">{{ t('Abfolge') }}</button>
   </div>
-  @let classCount = level() === 'class' ? boxes().length : frames().length;
-  @let methodCount = level() === 'class' ? 0 : boxes().length;
-  <span class="hint">
-    @if (classCount) {
-      {{ classCount === 1 ? t('1 Klasse') : t('{n} Klassen', { n: classCount }) }}
+  @if (diagramKind() === 'graph') {
+    <div class="seg-switch text" role="group" [attr.aria-label]="t('Ebene des Diagramms')">
+      <button type="button" [class.on]="level() === 'class'" [attr.aria-pressed]="level() === 'class'" (click)="setLevel('class')"
+              [title]="t('Ein Knoten pro Klasse: ihre Methoden des Flows zusammengefasst, Verbindungen zwischen den Klassen')">{{ t('Klassen') }}</button>
+      <button type="button" [class.on]="level() === 'combined'" [attr.aria-pressed]="level() === 'combined'" (click)="setLevel('combined')"
+              [title]="t('Klassen als Rahmen, ihre Methoden als kleinere Knoten darin; Verbindungen zwischen den Methoden')">{{ t('Klassen + Methoden') }}</button>
+      <button type="button" [class.on]="level() === 'method'" [attr.aria-pressed]="level() === 'method'" (click)="setLevel('method')"
+              [title]="t('Ein Knoten pro Methode bzw. Funktion')">{{ t('Methoden') }}</button>
+    </div>
+    @let classCount = level() === 'class' ? boxes().length : frames().length;
+    @let methodCount = level() === 'class' ? 0 : boxes().length;
+    <span class="hint">
+      @if (classCount) {
+        {{ classCount === 1 ? t('1 Klasse') : t('{n} Klassen', { n: classCount }) }}
+      }
+      @if (classCount && methodCount) {
+        ·
+      }
+      @if (methodCount) {
+        {{ methodCount === 1 ? t('1 Methode') : t('{n} Methoden', { n: methodCount }) }}
+      }
+    </span>
+    <span class="spacer"></span>
+    @if (hasMoved()) {
+      <button type="button" class="ftool" (click)="resetLayout()" [title]="t('Alle verschobenen Knoten wieder automatisch anordnen')">
+        <app-icon name="refresh" [size]="13" /> {{ t('Anordnung zurücksetzen') }}
+      </button>
     }
-    @if (classCount && methodCount) {
-      ·
+    <span class="hint">{{ t('Knoten und Klassen lassen sich ziehen') }}</span>
+  } @else {
+    @let lifelines = sequenceClasses();
+    @if (usedSteps() > 0) {
+      <button type="button" class="ftool" [class.on]="callsOnly()" [attr.aria-pressed]="callsOnly()" (click)="toggleCallsOnly()"
+              [title]="t('Konstanten und Typen aus der Abfolge nehmen: sie werden verwendet, nicht aufgerufen ({n} im Flow)', { n: usedSteps() })">
+        <app-icon name="eyeOff" [size]="13" /> {{ t('Nur Aufrufe') }}
+      </button>
     }
-    @if (methodCount) {
-      {{ methodCount === 1 ? t('1 Methode') : t('{n} Methoden', { n: methodCount }) }}
-    }
-  </span>
-  <span class="spacer"></span>
-  @if (hasMoved()) {
-    <button type="button" class="ftool" (click)="resetLayout()" [title]="t('Alle verschobenen Knoten wieder automatisch anordnen')">
-      <app-icon name="refresh" [size]="13" /> {{ t('Anordnung zurücksetzen') }}
-    </button>
+    <span class="hint">{{ lifelines === 1 ? t('1 Klasse') : t('{n} Klassen', { n: lifelines }) }} · {{ sequence().calls.length === 1 ? t('1 Aufruf') : t('{n} Aufrufe', { n: sequence().calls.length }) }}</span>
+    <span class="spacer"></span>
+    <span class="hint">{{ t('Klick auf einen Aufruf zeigt ihn; die Zeilennummer springt zur Aufrufstelle') }}</span>
   }
-  <span class="hint">{{ t('Knoten und Klassen lassen sich ziehen') }}</span>
 </div>
 
-<div class="diagram" role="list" [class.dragging]="dragging()">
+<div class="seq-bar">
+  <span class="lbl"><app-icon name="sequence" [size]="14" /> {{ t('Abfolge') }}</span>
+  <app-sequence-controls [player]="player" [length]="sequence().calls.length">
+    @if (currentCall(); as c) {
+      <span class="who">{{ stepName(c.from) }}</span>
+      <app-icon name="arrowRight" [size]="12" />
+      <span class="no" [style.background]="c.bridged ? 'var(--fg-muted)' : 'var(--edge-' + playback()?.c + ')'">{{ stepOf()[c.to] }}</span>
+      <b class="who">{{ stepName(c.to) }}</b>
+      @if (c.http) {
+        <span class="via">HTTP {{ c.via }}</span>
+      }
+      <button type="button" class="ftool" (click)="openTarget({ segmentId: c.from, line: c.line })"
+              [title]="c.line != null ? t('Zur Aufrufstelle im Code springen') : t('Zum Code des Aufrufers springen')">
+        <app-icon name="code" [size]="12" />
+        @if (c.line != null) {
+          {{ t('Zeile {line}', { line: c.line }) }}
+        }
+      </button>
+    }
+  </app-sequence-controls>
+  <span class="hint" [title]="t('Die Abfolge ist statisch aus dem Code gelesen: jeder Aufrufer Zeile für Zeile, jeder Schritt wird beim ersten Aufruf aufgeklappt. Bedingungen, Schleifen und asynchrone Aufrufe sind nicht bekannt – ob und wie oft ein Aufruf wirklich läuft, sagt sie nicht')">
+    <app-icon name="info" [size]="12" /> {{ t('statisch: Reihenfolge der Aufrufstellen') }}</span>
+</div>
+
+@if (diagramKind() === 'sequence') {
+  <app-sequence-diagram [sequence]="sequence()" [current]="player.index()" [duration]="player.duration()" [stepOf]="stepOf()"
+                        (pick)="pickCall($event)" (open)="openTarget($event)" />
+}
+
+@let pb = playback();
+<div class="diagram" #graph role="list" [class.dragging]="dragging()" [hidden]="diagramKind() !== 'graph'"
+     [class.playing]="!!pb" [style.--seq-dur]="player.duration() + 'ms'">
   @for (f of frames(); track f.key) {
     @let fp = progressOf(f.ids);
     @let fl = accepted(fp);
     <div class="frame" [style.left.px]="f.x" [style.top.px]="f.y" [style.width.px]="f.w" [style.height.px]="f.h" [style.--area]="areaColor(f.area)"
-         [class.done]="fl !== 'open'" [class.acc-all]="fl === 'all'" [class.off]="isOff(f.ids)" [class.root]="focused() === f.key">
+         [class.done]="fl !== 'open'" [class.acc-all]="fl === 'all'" [class.off]="isOff(f.ids)" [class.root]="focused() === f.key"
+         [class.seq-later]="notYetPlayed(f.ids)">
       <div class="frame-head" role="button" tabindex="0" [title]="f.hint"
            (mouseenter)="hover(f.ids)" (mouseleave)="hover(null)" (click)="openBox(f)" (keydown.enter)="openBox(f)"
            (pointerdown)="dragStart($event, f.ids)" (pointermove)="dragMove($event)" (pointerup)="dragEnd($event)" (pointercancel)="dragEnd($event)">
@@ -167,6 +218,7 @@
     @for (e of d.edges; track $index) {
       <path [attr.d]="e.d" class="edge" [class.hot]="isHot(e.ends)" [class.back]="e.back" [class.http]="e.http" [class.bridged]="e.bridged"
             [class.dim]="!!hovered() && !isHot(e.ends)"
+            [class.seq-later]="!!pb && !pb.played.has(e.from + '>' + e.to)"
             [class.run-separate]="e.run === 'separate'" [class.run-faint]="e.run === 'partial' || e.run === 'none'"
             [style.stroke]="'var(--edge-' + e.c + ')'" [attr.marker-end]="'url(#arrow-' + e.c + ')'"><title>{{ e.title }}</title></path>
       @if (e.http) {
@@ -178,7 +230,17 @@
         <text class="run-label" [attr.x]="e.lx" [attr.y]="e.ly + (e.http ? 22 : 12)" text-anchor="middle">{{ t('einzeln') }}<title>{{ e.title }}</title></text>
       }
     }
+    <!-- playback: the connection of the current call is drawn again, on top -->
+    @for (r of playbackRuns(); track r.no) {
+      <path [attr.d]="r.d" class="seq-run" pathLength="1" [style.stroke]="'var(--edge-' + r.c + ')'" />
+    }
   </svg>
+  <!-- playback: a dot runs along the connection of the current call, from the caller to the step called -->
+  <div class="seq-layer" aria-hidden="true">
+    @for (r of playbackRuns(); track r.no) {
+      <span class="seq-dot" [style.offset-path]="r.motion" [style.background]="'var(--edge-' + r.c + ')'"></span>
+    }
+  </div>
   @for (b of boxes(); track b.key) {
     @let p = progressOf(b.ids);
     @let pl = accepted(p);
@@ -188,6 +250,8 @@
             [class.done]="pl !== 'open'" [class.acc-all]="pl === 'all'" [class.quick]="b.quick" [class.cls]="level() === 'class'" [class.mini]="b.mini"
             [class.off]="isOff(b.ids)" [class.other-commit]="otherCommit(b.ids)" [class.current]="isCurrent(b.ids)" [class.root]="focused() === b.key"
             [style.--area]="areaColor(b.area)"
+            [class.seq-from]="pb?.from === b.key" [class.seq-to]="pb?.to === b.key" [class.seq-even]="!!pb && pb.no % 2 === 0"
+            [class.seq-later]="!!pb && !pb.reached.has(b.key)"
             [class.run-tested]="run === 'tested'" [class.run-mocked]="run === 'mocked'" [class.run-none]="run === 'none'"
             [title]="runTitle(b.ids)"
             (mouseenter)="hover(b.ids)" (mouseleave)="hover(null)"
