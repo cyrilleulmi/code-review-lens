@@ -285,6 +285,46 @@ export interface Segment {
   /** ports & adapters layer (domain | application | usecase | adapter), null if none */
   layer: string | null;
   frontend: boolean;
+  /** what a function, method or component takes and returns; missing for everything else and in older analyses */
+  signature?: Signature | null;
+}
+
+export interface Parameter {
+  /** "" when only a type is written (Go) */
+  name: string;
+  /** as declared; null when the code gives none */
+  type: string | null;
+}
+
+/** What a function takes and returns, read from its declaration. */
+export interface Signature {
+  /** the head as written, on one line */
+  declaration: string;
+  params: Parameter[];
+  /** the declared return type; null when none is written */
+  returns: string | null;
+  /** ids of Analysis.types for the types named in params and returns that an analysed file declares */
+  types: string[];
+}
+
+export interface TypeField {
+  name: string;
+  /** null for enum constants and fields without a written type */
+  type: string | null;
+}
+
+/** A class, interface, type or enum that a signature names, with its fields. */
+export interface TypeInfo {
+  /** "<path>#<name>" */
+  id: string;
+  name: string;
+  path: string;
+  kind: 'class' | 'interface' | 'type' | 'enum';
+  line: number | null;
+  /** at most 12, in the order of the code */
+  fields: TypeField[];
+  /** how many further fields there are */
+  more: number;
 }
 
 export interface Group {
@@ -680,6 +720,8 @@ export interface Analysis {
   ruleChecks?: RuleCheck[] | null;
   /** Wirkung von Setup und Testdaten: changed setup blocks, fixtures and test helpers with the tests they affect (empty for a whole repository, absent in older analyses) */
   setupImpacts?: SetupImpact[] | null;
+  /** the types named in the signatures of the segments, with their fields; missing in older analyses */
+  types?: TypeInfo[] | null;
 }
 
 /** setup: beforeEach & co., JUnit @BeforeEach/@AfterAll … · fixture: constant, field or suite variable with a value · helper: function, method, class of test code */

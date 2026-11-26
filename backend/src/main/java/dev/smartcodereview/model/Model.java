@@ -197,6 +197,8 @@ public final class Model {
      * place needs its own "ok" (see ReviewState.okAt). testedBy: ids of test segments that reach this one.
      * layer: domain | application | usecase | adapter when the project uses ports & adapters (else null).
      * frontend: the file belongs to a web frontend (Angular, React, Vue, templates, ...).
+     * signature: for a function, method or component what it takes and returns (see Signature); null for everything
+     * else, when the declaration could not be read, and in analyses of older versions.
      */
     @RegisterForReflection
     public record Segment(String id, String path, String language, String kind,
@@ -204,7 +206,47 @@ public final class Model {
                           String category, String group, String ruleId, String reason,
                           List<String> lineKeys, List<DisplayLine> lines,
                           List<String> places, List<String> testedBy,
-                          String layer, boolean frontend) {
+                          String layer, boolean frontend, Signature signature) {
+        public Segment(String id, String path, String language, String kind,
+                       String symbol, String symbolKind, Integer startLine, Integer endLine,
+                       String category, String group, String ruleId, String reason,
+                       List<String> lineKeys, List<DisplayLine> lines,
+                       List<String> places, List<String> testedBy,
+                       String layer, boolean frontend) {
+            this(id, path, language, kind, symbol, symbolKind, startLine, endLine, category, group, ruleId, reason,
+                    lineKeys, lines, places, testedBy, layer, frontend, null);
+        }
+    }
+
+    /** A parameter of a function. type: as declared, null when the code gives none (untyped JavaScript). name: "" when only a type is written (Go). */
+    @RegisterForReflection
+    public record Parameter(String name, String type) {
+    }
+
+    /**
+     * What a function takes and returns, read from its declaration (pattern-based, see analysis/Signatures).
+     * declaration: the head as written, on one line (without the body). params: in order. returns: the declared
+     * return type, null when none is written (constructors, untyped code, Kotlin Unit). types: ids of Analysis.types
+     * for the types named in params and returns that an analysed file declares - their fields are the data structure
+     * of the call.
+     */
+    @RegisterForReflection
+    public record Signature(String declaration, List<Parameter> params, String returns, List<String> types) {
+    }
+
+    /** A field of a type. type: as declared; null for enum constants and fields without a written type. */
+    @RegisterForReflection
+    public record TypeField(String name, String type) {
+    }
+
+    /**
+     * A class, interface, type or enum that a signature names and an analysed file declares. id: "<path>#<name>".
+     * kind: class | interface | type | enum. line: where it starts (new file). fields: its fields in the order of the
+     * code (record components and constructor properties included, methods left out), at most 12; more: how many
+     * further fields there are.
+     */
+    @RegisterForReflection
+    public record TypeInfo(String id, String name, String path, String kind, Integer line, List<TypeField> fields, int more) {
     }
 
     @RegisterForReflection
@@ -611,7 +653,8 @@ public final class Model {
      * test of the expected form exists (see RuleCheck), by segment and line; empty for a whole repository, null in
      * analyses of older versions. setupImpacts: changed setup blocks, fixtures and test helpers with the tests they
      * affect (Wirkung von Setup und Testdaten, see SetupImpact), by path and line; empty for a whole repository, null in
-     * analyses of older versions.
+     * analyses of older versions. types: the types named in the signatures of the segments, as far as analysed files
+     * declare them, with their fields (see TypeInfo), by path and line; null in analyses of older versions.
      */
     @RegisterForReflection
     public record Analysis(int schemaVersion, String generatedAt, String headSha, String rulesHash,
@@ -621,7 +664,19 @@ public final class Model {
                            List<CodeCoverage> coverage, List<SpecFile> specs, List<CaseMatrix> caseMatrices,
                            List<ExistingTest> existingTests, RelatedTests relatedTests,
                            List<MockWarning> mockWarnings, List<FlowCoverage> flowCoverage,
-                           List<RuleCheck> ruleChecks, List<SetupImpact> setupImpacts) {
+                           List<RuleCheck> ruleChecks, List<SetupImpact> setupImpacts, List<TypeInfo> types) {
+        public Analysis(int schemaVersion, String generatedAt, String headSha, String rulesHash,
+                        List<Segment> segments, List<Category> categories, List<Flow> flows,
+                        List<TestInfo> tests, ArchitectureInfo architecture,
+                        List<Component> components, List<ComponentEdge> componentEdges,
+                        List<CodeCoverage> coverage, List<SpecFile> specs, List<CaseMatrix> caseMatrices,
+                        List<ExistingTest> existingTests, RelatedTests relatedTests,
+                        List<MockWarning> mockWarnings, List<FlowCoverage> flowCoverage,
+                        List<RuleCheck> ruleChecks, List<SetupImpact> setupImpacts) {
+            this(schemaVersion, generatedAt, headSha, rulesHash, segments, categories, flows, tests, architecture, components,
+                    componentEdges, coverage, specs, caseMatrices, existingTests, relatedTests, mockWarnings, flowCoverage,
+                    ruleChecks, setupImpacts, null);
+        }
     }
 
     /**

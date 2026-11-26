@@ -26,6 +26,7 @@
 | `diff/PatchParser` | Zerlegt GitHubs Unified-Diff pro Datei in Hunks und nummerierte Zeilen. |
 | `analysis/CodeText` | Mini-Lexer: Kopie des Quelltexts, in der Strings und Kommentare ausgeblendet sind, plus Klammerpaare. |
 | `analysis/SymbolExtractor` | Findet Funktionen, Methoden, Klassen, Typen und Top-Level-Konstanten mit Zeilenbereich. |
+| `analysis/Signatures` | Signatur einer Funktion (Parameter, Rückgabetyp) und Felder eines Typs aus der Deklaration, für die Detailstufen der Diagramme. |
 | `analysis/FileView` | Neue Dateiversion mit eingewobenen gelöschten Zeilen, um ganze Funktionen mit Diff-Farben zu zeigen. |
 | `analysis/Structure` | Ports-&-Adapters-Erkennung aus den Ordnern, Schicht einer Datei, Frontend-Erkennung, Komponenten-Schlüssel. |
 | `analysis/Http` | REST quer durch den Stack: HTTP-Aufrufe im Client-Code, Endpunkte im Server-Code, Vergleich der Pfade. |

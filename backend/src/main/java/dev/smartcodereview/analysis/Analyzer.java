@@ -21,6 +21,9 @@ import dev.smartcodereview.model.Model.DisplayLine;
 import dev.smartcodereview.model.Model.ExistingTest;
 import dev.smartcodereview.model.Model.Flow;
 import dev.smartcodereview.model.Model.FlowEdge;
+import dev.smartcodereview.model.Model.Signature;
+import dev.smartcodereview.model.Model.TypeField;
+import dev.smartcodereview.model.Model.TypeInfo;
 import dev.smartcodereview.model.Model.FlowStep;
 import dev.smartcodereview.model.Model.Group;
 import dev.smartcodereview.model.Model.Hunk;
@@ -114,7 +117,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 31;
+    public static final int VERSION = 32;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -344,9 +347,12 @@ public final class Analyzer {
                     .forEach(c -> testedBy.computeIfAbsent(c.segmentId(), k -> new ArrayList<>()).add(t.segmentId()));
         }
 
+        Map<String, Signature> signatures = new HashMap<>();
+        List<TypeInfo> types = signatures(works, sources, signatures);
         List<Segment> segments = new ArrayList<>();
         for (Work w : works) {
-            segments.add(toSegment(w, places.getOrDefault(w.id, List.of()), testedBy.getOrDefault(w.id, List.of())));
+            segments.add(toSegment(w, places.getOrDefault(w.id, List.of()), testedBy.getOrDefault(w.id, List.of()),
+                    signatures.get(w.id)));
         }
         ArchitectureInfo architecture = new ArchitectureInfo(Structure.styleOf(evidence), evidence);
         Map<String, String> componentOf = new HashMap<>();
@@ -366,7 +372,89 @@ public final class Analyzer {
                 existingTests, related, List.copyOf(mockWarnings), MockBoundaries.flowCoverage(flows, tests, existingTests, http.expectations(), endpoints),
                 ruleChecks,
                 // the whole repository: every setup piece would be "new" and affect only new tests - nothing to warn about
-                repository ? List.of() : setupImpacts(works, specList, related, relatedSources));
+                repository ? List.of() : setupImpacts(works, specList, related, relatedSources),
+                types);
+    }
+
+    // ------------------------------------------------------------------ signatures and the types they name
+
+    /** A type declared in an analysed file. */
+    private record TypeDecl(String path, String language, CodeText text, Symbol symbol) {
+        String id() {
+            return path + "#" + symbol.name();
+        }
+    }
+
+    private static final Set<String> TYPE_KINDS = Set.of("class", "interface", "type", "enum");
+
+    /**
+     * The signature of every changed function, method and component (into `out`, by segment id) and the types these
+     * signatures name, with their fields. A type is known when a file of the change with a source declares it - also
+     * a file that is segmented by a path rule only (DTO and model files). Types in unchanged files are not loaded.
+     */
+    private static List<TypeInfo> signatures(List<Work> works, Map<String, String> sources, Map<String, Signature> out) {
+        Map<String, FileCtx> parsed = new HashMap<>();
+        works.stream().filter(w -> w.ctx != null).forEach(w -> parsed.putIfAbsent(w.file.path(), w.ctx));
+        Map<String, List<TypeDecl>> declared = new HashMap<>();
+        for (String path : new TreeSet<>(sources.keySet())) {
+            String language = Languages.of(path);
+            String source = sources.get(path);
+            if (source == null || !Languages.hasSymbols(language)) {
+                continue;
+            }
+            FileCtx ctx = parsed.get(path);
+            CodeText text = ctx != null ? ctx.text : CodeText.of(source);
+            List<Symbol> symbols = ctx != null ? ctx.symbols : SymbolExtractor.extract(text, path);
+            for (Symbol s : symbols) {
+                if (TYPE_KINDS.contains(s.kind())) {
+                    declared.computeIfAbsent(s.name(), k -> new ArrayList<>()).add(new TypeDecl(path, language, text, s));
+                }
+            }
+        }
+        Map<String, TypeInfo> used = new HashMap<>();
+        for (Work w : works) {
+            if (w.ctx == null || w.symbol == null) {
+                continue;
+            }
+            Signature s = Signatures.of(w.ctx.text, w.symbol, w.file.language());
+            if (s == null) {
+                continue;
+            }
+            List<String> ids = new ArrayList<>();
+            for (String name : Signatures.typeNames(s)) {
+                TypeDecl d = typeFor(name, w, declared.getOrDefault(name, List.of()));
+                if (d != null && !ids.contains(d.id())) {
+                    used.computeIfAbsent(d.id(), id -> typeInfo(d));
+                    ids.add(d.id());
+                }
+            }
+            out.put(w.id, new Signature(s.declaration(), s.params(), s.returns(), List.copyOf(ids)));
+        }
+        return used.values().stream()
+                .sorted(Comparator.comparing(TypeInfo::path).thenComparing(TypeInfo::line).thenComparing(TypeInfo::name)).toList();
+    }
+
+    /**
+     * The declaration a type name in a signature means, of those with that name (by path): the one in the same file,
+     * else in the same directory, else one whose file the caller's imports name, else the first.
+     */
+    private static TypeDecl typeFor(String name, Work user, List<TypeDecl> candidates) {
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        String path = user.file.path();
+        String imports = user.ctx.importsText == null ? "" : user.ctx.importsText;
+        return candidates.stream().filter(d -> d.path().equals(path)).findFirst()
+                .or(() -> candidates.stream().filter(d -> dirOf(d.path()).equals(dirOf(path))).findFirst())
+                .or(() -> candidates.stream().filter(d -> imports.contains(stemOf(d.path()))).findFirst())
+                .orElse(candidates.get(0));
+    }
+
+    private static TypeInfo typeInfo(TypeDecl d) {
+        List<TypeField> fields = Signatures.fieldsOf(d.text(), d.symbol(), d.language());
+        int shown = Math.min(fields.size(), Signatures.MAX_FIELDS);
+        return new TypeInfo(d.id(), d.symbol().name(), d.path(), d.symbol().kind(), d.symbol().startLine(),
+                List.copyOf(fields.subList(0, shown)), fields.size() - shown);
     }
 
     /**
@@ -1976,7 +2064,7 @@ public final class Analyzer {
 
     // ------------------------------------------------------------------ output
 
-    private Segment toSegment(Work w, List<String> places, List<String> testedBy) {
+    private Segment toSegment(Work w, List<String> places, List<String> testedBy, Signature signature) {
         Set<String> own = w.changed.stream().map(DiffLine::key).collect(Collectors.toCollection(LinkedHashSet::new));
         List<DisplayLine> lines;
         if (w.ctx == null) {
@@ -2003,7 +2091,7 @@ public final class Analyzer {
                 s == null ? null : s.displayName(), s == null ? null : s.kind(),
                 s == null ? null : s.startLine(), s == null ? null : s.endLine(),
                 w.category, w.group, w.rule == null ? null : w.rule.id(), w.reason, List.copyOf(own), lines,
-                List.copyOf(places), List.copyOf(testedBy), w.layer, w.frontend);
+                List.copyOf(places), List.copyOf(testedBy), w.layer, w.frontend, signature);
     }
 
     /** Lines of the new file in [start, end] with deletions woven in; long unchanged stretches collapse to gaps. */

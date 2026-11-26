@@ -102,6 +102,19 @@ Jeder Aufruf kennt Aufrufer, Ziel, Zeile, Tiefe, den Aufruf, in dem er steht (`p
 
 **Grenzen:** Die Abfolge ist statisch. Sie kennt die Reihenfolge der Aufrufzeilen, aber keine Bedingungen, Schleifen, Callbacks oder asynchronen Aufrufe: Ob und wie oft ein Aufruf läuft, sagt sie nicht (`subscribe({ next: … })` steht an der Stelle im Code, nicht an der Stelle der Ausführung). Zwei Aufrufe desselben Ziels auf **einer** Zeile sind ein Aufruf. Die Ungenauigkeiten der Kanten (B2: gleichnamige Funktionen) gelten auch hier.
 
+## 3g. Signaturen und Datenstrukturen
+
+Für die Detailstufen der Diagramme (FR-UI-24) liest die Analyse aus der Deklaration jeder geänderten Funktion, Methode und Komponente, was sie nimmt und zurückgibt (`segments[].signature`, Code in `analysis/Signatures`). Wie der Rest musterbasiert, ohne Parser und ohne Typauflösung:
+
+1. **Deklaration:** die erste Stelle im Kopf des Symbols, an der sein Name steht und – nach optionalen Typparametern – eine Parameterliste folgt: `name(…)`, `name = (…) =>`, `name = async function (…)`, `name: (…) =>`. Ein Aufruf im Rumpf (`this.name(…)`) zählt nicht. Ohne solche Stelle (Arrow-Funktion mit nacktem Parameter `x => …`) gibt es keine Signatur; die Diagramme zeigen dann auf jeder Stufe den Namen.
+2. **Parameter:** der Text zwischen den Klammern, an den Kommas der obersten Ebene getrennt. Annotationen, Modifikatoren (`private readonly`, `final`, `vararg` …) und Vorgabewerte fallen weg. TypeScript, JavaScript und Kotlin schreiben `name: Typ`, Java und C# `Typ name`, Go `name Typ` (`a, b int` gibt zwei Parameter). Ein destrukturierter Parameter heisst `{…}`. Ohne geschriebenen Typ ist `type` `null`.
+3. **Rückgabetyp:** TypeScript und Kotlin `): Typ` bis zum Rumpf, Go alles zwischen Parameterliste und `{` (auch `(*Player, error)`), Java und C# was vor dem Namen steht, ohne Annotationen, Modifikatoren und Typparameter der Methode. Konstruktoren und untypisierter Code haben `null`.
+4. **`declaration`:** der Kopf, wie er im Code steht, auf einer Zeile (für Tooltips).
+5. **Typen:** Die grossgeschriebenen Namen in Parameter- und Rückgabetypen (`Observable<PlayerDetail>` → `Observable`, `PlayerDetail`) werden in den Dateien der Änderung gesucht, deren Quelltext vorliegt – auch in Dateien, die nur über eine Pfad-Regel eingeteilt sind (DTO- und Model-Dateien). Gibt es den Namen mehrfach, gewinnt die Deklaration in derselben Datei, sonst im selben Ordner, sonst in einer importierten Datei, sonst die erste nach Pfad. Gefundene Typen stehen in `types[]` (`id` = `<pfad>#<name>`), die Signatur verweist mit `types` darauf.
+6. **Felder:** was auf oberster Ebene im Rumpf des Typs als Feld steht (`name?: Typ;`, `private String name;`, `val name: Typ`, Go `Name Typ`), die Komponenten eines Java-Records bzw. die Konstruktor-Properties einer Kotlin-Klasse, bei einem Enum die Konstanten. Methoden fehlen. Höchstens 12 Felder, `more` zählt den Rest.
+
+**Grenzen:** Typen aus **unveränderten** Dateien sind nicht bekannt (ihr Quelltext wird nicht geladen); die Diagramme zeigen dann nur den Typnamen. Gleichnamige Typen können verwechselt werden, generische Parameter (`T`) und Typen aus Bibliotheken bleiben ohne Felder. Vererbte Felder fehlen, verschachtelte Objekttypen stehen als `{…}`.
+
 ## 4. Orte
 
 Jede Gruppe, die ein Segment zeigt, ist ein **Ort** (`segments[].places`): die Gruppe seiner Kategorie (ausser Logik, die in einem Flow liegt – die steht nur dort) und jeder Flow, der es enthält. Beispiel: `PlayerApiService.setJerseyNumber` ist ein banaler REST-Aufruf *und* der letzte Schritt von `saveJerseyNumber → setJerseyNumber` → zwei Orte, zwei Oks.

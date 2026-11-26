@@ -320,6 +320,53 @@ class AnalyzerTest {
     }
 
     @Test
+    void givesFunctionsTheirSignatureAndTheTypesItNames() throws Exception {
+        String service = """
+                import { HttpClient } from '@angular/common/http';
+                import { PlayerDetail, PlayerUpdate } from './player.model';
+
+                export class PlayerApiService {
+                  update(id: string, change: PlayerUpdate): Observable<PlayerDetail> {
+                    return this.http.put<PlayerDetail>(`/api/players/${id}`, change);
+                  }
+                }
+                """;
+        String model = """
+                export interface PlayerDetail {
+                  id: string;
+                  name: string;
+                  jerseyNumber: number | null;
+                }
+
+                export interface PlayerUpdate {
+                  jerseyNumber: number | null;
+                }
+                """;
+        Snapshot snapshot = new Snapshot(1, "now", info(), List.of(
+                added("src/app/players/player-api.service.ts", service),
+                added("src/app/players/player.model.ts", model)));
+
+        Analysis analysis = new Analyzer(defaultRules()).analyze(snapshot, Map.of(
+                "src/app/players/player-api.service.ts", service,
+                "src/app/players/player.model.ts", model));
+
+        Model.Signature signature = segment(analysis, "PlayerApiService.update").signature();
+        assertEquals(List.of(new Model.Parameter("id", "string"), new Model.Parameter("change", "PlayerUpdate")), signature.params());
+        assertEquals("Observable<PlayerDetail>", signature.returns());
+        // the model file is a quick win by its path (no symbols of its own): its types are known all the same
+        assertEquals(List.of("src/app/players/player.model.ts#PlayerUpdate", "src/app/players/player.model.ts#PlayerDetail"),
+                signature.types());
+        assertEquals(List.of("PlayerDetail", "PlayerUpdate"), analysis.types().stream().map(Model.TypeInfo::name).toList());
+        Model.TypeInfo detail = analysis.types().getFirst();
+        assertEquals("interface", detail.kind());
+        assertEquals(List.of("id", "name", "jerseyNumber"), detail.fields().stream().map(Model.TypeField::name).toList());
+        assertEquals(0, detail.more());
+        // a class has no signature
+        assertEquals(null, analysis.segments().stream().filter(s -> "class".equals(s.symbolKind())).map(Segment::signature)
+                .filter(x -> x != null).findFirst().orElse(null));
+    }
+
+    @Test
     void everyCategoryDescribesItselfAndFlowsKeepTheirOwnView() throws Exception {
         String service = """
                 export class EventService {

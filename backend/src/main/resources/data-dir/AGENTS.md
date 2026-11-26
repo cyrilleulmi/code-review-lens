@@ -160,6 +160,10 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    then ends with `(operationId)`). `flows[].edges[].line` is the call site shown, `lines` every line of the caller that
    calls the callee (ascending): sort a caller's edges by these lines to read its calls in the order of the code.
    Flow titles start with the trigger when known (`JMS-Listener: …`, `PUT /x: …`).
+   `segments[].signature` (functions, methods, components) holds `declaration` (the head as written), `params[]`
+   (`name`, `type`), `returns` and `types`: ids into `types[]`, the types named in it that a changed file declares,
+   each with `kind`, `path`, `line`, up to 12 `fields[]` (`name`, `type`) and `more`. Read from the declarations by
+   pattern: no type resolution, types of unchanged files are missing.
    Cross-cutting categories: `api-contract`, `security`, `messaging`, `transactions`, `persistence`, `runtime`.
    `reviews/…/structure.json` holds the repository directories, file paths and the API contract `operations`.
 7. `components[]` / `componentEdges[]`: changed files grouped into components and the calls between them.
