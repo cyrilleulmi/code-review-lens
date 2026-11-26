@@ -114,7 +114,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 29;
+    public static final int VERSION = 30;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -734,9 +734,10 @@ public final class Analyzer {
                 if (b.ctx != a.ctx && !importsFrom(a.ctx, b)) {
                     continue;
                 }
-                Integer line = firstReference(a, b, lines);
+                List<Integer> all = references(a, b, lines);
+                Integer line = preferred(a, all);
                 if (line != null) {
-                    edges.add(new FlowEdge(a.id, b.id, line, b.symbol.name(), "call"));
+                    edges.add(new FlowEdge(a.id, b.id, line, b.symbol.name(), "call", callLines(a, b, all, line)));
                     a.refs.computeIfAbsent(line, k -> new ArrayList<>()).add(new LineRef(b.id, b.label()));
                 }
             }
@@ -1113,6 +1114,21 @@ public final class Analyzer {
     /** The name followed by an argument list: `name(`, `name<T>(`. */
     private static Pattern callPattern(String name) {
         return Pattern.compile("(?<![\\w$])" + Pattern.quote(name) + "\\s*(?:<[^>]*>)?\\(");
+    }
+
+    /**
+     * The lines of a that call b, for the order of the calls (FlowEdge.lines): of the references those with call
+     * syntax - a line that only names b (a parameter or variable of the same name, a type) is not a second call -
+     * plus the line the edge shows. Something that is not called (a constant, a type) is used, not called again and
+     * again: only the line shown.
+     */
+    private static List<Integer> callLines(Work a, Work b, List<Integer> references, int line) {
+        Set<Integer> result = new TreeSet<>(List.of(line));
+        if (b.symbol.isCallable() && !"component".equals(b.symbol.kind())) {
+            Pattern call = callPattern(b.symbol.name());
+            references.stream().filter(ln -> call.matcher(a.ctx.text.code.get(ln - 1)).find()).forEach(result::add);
+        }
+        return List.copyOf(result);
     }
 
     // ------------------------------------------------------------------ flows

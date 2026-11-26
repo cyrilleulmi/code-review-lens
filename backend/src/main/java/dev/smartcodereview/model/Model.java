@@ -227,11 +227,17 @@ public final class Model {
     }
 
     /**
-     * line: new-file line in the caller where the callee is referenced. kind: "call" (name reference) or
-     * "http" (a frontend REST call matched to a backend endpoint; via is then e.g. "PUT /api/players/{}").
+     * line: new-file line in the caller where the callee is referenced (the first reference on a changed line, else
+     * the first one). kind: "call" (name reference) or "http" (a frontend REST call matched to a backend endpoint; via
+     * is then e.g. "PUT /api/players/{}"). lines: every new-file line of the caller that references the callee,
+     * ascending (contains line) - the caller calls it once per entry, which gives the order of the calls (Abfolge);
+     * null in analyses of older versions.
      */
     @RegisterForReflection
-    public record FlowEdge(String from, String to, Integer line, String via, String kind) {
+    public record FlowEdge(String from, String to, Integer line, String via, String kind, List<Integer> lines) {
+        public FlowEdge(String from, String to, Integer line, String via, String kind) {
+            this(from, to, line, via, kind, line == null ? List.of() : List.of(line));
+        }
     }
 
     @RegisterForReflection

@@ -6,6 +6,9 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+### Geändert
+- **Analyse: alle Aufrufstellen (`flows[].edges[].lines`):** Eine Verbindung im Flow kennt neu alle Zeilen, an denen der Aufrufer das Ziel aufruft, nicht nur die eine gezeigte. Das Feld ist neu in `analysis.json` (`Analyzer.VERSION` 30, bestehende Analysen werden beim nächsten Öffnen neu berechnet); `line` bleibt.
+
 ### Behoben
 - **Aufrufstelle bei gleichnamigen Methoden:** Delegiert eine Methode an eine gleichnamige (`update()` ruft `service.update()` auf, eine Überladung), galt ihre eigene Deklarationszeile als Aufrufstelle: Die Markierung des Aufrufs im Code sass auf der Signatur statt auf dem Aufruf, und eine Methode, die eine gleichnamige gar nicht aufruft, wurde trotzdem mit ihr verbunden. Die Deklaration zählt nicht mehr; solche falschen Verbindungen fallen weg, wodurch sich einzelne Flüsse anders zusammensetzen können.
 

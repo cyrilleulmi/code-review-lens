@@ -103,6 +103,43 @@ class AnalyzerTest {
     }
 
     @Test
+    void listsEveryCallSiteOfAnEdgeInLineOrder() throws Exception {
+        String service = """
+                export class OrderService {
+                  submit(order: Order): void {
+                    this.validateOrder(order);
+                    this.persistOrder(order);
+                    this.validateOrder(order);
+                  }
+
+                  validateOrder(order: Order): void {
+                    if (!order.items.length) throw new Error('empty');
+                  }
+
+                  persistOrder(order: Order): void {
+                    this.repository.insert(order);
+                  }
+                }
+                """;
+        Snapshot snapshot = new Snapshot(1, "now", info(), List.of(added("src/app/order.service.ts", service)));
+
+        Analysis analysis = new Analyzer(defaultRules()).analyze(snapshot, Map.of("src/app/order.service.ts", service));
+
+        Segment submit = segment(analysis, "OrderService.submit");
+        Segment validate = segment(analysis, "OrderService.validateOrder");
+        Segment persist = segment(analysis, "OrderService.persistOrder");
+        Model.Flow flow = analysis.flows().getFirst();
+        Model.FlowEdge toValidate = flow.edges().stream()
+                .filter(e -> e.from().equals(submit.id()) && e.to().equals(validate.id())).findFirst().orElseThrow();
+        Model.FlowEdge toPersist = flow.edges().stream()
+                .filter(e -> e.from().equals(submit.id()) && e.to().equals(persist.id())).findFirst().orElseThrow();
+        // one edge per caller and callee, with every line that calls it: validate, persist, validate again
+        assertEquals(3, toValidate.line());
+        assertEquals(List.of(3, 5), toValidate.lines());
+        assertEquals(List.of(4), toPersist.lines());
+    }
+
+    @Test
     void aCallerNamedLikeItsCalleeDoesNotCallItInItsOwnDeclaration() throws Exception {
         String resource = """
                 import { PlayerService } from './player.service';
@@ -140,6 +177,44 @@ class AnalyzerTest {
                 .filter(e -> e.from().equals(caller.id()) && e.to().equals(callee.id())).findFirst().orElseThrow();
         // line 6 calls the service, not line 4 where the resource declares its own update()
         assertEquals(6, delegation.line());
+        assertEquals(List.of(6), delegation.lines());
+    }
+
+    @Test
+    void onlyCallsCountAsFurtherCallSites() throws Exception {
+        String service = """
+                export class ThreadService {
+                  convert(note: Note): Comment {
+                    const resolved = this.resolved(note);
+                    return this.toComment(note, resolved);
+                  }
+
+                  resolved(note: Note): boolean {
+                    return note.resolved === true;
+                  }
+
+                  toComment(note: Note, state: boolean): Comment {
+                    return { id: note.id, state: state || LIMITS.open > 0, max: LIMITS.max };
+                  }
+                }
+
+                export const LIMITS = { open: 1, max: 9 };
+                """;
+        Snapshot snapshot = new Snapshot(1, "now", info(), List.of(added("src/app/thread.service.ts", service)));
+
+        Analysis analysis = new Analyzer(defaultRules()).analyze(snapshot, Map.of("src/app/thread.service.ts", service));
+
+        Segment convert = segment(analysis, "ThreadService.convert");
+        Segment resolved = segment(analysis, "ThreadService.resolved");
+        Segment toComment = segment(analysis, "ThreadService.toComment");
+        List<Model.FlowEdge> edges = analysis.flows().stream().flatMap(f -> f.edges().stream()).toList();
+        // line 4 only passes the variable `resolved` on: no second call of resolved()
+        assertEquals(List.of(3), edges.stream().filter(e -> e.from().equals(convert.id()) && e.to().equals(resolved.id()))
+                .findFirst().orElseThrow().lines());
+        // a constant is used, not called: one line, however often it is named
+        Model.FlowEdge constant = edges.stream().filter(e -> e.from().equals(toComment.id()) && e.via().equals("LIMITS"))
+                .findFirst().orElseThrow();
+        assertEquals(List.of(constant.line()), constant.lines());
     }
 
     @Test

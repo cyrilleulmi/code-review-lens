@@ -157,7 +157,9 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    adapter packages without ports; then `segments[].layer` is domain | application | usecase | adapter.
    `segments[].frontend` marks web frontend code. `flows[].edges[].kind` = "http" for REST calls from the
    frontend into a backend endpoint (literal URLs, or generated OpenAPI clients matched by operationId; `via`
-   then ends with `(operationId)`). Flow titles start with the trigger when known (`JMS-Listener: …`, `PUT /x: …`).
+   then ends with `(operationId)`). `flows[].edges[].line` is the call site shown, `lines` every line of the caller that
+   calls the callee (ascending): sort a caller's edges by these lines to read its calls in the order of the code.
+   Flow titles start with the trigger when known (`JMS-Listener: …`, `PUT /x: …`).
    Cross-cutting categories: `api-contract`, `security`, `messaging`, `transactions`, `persistence`, `runtime`.
    `reviews/…/structure.json` holds the repository directories, file paths and the API contract `operations`.
 7. `components[]` / `componentEdges[]`: changed files grouped into components and the calls between them.
