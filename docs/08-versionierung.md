@@ -35,7 +35,9 @@ Zwischen zwei Releases steht in `pom.xml` die **letzte veröffentlichte** Versio
    ./release.sh X.Y.Z            # oder: ./release.sh X.Y.Z --no-push
    ```
 
-Das Skript prüft (Branch `main`, sauberer Arbeitsstand, Tag noch frei, Changelog-Abschnitt vorhanden), setzt die Version, baut das native Image (inkl. Unit-Tests), committet «Release X.Y.Z», setzt den Tag `vX.Y.Z` und pusht Git und beide Image-Tags. Schlägt der Image-Build fehl, wird die Versionsänderung zurückgenommen und nichts committet.
+Das Skript prüft (Branch `main`, sauberer Arbeitsstand, Tag noch frei, Changelog-Abschnitt vorhanden), setzt die Version, baut das native Image (inkl. Unit-Tests), committet «Release X.Y.Z», setzt den Tag `vX.Y.Z`, pusht Git und beide Image-Tags und legt das GitHub-Release an. Schlägt der Image-Build fehl, wird die Versionsänderung zurückgenommen und nichts committet.
+
+**GitHub-Release:** Zu jeder Version auf Docker Hub gehört ein Release auf GitHub. `release.sh` legt es am Ende an (`github-release.sh X.Y.Z`): Titel «CodeReviewLens X.Y.Z», darin `docker pull`, der Abschnitt der Version aus `CHANGELOG.md` und der Link zum vollständigen Vergleich. Für eine Version, die schon ein Release hat, tut das Skript nichts; ein fehlendes holt man mit demselben Befehl nach.
 
 **Beschreibung auf Docker Hub:** Die Seite des Images zeigt `DOCKERHUB.md` (Startbefehle zum Kopieren, mit und ohne Token; Konfiguration) und eine Kurzbeschreibung. Ist `DOCKERHUB_TOKEN` gesetzt (Personal Access Token von Docker Hub mit «Read, Write, Delete» – «Read & Write» genügt für die Beschreibung nicht), aktualisiert `release.sh` sie am Ende; sonst separat: `DOCKERHUB_TOKEN=… ./dockerhub-overview.sh`. Wer `DOCKERHUB.md` ändert, führt das Skript nach dem Merge aus – die Seite folgt der Datei nicht von selbst.
 
