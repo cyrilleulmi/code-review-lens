@@ -6,6 +6,8 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 
 ## [Unreleased]
 
+## [0.11.0] – 2026-11-27
+
 ### Neu
 - **Abfolge der Aufrufe (Liste und Sequenzdiagramm), zusammen mit dem Aufrufgraph:** Jeder Datenfluss zeigt neu zwei Diagramme untereinander: oben den Aufrufgraph, darunter die «Abfolge». Statt «wer ruft wen auf» steht in der Abfolge, **in welcher Reihenfolge**: links die Aufrufe als nummerierte Liste, eingerückt nach Aufrufer, rechts – Zeile für Zeile daneben – ein Sequenzdiagramm mit einer Lebenslinie pro Klasse, einem Pfeil pro Aufruf (REST-Aufrufe gestrichelt mit der Anfrage) und einem Balken, solange ein Schritt läuft. Die Abfolge folgt dem Code: ab dem Einstiegspunkt, jeder Aufrufer Zeile für Zeile; wird ein Schritt an zwei Stellen aufgerufen, steht er zweimal da («erneut»), Rekursion ist als «Rückruf» markiert. **Was wann zurückkommt:** Gibt ein Aufruf etwas zurück, steht nach dem letzten Aufruf, den er selbst macht, ein gestrichelter Pfeil zurück zum Aufrufer mit dem Rückgabetyp («↩ PlayerDetailDto»), in der Liste «↩ Typ an Aufrufer»; der Balken des Schritts endet dort. Ein Klick auf die Zeilennummer springt zur Aufrufstelle im Code; «Nur Aufrufe» nimmt Konstanten und Typen heraus, die nur verwendet werden. Die Abfolge ist statisch aus dem Code gelesen: Bedingungen, Schleifen und asynchrone Aufrufe kennt sie nicht.
 - **Abfolge abspielen – im Flow und im Komponentendiagramm:** Die neue Leiste «Abfolge» in jedem Datenfluss spielt die Aufrufe der Reihe nach ab (Abspielen / Pause, einen Aufruf vor oder zurück, Tempo 0.5× / 1× / 2×). Im Aufrufgraph läuft ein Punkt vom Aufrufer zum aufgerufenen Schritt, die Verbindung wird nachgezeichnet, Aufrufer und Ziel sind deutlich hervorgehoben und alles andere tritt zurück; im Sequenzdiagramm wandert die Markierung von Pfeil zu Pfeil, die Köpfe der beiden beteiligten Klassen sind markiert. Passen Aufrufer und Ziel nicht zusammen ins Bild, zoomt das Diagramm für diesen Aufruf heraus und scrollt dorthin. Die Leiste zeigt zum aktuellen Aufruf, was er zurückgibt. **Der Code folgt:** Solange ein Aufruf gezeigt wird, steht unter den Diagrammen nur der Code der beiden betroffenen Schritte (Aufrufer und Ziel); «Beenden» zeigt wieder alles. Im Komponentendiagramm der Übersicht wählt man unter «Abfolge» einen Datenfluss: Seine Komponenten bleiben stehen, der Rest tritt zurück, und beim Abspielen läuft der Punkt von Komponente zu Komponente.
@@ -200,7 +202,8 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 ### Neu
 - Erster PoC: offene GitHub-PRs (eigene und Review-Anfragen), Zerlegung in Segmente, Quick wins per Regeln (ohne KI), Datenflüsse in Aufrufreihenfolge mit Diagramm, zeilenweises «ok» lokal in JSON-Dateien für Agenten, Inline-Kommentare werden sofort veröffentlicht, IntelliJ-artiges UI.
 
-[Unreleased]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.8.0...v0.9.0
