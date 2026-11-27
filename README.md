@@ -1,4 +1,4 @@
-# SmartCodeReview (PoC)
+# SmartCodeReview
 
 Code review **by meaning instead of by file**. SmartCodeReview loads your open pull requests from **GitHub** and merge
 requests from **GitLab** (gitlab.com or self-managed), splits every change into meaningful units (functions, types,
@@ -296,7 +296,7 @@ The detailed documentation is in German:
 | Document | Content |
 |---|---|
 | [docs/01-konzept.md](docs/01-konzept.md) | Requirements and decisions from the kick-off |
-| [docs/02-annahmen.md](docs/02-annahmen.md) | Assumptions and deliberate simplifications of the PoC |
+| [docs/02-annahmen.md](docs/02-annahmen.md) | Assumptions and deliberate simplifications |
 | [docs/03-architektur.md](docs/03-architektur.md) | Structure, REST API, technology |
 | [docs/04-persistenz-und-agenten.md](docs/04-persistenz-und-agenten.md) | File format in the data directory, working with agents |
 | [docs/05-analyse.md](docs/05-analyse.md) | How quick wins and data flows are detected without AI; `rules.json` |

@@ -1,12 +1,12 @@
 # Konzept
 
-Stand: 13.11.2026, Kick-off des PoC.
+Stand: 13.11.2026, Kick-off.
 
 ## Problem
 
 Auf GitHub sieht man bei einem Pull Request alle geänderten Zeilen aller Dateien untereinander, alphabetisch nach Pfad. Wichtige Logik ist zwischen DTOs, Übersetzungen, Lockfiles und Mappern versteckt, und einen Aufrufpfad (Komponente → Service → Repository) muss man sich über mehrere Dateien selbst zusammensuchen.
 
-## Ziel des PoC
+## Ziel
 
 Ein lokal startbares Werkzeug, das
 

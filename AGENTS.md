@@ -1,6 +1,6 @@
 # Working on SmartCodeReview
 
-PoC of a review tool: Quarkus backend (`backend/`) + Angular UI (`frontend/`). Start with `README.md`, the
+Review tool: Quarkus backend (`backend/`) + Angular UI (`frontend/`). Start with `README.md`, the
 design decisions are in `docs/` (German): architecture overview `docs/09`, requirements `docs/10`, known improvements
 `docs/11`. When adding or changing a feature, update its requirement in `docs/10-anforderungen.md`.
 

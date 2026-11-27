@@ -1,6 +1,6 @@
 # Test-PRs
 
-Für den PoC wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **[TEST-MR]** im Titel, einen Warnhinweis in der Beschreibung und gehören **nicht gemergt**. Nach den Tests einfach schliessen und den Branch löschen (siehe unten).
+Zum Prüfen des Tools wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **[TEST-MR]** im Titel, einen Warnhinweis in der Beschreibung und gehören **nicht gemergt**. Nach den Tests einfach schliessen und den Branch löschen (siehe unten).
 
 | PR | Repo / Basis | Inhalt | Was es testet |
 |---|---|---|---|
@@ -9,7 +9,7 @@ Für den PoC wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **
 | [stv-bero-website#2](https://github.com/cyrilleulmi/stv-bero-website/pull/2) | `wave-1/new-site` | Anmeldeschluss für Anlässe | Payload-Collection, generierte Typen, Next.js-Komponente, Helfer, Konstante im Flow |
 | [stv-bero-website#1](https://github.com/cyrilleulmi/stv-bero-website/pull/1) | `main` | (bestehender, echter PR «Wave 1») | Stresstest: 294 Dateien, ca. 900 Segmente |
 
-## Ergebnisse (Stand PoC)
+## Ergebnisse der ersten Version
 
 **spongecoach#13**
 

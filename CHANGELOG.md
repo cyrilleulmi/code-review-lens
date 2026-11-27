@@ -200,7 +200,7 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 ## [0.1.0] – 2026-11-13
 
 ### Neu
-- Erster PoC: offene GitHub-PRs (eigene und Review-Anfragen), Zerlegung in Segmente, Quick wins per Regeln (ohne KI), Datenflüsse in Aufrufreihenfolge mit Diagramm, zeilenweises «ok» lokal in JSON-Dateien für Agenten, Inline-Kommentare werden sofort veröffentlicht, IntelliJ-artiges UI.
+- Erste Version: offene GitHub-PRs (eigene und Review-Anfragen), Zerlegung in Segmente, Quick wins per Regeln (ohne KI), Datenflüsse in Aufrufreihenfolge mit Diagramm, zeilenweises «ok» lokal in JSON-Dateien für Agenten, Inline-Kommentare werden sofort veröffentlicht, IntelliJ-artiges UI.
 
 [Unreleased]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.11.0...HEAD
 [0.11.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.10.1...v0.11.0

@@ -2,7 +2,7 @@
 
 ## Schema
 
-SmartCodeReview folgt [Semantic Versioning](https://semver.org/lang/de/) `MAJOR.MINOR.PATCH`. Solange die Hauptversion `0` ist (PoC), gilt:
+SmartCodeReview folgt [Semantic Versioning](https://semver.org/lang/de/) `MAJOR.MINOR.PATCH`. Solange die Hauptversion `0` ist, gilt:
 
 | Teil | Wann erhöhen | Beispiel |
 |---|---|---|
