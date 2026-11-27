@@ -103,53 +103,8 @@
   </div>
 </ng-template>
 
-<div class="level-bar">
-  <span class="lbl">{{ t('Diagramm') }}</span>
-  <div class="seg-switch text" role="group" [attr.aria-label]="t('Art des Diagramms')">
-    <button type="button" [class.on]="diagramKind() === 'graph'" [attr.aria-pressed]="diagramKind() === 'graph'" (click)="setDiagram('graph')"
-            [title]="t('Aufrufgraph: wer wen aufruft, jeder Schritt einmal')">{{ t('Aufrufgraph') }}</button>
-    <button type="button" [class.on]="diagramKind() === 'sequence'" [attr.aria-pressed]="diagramKind() === 'sequence'" (click)="setDiagram('sequence')"
-            [title]="t('Abfolge: die Aufrufe der Reihe nach als Liste und als Sequenzdiagramm – eine Lebenslinie pro Klasse, ein Pfeil pro Aufruf')">{{ t('Abfolge') }}</button>
-  </div>
-  @if (diagramKind() === 'graph') {
-    <div class="seg-switch text" role="group" [attr.aria-label]="t('Ebene des Diagramms')">
-      <button type="button" [class.on]="level() === 'class'" [attr.aria-pressed]="level() === 'class'" (click)="setLevel('class')"
-              [title]="t('Ein Knoten pro Klasse: ihre Methoden des Flows zusammengefasst, Verbindungen zwischen den Klassen')">{{ t('Klassen') }}</button>
-      <button type="button" [class.on]="level() === 'combined'" [attr.aria-pressed]="level() === 'combined'" (click)="setLevel('combined')"
-              [title]="t('Klassen als Rahmen, ihre Methoden als kleinere Knoten darin; Verbindungen zwischen den Methoden')">{{ t('Klassen + Methoden') }}</button>
-      <button type="button" [class.on]="level() === 'method'" [attr.aria-pressed]="level() === 'method'" (click)="setLevel('method')"
-              [title]="t('Ein Knoten pro Methode bzw. Funktion')">{{ t('Methoden') }}</button>
-    </div>
-    <ng-container [ngTemplateOutlet]="methodDetail" />
-    @let classCount = level() === 'class' ? boxes().length : frames().length;
-    @let methodCount = level() === 'class' ? 0 : boxes().length;
-    <span class="hint">
-      @if (classCount) {
-        {{ classCount === 1 ? t('1 Klasse') : t('{n} Klassen', { n: classCount }) }}
-      }
-      @if (classCount && methodCount) {
-        ·
-      }
-      @if (methodCount) {
-        {{ methodCount === 1 ? t('1 Methode') : t('{n} Methoden', { n: methodCount }) }}
-      }
-    </span>
-    <span class="spacer"></span>
-    @if (hasMoved()) {
-      <button type="button" class="ftool" (click)="resetLayout()" [title]="t('Alle verschobenen Knoten wieder automatisch anordnen')">
-        <app-icon name="refresh" [size]="13" /> {{ t('Anordnung zurücksetzen') }}
-      </button>
-    }
-    <span class="hint">{{ t('Knoten und Klassen lassen sich ziehen') }}</span>
-    <app-zoom-controls [zoom]="graphShownZoom()" (zoomChange)="setGraphZoom($event)" (fit)="fitGraph()" />
-  } @else {
-    <ng-container [ngTemplateOutlet]="methodDetail" />
-    <span class="spacer"></span>
-    <span class="hint">{{ t('Klick auf einen Aufruf zeigt ihn; die Zeilennummer springt zur Aufrufstelle') }}</span>
-    <app-zoom-controls [zoom]="seqDiagram()?.shownZoom() ?? seqZoom()" (zoomChange)="seqZoom.set($event)" (fit)="seqDiagram()?.fit()" />
-  }
-</div>
-
+<!-- both diagrams of the flow, one below the other; either can be shown full screen with the bar of the playback -->
+<div class="diagrams" #diagrams [class.full]="!!full.what()" [class.full-graph]="full.what() === 'graph'" [class.full-sequence]="full.what() === 'sequence'">
 <div class="seq-bar">
   <span class="lbl"><app-icon name="sequence" [size]="14" /> {{ t('Abfolge') }}</span>
   <app-sequence-controls [player]="player" [length]="sequence().calls.length">
@@ -183,14 +138,44 @@
     <app-icon name="info" [size]="12" /> {{ t('statisch: Reihenfolge der Aufrufstellen') }}</span>
 </div>
 
-@if (diagramKind() === 'sequence') {
-  <app-sequence-diagram [sequence]="sequence()" [current]="player.index()" [duration]="player.duration()" [stepOf]="stepOf()"
-                        [detail]="store.methodDetail()" [returns]="store.showReturns()" [(zoom)]="seqZoom"
-                        (pick)="pickCall($event)" (open)="openTarget($event)" />
-}
-
 @let pb = playback();
-<div class="diagram" #graph [class.dragging]="dragging()" [hidden]="diagramKind() !== 'graph'"
+<section class="part graph-part" [attr.aria-label]="t('Aufrufgraph')">
+<div class="level-bar">
+  <span class="lbl" [title]="t('Aufrufgraph: wer wen aufruft, jeder Schritt einmal') + '
+' + t('Knoten und Klassen lassen sich ziehen')">
+    <app-icon name="flow" [size]="14" /> {{ t('Aufrufgraph') }}</span>
+  <div class="seg-switch text" role="group" [attr.aria-label]="t('Ebene des Diagramms')">
+    <button type="button" [class.on]="level() === 'class'" [attr.aria-pressed]="level() === 'class'" (click)="setLevel('class')"
+            [title]="t('Ein Knoten pro Klasse: ihre Methoden des Flows zusammengefasst, Verbindungen zwischen den Klassen')">{{ t('Klassen') }}</button>
+    <button type="button" [class.on]="level() === 'combined'" [attr.aria-pressed]="level() === 'combined'" (click)="setLevel('combined')"
+            [title]="t('Klassen als Rahmen, ihre Methoden als kleinere Knoten darin; Verbindungen zwischen den Methoden')">{{ t('Klassen + Methoden') }}</button>
+    <button type="button" [class.on]="level() === 'method'" [attr.aria-pressed]="level() === 'method'" (click)="setLevel('method')"
+            [title]="t('Ein Knoten pro Methode bzw. Funktion')">{{ t('Methoden') }}</button>
+  </div>
+  <ng-container [ngTemplateOutlet]="methodDetail" />
+  @let classCount = level() === 'class' ? boxes().length : frames().length;
+  @let methodCount = level() === 'class' ? 0 : boxes().length;
+  <span class="hint">
+    @if (classCount) {
+      {{ classCount === 1 ? t('1 Klasse') : t('{n} Klassen', { n: classCount }) }}
+    }
+    @if (classCount && methodCount) {
+      ·
+    }
+    @if (methodCount) {
+      {{ methodCount === 1 ? t('1 Methode') : t('{n} Methoden', { n: methodCount }) }}
+    }
+  </span>
+  <span class="spacer"></span>
+  @if (hasMoved()) {
+    <button type="button" class="ftool" (click)="resetLayout()" [title]="t('Alle verschobenen Knoten wieder automatisch anordnen')">
+      <app-icon name="refresh" [size]="13" /> {{ t('Anordnung zurücksetzen') }}
+    </button>
+  }
+  <app-zoom-controls [zoom]="graphShownZoom()" (zoomChange)="setGraphZoom($event)" (fit)="fitGraph()"
+                     [full]="full.what() === 'graph'" (fullChange)="full.toggle('graph')" />
+</div>
+<div class="diagram" #graph [class.dragging]="dragging()"
      [class.playing]="!!pb" [style.--seq-dur]="player.duration() + 'ms'" (wheel)="graphWheel($event)">
  <div class="zoomed" role="list" [style.zoom]="graphShownZoom()">
   @for (f of frames(); track f.key) {
@@ -324,6 +309,23 @@
   }
  </div>
 </div>
+</section>
+
+<section class="part seq-part" [attr.aria-label]="t('Abfolge')">
+<div class="level-bar">
+  <span class="lbl" [title]="t('Abfolge: die Aufrufe der Reihe nach als Liste und als Sequenzdiagramm – eine Lebenslinie pro Klasse, ein Pfeil pro Aufruf')">
+    <app-icon name="sequence" [size]="14" /> {{ t('Abfolge') }}</span>
+  <ng-container [ngTemplateOutlet]="methodDetail" />
+  <span class="spacer"></span>
+  <span class="hint">{{ t('Klick auf einen Aufruf zeigt ihn; die Zeilennummer springt zur Aufrufstelle') }}</span>
+  <app-zoom-controls [zoom]="seqDiagram()?.shownZoom() ?? seqZoom()" (zoomChange)="seqZoom.set($event)" (fit)="seqDiagram()?.fit()"
+                     [full]="full.what() === 'sequence'" (fullChange)="full.toggle('sequence')" />
+</div>
+<app-sequence-diagram [sequence]="sequence()" [current]="player.index()" [duration]="player.duration()" [stepOf]="stepOf()"
+                      [detail]="store.methodDetail()" [returns]="store.showReturns()" [(zoom)]="seqZoom" [full]="full.what() === 'sequence'"
+                      (pick)="pickCall($event)" (open)="openTarget($event)" />
+</section>
+</div>
 
 <div class="level-bar">
   <span class="lbl">{{ t('Code') }}</span>
@@ -341,6 +343,10 @@
           [title]="codeFollows() ? t('Der Code folgt dem Diagramm: Klassen bei «Klassen», sonst Methoden. Klick: die Ebene des Codes eigens festhalten') : t('Der Code hat eine eigene Ebene. Klick: wieder dem Diagramm folgen')">
     <app-icon name="link" [size]="13" /> {{ t('wie Diagramm') }}
   </button>
+  @if (currentCall(); as c) {
+    <span class="play-note" [title]="t('Solange ein Aufruf der Abfolge gezeigt wird, steht hier nur sein Code: der Aufrufer und der aufgerufene Schritt. «Beenden» in der Leiste der Abfolge zeigt wieder alles')">
+      <app-icon name="sequence" [size]="12" /> {{ t('Aufruf {no}: nur der betroffene Code', { no: c.no }) }}</span>
+  }
   <span class="spacer"></span>
   <div class="seg-switch text" role="group" [attr.aria-label]="t('Ansicht der Änderungen')">
     <button type="button" [class.on]="store.diffMode() === 'unified'" [attr.aria-pressed]="store.diffMode() === 'unified'" (click)="store.setDiffMode('unified')"
@@ -378,7 +384,7 @@
           <span class="dim">{{ t('weiter oben gezeigt') }}</span>
           <app-icon name="arrowRight" [size]="12" />
         </button>
-      } @else if (visible().has(s.id)) {
+      } @else if (shown().has(s.id)) {
         <app-code-block
           [segment]="n.segment"
           [place]="place()"
@@ -391,7 +397,7 @@
           (refClick)="scrollTo($event)"
         />
       } @else {
-        @if (stepIndex() === null) {
+        @if (!solo()) {
           <button type="button" class="hidden-step" (click)="toggleHidden([s.id], $event)" [title]="t('Einblenden')">
             <span class="no">{{ n.no }}</span> {{ nodeName(n.segment) }}
             <span class="dim">{{ isDone(s.id) && !hidden().has(s.id) ? t('erledigt') : t('ausgeblendet') }}</span>
@@ -436,7 +442,7 @@
           }
         }
       </div>
-    } @else if (stepIndex() === null) {
+    } @else if (!solo()) {
       <button type="button" class="hidden-step" (click)="toggleHidden(w.ids, $event)" [title]="t('Einblenden')">
         <app-symbol-badge kind="class" /> {{ w.name }}
         <span class="dim">{{ t('ausgeblendet') }}</span>
@@ -450,7 +456,7 @@
     </div>
   }
   @for (u of codeCards(); track u.key) {
-    @if (stepIndex() === null || anyVisible(u.ids)) {
+    @if (!solo() || anyVisible(u.ids)) {
       @let cardLevel = u.framed ? accepted(progressOf(u.ids)) : 'open';
       <div class="unit" [class.class-card]="u.framed" [class.done]="cardLevel !== 'open'" [class.acc-all]="cardLevel === 'all'" [class.run]="!u.framed" [class.lit]="!u.framed && hoveredClass() === u.classKey" [class.wide]="u.wide"
            [attr.data-class]="u.classKey" [style.margin-left.px]="gutter() + u.depth * indent()" [style.--area]="areaColor(u.area)">
@@ -498,7 +504,7 @@
         }
         @for (m of u.members; track m.node.step.segmentId) {
           @let n = m.node;
-          @if (visible().has(n.step.segmentId)) {
+          @if (shown().has(n.step.segmentId)) {
             <app-code-block
               [segment]="n.segment"
               [place]="place()"
@@ -513,7 +519,7 @@
               (refClick)="scrollTo($event)"
               (calledByClick)="scrollToParent(n)"
             />
-          } @else if (stepIndex() === null) {
+          } @else if (!solo()) {
             <button type="button" class="hidden-step" [style.margin-left.px]="m.indent * indent()" (click)="toggleHidden([n.step.segmentId], $event)" [title]="t('Einblenden')">
               <span class="no">{{ n.no }}</span> {{ nodeName(n.segment) }}
               <span class="dim">{{ isDone(n.step.segmentId) && !hidden().has(n.step.segmentId) ? t('erledigt') : t('ausgeblendet') }}</span>

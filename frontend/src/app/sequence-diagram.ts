@@ -34,6 +34,7 @@ export interface SequenceTarget {
 @Component({
   selector: 'app-sequence-diagram',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[class.full]': 'full()' },
   imports: [Icon],
   template: `
     @let l = layout();
@@ -156,8 +157,11 @@ export interface SequenceTarget {
   `,
   styles: `
     :host { display: block; margin: 0 0 20px; }
+    /* full screen: all the room there is */
+    :host(.full) { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: 0; }
+    :host(.full) .seq { flex: 1; max-height: none; }
     /* never taller than the editor below the bars of the flow: its scrollbars stay in view with it */
-    .seq { display: flex; align-items: flex-start; max-height: min(78vh, calc(100vh - 210px)); min-height: 220px; overflow: auto;
+    .seq { display: flex; align-items: flex-start; max-height: min(60vh, calc(100vh - 210px)); min-height: 220px; overflow: auto;
       border: 1px solid var(--border); border-radius: 10px;
       background: radial-gradient(circle at 1px 1px, var(--tint-dots) 1px, transparent 0) 0 0 / 16px 16px, var(--bg-panel-2); }
 
@@ -254,6 +258,8 @@ export class SequenceDiagram {
   readonly detail = input<MethodDetail>('name');
   /** what a call gives back: a dashed arrow back with the type, in the list a row of its own */
   readonly returns = input(true);
+  /** shown full screen: the diagram takes all the room it gets instead of its usual height */
+  readonly full = input(false);
   /** step number of every segment in the flow (the number in the bubbles, as in the flow diagram and the code) */
   readonly stepOf = input.required<Record<string, number>>();
   /** the zoom chosen (buttons and Ctrl + wheel); while playing the diagram may show less (shownZoom) */

@@ -59,7 +59,8 @@ export function zoomToShow(span: Span, viewW: number, viewH: number, chosen: num
 
 /**
  * The buttons of the zoom: out, the factor (a click goes back to 100 %), in, and fit (the whole drawing into the
- * view). The diagram holds the zoom and passes it in; Ctrl + wheel on the diagram zooms as well.
+ * view) - and beside them the button for full screen (full-view.ts). The diagram holds the zoom and passes it in;
+ * Ctrl + wheel on the diagram zooms as well.
  */
 @Component({
   selector: 'app-zoom-controls',
@@ -78,6 +79,12 @@ export function zoomToShow(span: Span, viewW: number, viewH: number, chosen: num
     <button type="button" class="ftool icon" (click)="fit.emit()" [title]="t('Ganzes Diagramm einpassen')" [attr.aria-label]="t('Ganzes Diagramm einpassen')">
       <app-icon name="fit" [size]="13" />
     </button>
+    @if (full() != null) {
+      <button type="button" class="ftool icon" [class.on]="full()" [attr.aria-pressed]="full()" (click)="fullChange.emit(!full())"
+              [title]="full() ? t('Vollbild beenden (Esc)') : t('Diagramm im Vollbild zeigen')" [attr.aria-label]="full() ? t('Vollbild beenden') : t('Vollbild')">
+        <app-icon [name]="full() ? 'fullscreenExit' : 'fullscreen'" [size]="13" />
+      </button>
+    }
   `,
   styles: `
     :host { display: inline-flex; flex: none; align-items: center; gap: 1px; }
@@ -90,6 +97,9 @@ export class ZoomControls {
   readonly zoom = input.required<number>();
   readonly zoomChange = output<number>();
   readonly fit = output<void>();
+  /** the diagram is shown full screen (null: it has no full screen, no button) */
+  readonly full = input<boolean | null>(null);
+  readonly fullChange = output<boolean>();
   protected readonly t = t;
   protected readonly min = ZOOM_MIN;
   protected readonly max = ZOOM_MAX;

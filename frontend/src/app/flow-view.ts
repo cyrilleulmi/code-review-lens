@@ -26,7 +26,8 @@ import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
 import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
-import { FlowDiagramKind, Progress, ReviewStore } from './review.store';
+import { Progress, ReviewStore } from './review.store';
+import { FullView } from './full-view';
 import { RETURNS_MAX, methodLabel, methodTooltip, returnType, returnsLabel } from './method-detail';
 import { comesLater, flowSequence, isUsedNotCalled, playbackOf, sequenceKey } from './flow-sequence';
 import { SequenceControls } from './sequence-controls';
@@ -196,7 +197,9 @@ const STEP_RUNS: StepRunStatus[] = ['none', 'mocked', 'tested'];
 const EDGE_RUNS: EdgeRunStatus[] = ['none', 'partial', 'separate', 'tested'];
 
 /**
- * A data flow: a call-tree diagram on top, below the code of each step in call order. Call sites inside
+ * A data flow: on top its two diagrams, one below the other - the call graph (who calls whom) and the sequence (which
+ * call comes after which, as a list and a sequence diagram) -, below them the code of each step in call order.
+ * Playing the sequence shows each call in both diagrams, and of the code only the two steps the call runs between. Call sites inside
  * the code are connected to the step they call with lines in the left margin. Steps can be hidden (one by one,
  * or all outside one branch), finished steps hidden, or the steps walked through one by one.
  *
@@ -209,6 +212,11 @@ const EDGE_RUNS: EdgeRunStatus[] = ['none', 'partial', 'separate', 'tested'];
   imports: [CodeBlock, Icon, NgTemplateOutlet, SequenceControls, SequenceDiagram, SymbolBadge, ZoomControls],
   templateUrl: './flow-view.html',
   styleUrl: './flow-view.scss',
+  host: {
+    '(document:fullscreenchange)': 'full.sync()',
+    '(document:keydown.escape)': 'full.close()',
+    '(window:resize)': 'measureGraph()',
+  },
 })
 export class FlowView {
   protected readonly store = inject(ReviewStore);
@@ -218,12 +226,28 @@ export class FlowView {
   private readonly graph = viewChild.required<ElementRef<HTMLElement>>('graph');
   protected readonly seqDiagram = viewChild(SequenceDiagram);
   private readonly injector = inject(Injector);
-  /** Zoom of the call graph and of the sequence diagram, as chosen (buttons, Ctrl + wheel); the same for every flow. */
-  protected readonly graphZoom = signal(1);
+  /** The two diagrams with the bar of the playback: what full screen shows, with one of the diagrams. */
+  private readonly diagrams = viewChild.required<ElementRef<HTMLElement>>('diagrams');
+  protected readonly full = new FullView<'graph' | 'sequence'>(() => this.diagrams().nativeElement);
+  /**
+   * Zoom of the call graph as chosen (buttons, Ctrl + wheel); null = not chosen: the whole flow fits into the view
+   * (graphFit). Every flow starts that way.
+   */
+  protected readonly graphZoom = linkedSignal<string, number | null>({ source: () => this.flow().id, computation: () => null });
+  /** Zoom of the sequence diagram, as chosen; the same for every flow. */
   protected readonly seqZoom = signal(1);
+  /** The room the call graph has: the width of its view and the height it may take at most. */
+  private readonly graphRoom = signal({ w: 0, h: 0 });
+  /** The zoom that shows the whole call graph (at most 100 %). */
+  private readonly graphFit = computed(() => {
+    const d = this.diagram();
+    const room = this.graphRoom();
+    return fitZoom(d.width + 2 * DIAGRAM_PAD, d.height + 2 * DIAGRAM_PAD, room.w, room.h, 1);
+  });
+  private readonly graphChosen = computed(() => this.graphZoom() ?? this.graphFit());
   /** Playing in the call graph: the zoom that shows the current call whole (null = the zoom chosen). */
   private readonly graphPlayZoom = signal<number | null>(null);
-  protected readonly graphShownZoom = computed(() => (this.player.index() > 0 ? this.graphPlayZoom() ?? this.graphZoom() : this.graphZoom()));
+  protected readonly graphShownZoom = computed(() => (this.player.index() > 0 ? this.graphPlayZoom() ?? this.graphChosen() : this.graphChosen()));
   protected readonly connectors = signal<Connector[]>([]);
   protected readonly railHeight = signal(0);
   protected readonly railWidth = signal(0);
@@ -261,8 +285,6 @@ export class FlowView {
   protected readonly codeFollows = computed(() => this.page().code == null);
   /** Areas taken out of this flow. */
   private readonly hiddenAreas = computed(() => this.page().hiddenAreas);
-  /** What the diagram shows: the call graph, or the calls one after the other (list and sequence diagram). */
-  protected readonly diagramKind = computed(() => this.page().diagram);
 
   /** Mock-Grenzen: what the tests really execute, per step (segment id) and per edge ("from>to"). */
   /** What the tests run in this flow; nothing while the test enrichments are switched off. */
@@ -735,9 +757,23 @@ export class FlowView {
   });
 
   protected readonly hiddenCount = computed(() => this.nodes().length - this.visible().size);
+  /**
+   * Segment ids whose code stands below the diagrams. While a call of the sequence is shown, only the two steps it
+   * runs between - also when they are hidden otherwise; else what is visible.
+   */
+  protected readonly shown = computed<ReadonlySet<string>>(() => {
+    const call = this.currentCall();
+    return call ? new Set([call.from, call.to]) : this.visible();
+  });
+  /** Only what is shown stands there, without a line for every step left out: step by step, and while playing. */
+  protected readonly solo = computed(() => this.stepIndex() != null || this.currentCall() != null);
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.player.destroy());
+    const destroyRef = inject(DestroyRef);
+    destroyRef.onDestroy(() => {
+      this.player.destroy();
+      this.full.close();
+    });
     // Another flow, or other calls (an area removed): the playback starts over. The same calls computed again (the
     // review was loaded anew) leave it where it is.
     const playing = computed(() => this.flow().id + '|' + sequenceKey(this.sequence()));
@@ -745,14 +781,28 @@ export class FlowView {
       playing();
       untracked(() => this.player.reset());
     });
+    // The room of the call graph, for the zoom that shows the whole flow: measured whenever its view changes size.
+    afterNextRender(() => {
+      const observer = new ResizeObserver(() => this.measureGraph());
+      observer.observe(this.graph().nativeElement);
+      destroyRef.onDestroy(() => observer.disconnect());
+      this.measureGraph();
+    });
+    // The playback starts: the call graph is what it is followed in - into view, should the page stand elsewhere.
+    const started = computed(() => this.player.index() > 0);
+    effect(() => {
+      if (started()) {
+        untracked(() => this.graph().nativeElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+      }
+    });
     // Playing in the call graph: a new call brings the boxes it runs between into view - zoomed out as far as needed
     // to see both, never further in than the zoom chosen - by scrolling the diagram, not the page.
     effect(() => {
       const call = this.currentCall();
-      const chosen = this.graphZoom();
+      const chosen = this.graphChosen();
       const pb = this.playback();
-      // also when the call graph is switched to while a call is shown: it was hidden (and had no size) before
-      if (!call || !pb || this.diagramKind() !== 'graph') {
+      // fitted into the view (the default), the whole flow is in view anyway: nothing to bring into view
+      if (!call || !pb || this.graphZoom() == null) {
         untracked(() => this.graphPlayZoom.set(null));
         return;
       }
@@ -767,8 +817,8 @@ export class FlowView {
         };
         const el = this.graph().nativeElement;
         afterNextRender({ write: () => {
-          // measured once the diagram is shown: the view may have been hidden until now
-          const zoom = zoomToShow(span, el.clientWidth, el.clientHeight, chosen);
+          // the view grows with the drawing up to its largest height
+          const zoom = zoomToShow(span, el.clientWidth, Math.max(el.clientHeight, this.graphRoom().h), chosen);
           this.graphPlayZoom.set(zoom);
           const at = (v: number) => (v + DIAGRAM_PAD) * zoom;
           afterNextRender({ write: () => {
@@ -814,6 +864,7 @@ export class FlowView {
       this.inlineRoots();
       this.wholeCards();
       this.visible();
+      this.shown();
       this.gutter();
       this.indent();
       this.store.ok();
@@ -841,6 +892,7 @@ export class FlowView {
     afterRenderEffect(() => {
       const target = this.store.focusSegment();
       this.visible();
+      this.shown();
       this.codeCards();
       this.inlineRoots();
       this.wholeCards();
@@ -878,11 +930,24 @@ export class FlowView {
     this.graphZoom.set(zoom);
   }
 
-  /** The whole call graph into the view (at most 100 %). */
+  /** The whole call graph into the view (at most 100 %), as every flow starts: it then follows the size of the view. */
   protected fitGraph(): void {
+    this.graphZoom.set(null);
+  }
+
+  /**
+   * How much room the call graph has: as wide as its view, as high as it may get at most (its max-height; full
+   * screen, where it has none, the height it has).
+   */
+  protected measureGraph(): void {
     const el = this.graph().nativeElement;
-    const d = this.diagram();
-    this.graphZoom.set(fitZoom(d.width + 2 * DIAGRAM_PAD, d.height + 2 * DIAGRAM_PAD, el.clientWidth, el.clientHeight, 1));
+    const limit = parseFloat(getComputedStyle(el).maxHeight);
+    const w = el.clientWidth;
+    const h = Number.isFinite(limit) ? limit - 2 : el.clientHeight;
+    const room = this.graphRoom();
+    if (room.w !== w || room.h !== h) {
+      this.graphRoom.set({ w, h });
+    }
   }
 
   /** Ctrl + wheel zooms the call graph around the pointer; the wheel alone scrolls. */
@@ -908,11 +973,6 @@ export class FlowView {
   /** What a call gives back (its return type), for the line that says which call is played; null = nothing, or not shown. */
   protected returnOf(call: { to: string }): string | null {
     return this.store.showReturns() ? returnType(this.store.segments().get(call.to)?.signature) : null;
-  }
-
-  /** Call graph or sequence. */
-  protected setDiagram(diagram: FlowDiagramKind): void {
-    this.store.setFlowPage(this.flow().id, { diagram });
   }
 
   protected toggleCallsOnly(): void {
@@ -994,9 +1054,9 @@ export class FlowView {
     }
   }
 
-  /** A step of the card is shown (in step-by-step mode only the current card has one). */
+  /** A step of the card is shown (step by step only the current card has one, while playing the cards of the call). */
   protected anyVisible(ids: readonly string[]): boolean {
-    return ids.some((id) => this.visible().has(id));
+    return ids.some((id) => this.shown().has(id));
   }
 
   protected isDone(id: string): boolean {
@@ -1304,6 +1364,12 @@ export class FlowView {
       const next = new Set(this.hiddenAreas());
       next.delete(removedStep.area);
       this.store.setFlowPage(this.flow().id, { hiddenAreas: next });
+    }
+    // to the code: out of full screen, and out of the playback when it shows the code of another call
+    this.full.close();
+    const call = this.currentCall();
+    if (call && call.from !== segmentId && call.to !== segmentId) {
+      this.player.reset();
     }
     if (!this.nodes().some((n) => n.step.segmentId === segmentId)) {
       this.store.reveal(segmentId);

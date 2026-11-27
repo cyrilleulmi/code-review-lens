@@ -706,7 +706,6 @@ export const EN: Record<string, string> = {
   "erledigt": "done",
   "ausgeblendet": "hidden",
   "Flow durchgearbeitet": "Flow done",
-  "Diagramm": "Diagram",
   "Code": "Code",
   "Methoden": "Methods",
   "Klassen": "Classes",
@@ -764,7 +763,6 @@ export const EN: Record<string, string> = {
 
   // ------------------------------------------------------------------ Abfolge: call sequence, sequence diagram, playback
   'Abfolge': 'Sequence',
-  'Art des Diagramms': 'Kind of diagram',
   'Aufrufgraph': 'Call graph',
   'Aufrufgraph: wer wen aufruft, jeder Schritt einmal': 'Call graph: who calls whom, every step once',
   'Abfolge: die Aufrufe der Reihe nach als Liste und als Sequenzdiagramm – eine Lebenslinie pro Klasse, ein Pfeil pro Aufruf':
@@ -833,6 +831,12 @@ export const EN: Record<string, string> = {
   'Vergrössern (Strg + Mausrad)': 'Zoom in (Ctrl + mouse wheel)',
   'Vergrössern': 'Zoom in',
   'Ganzes Diagramm einpassen': 'Fit the whole diagram',
+  'Vollbild': 'Full screen',
+  'Vollbild beenden': 'Exit full screen',
+  'Vollbild beenden (Esc)': 'Exit full screen (Esc)',
+  'Diagramm im Vollbild zeigen': 'Show the diagram full screen',
+  'Aufruf {no}: nur der betroffene Code': 'Call {no}: only the code involved',
+  'Solange ein Aufruf der Abfolge gezeigt wird, steht hier nur sein Code: der Aufrufer und der aufgerufene Schritt. «Beenden» in der Leiste der Abfolge zeigt wieder alles': 'While a call of the sequence is shown, only its code stands here: the caller and the step called. “Finish” in the bar of the sequence shows everything again',
 
   // ------------------------------------------------------------------ code block
   "Ausklappen": "Expand",

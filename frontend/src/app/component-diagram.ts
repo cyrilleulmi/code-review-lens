@@ -13,6 +13,7 @@ import { SequenceControls } from './sequence-controls';
 import { SequencePlayer, scrollToShow } from './sequence-player';
 import { returnType } from './method-detail';
 import { ZoomControls, fitZoom, wheelZoom, zoomAround, zoomToShow } from './zoom';
+import { FullView } from './full-view';
 
 const NO_SEQUENCE: FlowSequence = { entries: [], calls: [] };
 
@@ -82,6 +83,11 @@ const LOOSE_GAP = 22;
 @NgComponent({
   selector: 'app-component-diagram',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    '[class.full]': '!!full.what()',
+    '(document:fullscreenchange)': 'full.sync()',
+    '(document:keydown.escape)': 'full.close()',
+  },
   imports: [Icon, SequenceControls, ZoomControls],
   template: `
     @let pb = playback();
@@ -109,7 +115,7 @@ const LOOSE_GAP = 22;
       <button type="button" class="ftool" [class.on]="hideIsolated()" (click)="hideIsolated.set(!hideIsolated())"
               [title]="t('Komponenten ohne Aufrufbeziehung ausblenden')"><app-icon name="eyeOff" [size]="12" /> {{ t('Ohne Verbindung ausblenden') }}</button>
       <span class="legend"><i class="l-call"></i> {{ t('Aufruf') }} <i class="l-http"></i> REST/HTTP</span>
-      <app-zoom-controls [zoom]="shownZoom()" (zoomChange)="setZoom($event)" (fit)="fit()" />
+      <app-zoom-controls [zoom]="shownZoom()" (zoomChange)="setZoom($event)" (fit)="fit()" [full]="!!full.what()" (fullChange)="full.toggle('on')" />
     </div>
     @if (flowId()) {
       <div class="seq-bar">
@@ -208,6 +214,9 @@ const LOOSE_GAP = 22;
     .legend i { display: inline-block; width: 18px; border-top: 2px solid var(--fg-dim); }
     .legend i.l-http { border-top: 2px dashed var(--fg-dim); }
     .empty { color: var(--fg-muted); padding: 12px; margin: 0; }
+    /* full screen (full-view.ts): the diagram with its bars covers the page */
+    :host(.full) { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; border: 0; border-radius: 0; }
+    :host(.full) .scroll { flex: 1; max-height: none; }
     /* never taller than the editor below the bars: its scrollbars stay in view with it */
     .scroll { overflow: auto; max-height: min(78vh, calc(100vh - 190px)); }
     .canvas { position: relative; margin: 14px; }
@@ -273,6 +282,8 @@ export class ComponentDiagram {
   protected readonly focus = signal<string | null>(null);
   protected readonly hovered = signal<string | null>(null);
   private readonly injector = inject(Injector);
+  /** The diagram with its bars, shown full screen. */
+  protected readonly full = new FullView(() => this.host.nativeElement);
   /** Zoom as chosen (buttons, Ctrl + wheel), and while playing the zoom that shows the current call whole. */
   protected readonly zoom = signal(1);
   private readonly playZoom = signal<number | null>(null);

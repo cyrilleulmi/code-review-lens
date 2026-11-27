@@ -133,6 +133,13 @@ Für den PoC wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **
 * «Abfolge» mit «Signatur»: `CodeBlock` und `Api` stehen weiter auseinander, damit die Signatur Platz hat.
 * Im Backend-Flow `approve → approve → requirePullRequest (+2)` (Java): `ReviewResource.approve(@PathParam("provider") String provider, …)` erscheint als `approve(provider: String, owner: String, …): PrStatus`, im Tooltip die Records `ApprovalRequest { approved: boolean }` und `PrStatus` aus `Model.java` mit ihren Komponenten; `ReviewService.approve(PrRef ref, boolean approved)` gibt `Model.PrStatus` zurück und zeigt `PrRef` und `PrStatus` (der qualifizierte Name wird aufgelöst).
 
+**Beide Diagramme, Abspielen mit Code, Vollbild (FR-UI-22, -23, -25, -34)** – an spongecoach#13, Flow `saveJerseyNumber → setJerseyNumber → update → validateJerseyNumber (+2)`:
+
+* Der Flow zeigt oben den Aufrufgraph, darunter die Abfolge, dann den Code. Der Aufrufgraph ist eingepasst: alle vier Klassen sind zu sehen (bei 1500 px Fensterbreite 37 %, Ebene «Klassen» 57 %), kein Scrollbalken.
+* «Einen Aufruf weiter» bis Aufruf 3: In beiden Diagrammen sind `PlayerResource.update` und `validateJerseyNumber` hervorgehoben; unter den Diagrammen stehen nur diese zwei Blöcke, die Leiste «Code» zeigt «Aufruf 3: nur der betroffene Code». «Beenden» zeigt wieder alle sechs Blöcke.
+* «Vollbild» am Aufrufgraph: Er füllt mit seiner Leiste und der Leiste «Abfolge» den Bildschirm (50 %), «Einen Aufruf weiter» spielt dort weiter; Esc beendet. «Vollbild» an der Abfolge zeigt Liste und Sequenzdiagramm, der Knopf beendet es wieder.
+* Komponenten → «Vollbild»: Das Komponentendiagramm füllt den Bildschirm, Esc beendet.
+
 **Schalter «Signatur» und «Rückgabewerte» (FR-UI-24)** – an spongecoach#13, Flow `saveJerseyNumber → setJerseyNumber → update → validateJerseyNumber (+2)`:
 
 * Beide Schalter sind Pillen; an = gefüllt mit Haken. Standard: «Signatur» aus, «Rückgabewerte» an. Nach dem Neuladen steht die Wahl wieder so da.
