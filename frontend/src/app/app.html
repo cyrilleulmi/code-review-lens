@@ -1,10 +1,10 @@
 @let b = store.bundle();
 <header class="toolbar">
-  <button type="button" class="logo" (click)="home()" [title]="b ? t('Zur Startseite – {noun} schliessen', { noun: store.provider().noun }) : t('Startseite')"
+  <button type="button" class="logo" (click)="home()" [title]="b ? t('Zur Startseite – die Tabs bleiben offen') : t('Startseite')"
           [attr.aria-label]="t('Startseite')">SC</button>
   @if (b) {
     <button type="button" class="widget project" (click)="store.quickOpen.set(true)" [title]="t('Pull/Merge Request wechseln (Strg+K): andere dieses Repositorys, zuletzt geöffnete, angepinnte')">
-      <span class="avatar-sq">{{ b.pr.repo.charAt(0).toUpperCase() }}</span>
+      <span class="avatar-sq" [style.background]="currentColor()">{{ b.pr.repo.charAt(0).toUpperCase() }}</span>
       {{ b.pr.repo }}
       <app-icon name="chevronDown" [size]="12" />
     </button>
@@ -41,8 +41,8 @@
       <button type="button" class="pr-title" (click)="store.select({ kind: 'overview' })" [title]="b.pr.title + ' – ' + t('Übersicht')">
         {{ store.provider().sigil }}{{ b.pr.number }} {{ b.pr.title }}</button>
     }
-    <button type="button" class="tb-btn small close-pr" (click)="store.close()" [title]="t('{noun} schliessen – zurück zur Startseite', { noun: store.provider().noun })"
-            [attr.aria-label]="t('{noun} schliessen', { noun: store.provider().noun })"><app-icon name="close" [size]="13" /></button>
+    <button type="button" class="tb-btn small close-pr" (click)="store.closeTab(b.pr)" [title]="t('Tab schliessen: {noun} nicht mehr offen halten', { noun: store.provider().noun })"
+            [attr.aria-label]="t('Tab schliessen')"><app-icon name="close" [size]="13" /></button>
   } @else {
     <span class="widget"><span class="avatar-sq">S</span> SmartCodeReview</span>
   }
@@ -109,22 +109,55 @@
 </header>
 
 <div class="main">
-  <nav class="stripe" [attr.aria-label]="t('Tool-Fenster')">
-    <button type="button" [class.active]="tool() === 'prs'" (click)="toggleTool('prs')"
+  <nav class="stripe" [class.wide]="stripeWide()" [attr.aria-label]="t('Tool-Fenster')">
+    <button type="button" class="tool-btn" [class.active]="tool() === 'prs'" (click)="toggleTool('prs')"
             [title]="t('Pull Requests (Alt+1)') + (waiting() ? ' – ' + t('{n} warten auf dein Review', { n: waiting() }) : '')">
-      <app-icon name="pr" [size]="18" />
-      @if (waiting()) {
-        <span class="count">{{ waiting() }}</span>
+      <span class="sq"><app-icon name="pr" [size]="18" />
+        @if (waiting()) {
+          <span class="count">{{ waiting() }}</span>
+        }
+      </span>
+      @if (stripeWide()) {
+        <span class="text"><span class="t1">{{ t('Pull/Merge Requests') }}</span></span>
       }
     </button>
-    <button type="button" [class.active]="tool() === 'review'" (click)="toggleTool('review')" [disabled]="!b" [title]="t('Review (Alt+2)')">
-      <app-icon name="review" [size]="18" />
+    @if (tabs().length) {
+      <span class="sep" aria-hidden="true"></span>
+    }
+    <!-- a tab per open pull request: its colour, the initials of its repository and its number; unfolded, its title -->
+    <div class="tabs" role="tablist" [attr.aria-label]="t('Offene Pull/Merge Requests')">
+      @for (tab of tabs(); track tab.key) {
+        <div class="tab" [class.current]="tab.current" [class.shown]="tab.current && tool() === 'review'" [style.--tab]="tab.css">
+          <button type="button" class="tab-btn" role="tab" [attr.aria-selected]="tab.current" (click)="tabClick(tab)" (mousedown)="tabMiddle($event)" (mouseup)="tabMiddle($event, tab)" [title]="tab.tip">
+            <span class="sq"><b>{{ tab.initials }}</b><small>{{ tab.no }}</small></span>
+            @if (stripeWide()) {
+              <span class="text"><span class="t1">{{ tab.title }}</span><span class="t2">{{ tab.repo }} {{ tab.no }}</span></span>
+            }
+          </button>
+          @if (stripeWide()) {
+            <button type="button" class="tab-close" (click)="store.closeTab(tab)" [title]="t('Tab schliessen')" [attr.aria-label]="t('Tab schliessen')">
+              <app-icon name="close" [size]="12" />
+            </button>
+          }
+        </div>
+      }
+    </div>
+    <span class="spacer"></span>
+    <button type="button" class="tool-btn fold" (click)="toggleStripe()" [attr.aria-expanded]="stripeWide()"
+            [title]="stripeWide() ? t('Leiste einklappen') : t('Leiste ausklappen: die Titel der offenen Pull/Merge Requests zeigen')">
+      <span class="sq"><app-icon [name]="stripeWide() ? 'arrowLeft' : 'arrowRight'" [size]="15" /></span>
+      @if (stripeWide()) {
+        <span class="text"><span class="t1">{{ t('Einklappen') }}</span></span>
+      }
     </button>
   </nav>
 
   @if (tool()) {
     <aside class="tool" [style.width.px]="toolWidth()">
       <div class="tool-head">
+        @if (tool() === 'review' && b) {
+          <span class="tool-mark" [style.background]="currentColor()"></span>
+        }
         <span>{{ tool() === 'prs' ? t('Pull/Merge Requests') : t('Review') }}</span>
         <span class="spacer"></span>
         <button type="button" class="tb-btn small" (click)="tool.set(null)" [title]="t('Ausblenden')"><app-icon name="close" [size]="13" /></button>

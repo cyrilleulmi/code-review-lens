@@ -38,7 +38,7 @@ import { FlowCodeLevel, FlowDiagramLevel } from './flow-classes';
 import { INSIGHTS } from './insights';
 import { startSelection } from './start-selection';
 import { METHOD_DETAILS, MethodDetail } from './method-detail';
-import { Workspace } from './workspace';
+import { OpenTab, Workspace } from './workspace';
 import { groupWarnings, testNamer } from './mock-boundaries';
 import { reloadMessage } from './reload-message';
 import { serverText, t } from './i18n';
@@ -120,6 +120,8 @@ export class ReviewStore {
    */
   private historyMode: HistoryMode = 'push';
   private pendingHistory: HistoryMode = 'push';
+  /** Where each open pull request was left (its address), by prLabel: its tab comes back to that view. */
+  private readonly leftAt = new Map<string, string>();
   private prsLoadedAt = 0;
 
   readonly me = signal<Me | null>(null);
@@ -627,7 +629,30 @@ export class ReviewStore {
     });
   }
 
-  /** Back to the start page. A new entry of the browser history: back returns to the pull request. */
+  /** Shows the pull request of a tab, at the view it was left at. */
+  activate(tab: PrKey): void {
+    const left = parseHash(this.leftAt.get(prLabel(tab)) ?? '');
+    this.open({ provider: tab.provider, owner: tab.owner, repo: tab.repo, number: tab.number }, left?.selection ?? null, left?.commit ?? null);
+  }
+
+  /** Closes the tab of a pull request. Was it the one shown, the tab beside it is shown, without one the start page. */
+  closeTab(pr: PrKey): void {
+    const shown = this.prKey();
+    const next: OpenTab | null = this.workspace.closeTab(pr);
+    this.leftAt.delete(prLabel(pr));
+    if (shown && prLabel(shown) === prLabel(pr)) {
+      if (next) {
+        this.activate(next);
+      } else {
+        this.close();
+      }
+    }
+  }
+
+  /**
+   * To the start page; the tabs stay, none of them is shown. A new entry of the browser history: back returns to
+   * the pull request.
+   */
   close(history: HistoryMode = 'push'): void {
     if (history !== 'none' && location.hash) {
       window.history.pushState(null, '', location.pathname);
@@ -653,6 +678,7 @@ export class ReviewStore {
       this.flowPages.set(new Map()); // the flows of another PR
       this.status.set(null);
       this.workspace.noteOpened(b.pr);
+      this.workspace.openTab(b.pr);
     }
     this.bundle.set(b);
     this.applyState(b.state);
@@ -716,6 +742,7 @@ export class ReviewStore {
       return;
     }
     const hash = '#' + formatHash(key, this.selection(), this.commitFilter());
+    this.leftAt.set(prLabel(key), hash);
     if (location.hash === hash) {
       return;
     }

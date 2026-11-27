@@ -3,7 +3,7 @@ import {
 } from '@angular/core';
 import { AccountCookie } from './account-cookie';
 import { CertificateDialog } from './certificates';
-import { isTestsView, prLabel } from './api';
+import { PrKey, isTestsView, prLabel, providerInfo } from './api';
 import { applyLang, lang, serverText, setLang, t } from './i18n';
 import { applyTheme, theme, toggleTheme } from './theme';
 import { CoverageOverview } from './coverage-overview';
@@ -20,6 +20,7 @@ import { QuickOpen } from './quick-open';
 import { StartPage } from './start-page';
 import { ReviewStore, Slot } from './review.store';
 import { ReviewTree } from './review-tree';
+import { Workspace, prKeyOf, repoInitials, repoLabel, tabColor } from './workspace';
 
 type ToolWindow = 'prs' | 'review' | null;
 
@@ -49,7 +50,29 @@ interface EditorContent {
 })
 export class App {
   protected readonly store = inject(ReviewStore);
+  private readonly workspace = inject(Workspace);
   protected readonly tool = signal<ToolWindow>('prs');
+  /** The stripe at the left edge is unfolded: the tabs show the titles of their pull requests. Kept per browser. */
+  protected readonly stripeWide = signal(readFlag('scr.stripeWide'));
+  /** The tabs of the open pull requests as the stripe shows them. */
+  protected readonly tabs = computed<StripeTab[]>(() => {
+    const open = this.store.prKey();
+    return this.workspace.tabs().map((tab) => {
+      const no = tab.number === 0 ? 'repo' : providerInfo(tab.provider).sigil + tab.number;
+      return {
+        provider: tab.provider, owner: tab.owner, repo: tab.repo, number: tab.number, title: tab.title,
+        key: prKeyOf(tab), current: !!open && prKeyOf(open) === prKeyOf(tab), css: tabColor(tab.color),
+        initials: repoInitials(tab.repo), no,
+        tip: `${tab.title}\n${repoLabel(tab)} ${tab.number === 0 ? t('ganzes Repository') : no}\n${t('Mittlere Maustaste: Tab schliessen')}`,
+      };
+    });
+  });
+  /** The colour of the pull request that is shown (its tab, its entry in the lists, the toolbar). */
+  protected readonly currentColor = computed(() => {
+    const open = this.store.prKey();
+    const tab = open ? this.workspace.tabOf(open) : null;
+    return tab ? tabColor(tab.color) : null;
+  });
   protected readonly toolWidth = signal(readWidth());
   /** Provider whose cookie dialog is open (accounts behind an SSO proxy, status bar). */
   protected readonly cookieFor = signal<string | null>(null);
@@ -213,6 +236,36 @@ export class App {
     this.tool.set('prs');
   }
 
+  /** The tab of the pull request shown folds its review window in and out; another tab shows its pull request. */
+  protected tabClick(tab: PrKey): void {
+    const open = this.store.prKey();
+    if (open && prKeyOf(open) === prKeyOf(tab)) {
+      this.toggleTool('review');
+    } else {
+      this.store.activate(tab);
+    }
+  }
+
+  /** The middle mouse button closes a tab, as in a browser: pressed it does nothing (no scrolling), released it closes. */
+  protected tabMiddle(event: MouseEvent, tab?: PrKey): void {
+    if (event.button === 1) {
+      event.preventDefault();
+      if (tab) {
+        this.store.closeTab(tab);
+      }
+    }
+  }
+
+  protected toggleStripe(): void {
+    const wide = !this.stripeWide();
+    this.stripeWide.set(wide);
+    try {
+      localStorage.setItem('scr.stripeWide', String(wide));
+    } catch {
+      // storage unavailable - the stripe is just folded again next time
+    }
+  }
+
   protected toggleTool(t: ToolWindow): void {
     this.tool.set(this.tool() === t ? null : t);
   }
@@ -253,6 +306,27 @@ export class App {
       event.preventDefault();
       this.toggleTool('review');
     }
+  }
+}
+
+/** A tab of the stripe: the pull request with its colour as a CSS value and its short texts. */
+interface StripeTab extends PrKey {
+  title: string;
+  key: string;
+  current: boolean;
+  /** its colour as a CSS value */
+  css: string;
+  initials: string;
+  /** "#17", "!4347", "repo" for a whole repository */
+  no: string;
+  tip: string;
+}
+
+function readFlag(name: string): boolean {
+  try {
+    return localStorage.getItem(name) === 'true';
+  } catch {
+    return false;
   }
 }
 

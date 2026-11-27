@@ -30,6 +30,7 @@ export interface RepoGroup {
 export const RECENT_MAX = 12;
 const RECENT_KEY = 'scr.recentPrs';
 const PINNED_KEY = 'scr.pinnedRepos';
+const TABS_KEY = 'scr.openTabs';
 /** The list of recently opened repositories of earlier versions: they are offered for pinning. */
 const OLD_RECENT_REPOS_KEY = 'scr.recentRepos';
 
@@ -116,6 +117,56 @@ export function relativeTime(iso: string | null | undefined, now: Date): string 
   return then.toISOString().substring(0, 10);
 }
 
+/**
+ * A pull request that is open as a tab at the left edge. Its colour (1..8 of the palette of the connections) marks
+ * it wherever it shows: its tab, its entry in the lists, the toolbar.
+ */
+export interface OpenTab extends PrKey {
+  title: string;
+  color: number;
+}
+
+/** How many colours the tabs have; with more tabs open, colours repeat. */
+export const TAB_COLORS = 8;
+
+/** The colour of a tab as a CSS value. */
+export function tabColor(color: number): string {
+  return `var(--edge-${((Math.max(1, color) - 1) % TAB_COLORS) + 1})`;
+}
+
+/**
+ * Opens a tab for the pull request at the end of the row, in the first colour no open tab has (with all taken: the
+ * one used least). A pull request that has a tab keeps it and its colour, with the title as it is now.
+ */
+export function addTab(tabs: readonly OpenTab[], pr: PrKey & { title: string }): OpenTab[] {
+  const key = prKeyOf(pr);
+  if (tabs.some((tab) => prKeyOf(tab) === key)) {
+    return tabs.map((tab) => (prKeyOf(tab) === key ? { ...tab, title: pr.title } : tab));
+  }
+  const used = (color: number) => tabs.filter((tab) => tab.color === color).length;
+  const colors = Array.from({ length: TAB_COLORS }, (_, i) => i + 1);
+  const color = colors.reduce((best, c) => (used(c) < used(best) ? c : best), 1);
+  return [...tabs, { provider: pr.provider, owner: pr.owner, repo: pr.repo, number: pr.number, title: pr.title, color }];
+}
+
+/** Closes a tab. next: the tab to go on with when it was the one shown - the one after it, else the one before. */
+export function removeTab(tabs: readonly OpenTab[], pr: PrKey): { tabs: OpenTab[]; next: OpenTab | null } {
+  const key = prKeyOf(pr);
+  const at = tabs.findIndex((tab) => prKeyOf(tab) === key);
+  const rest = tabs.filter((tab) => prKeyOf(tab) !== key);
+  return { tabs: rest, next: at < 0 ? null : rest[at] ?? rest[at - 1] ?? null };
+}
+
+/**
+ * Two letters for a repository, for the square of its tab: the first letters of its first two words
+ * ("smart-code-review" → SC, "StvBeroPlatform" → SB), of a name in one word its first two letters ("spongecoach" → SP).
+ */
+export function repoInitials(repo: string): string {
+  const words = repo.replace(/([a-z0-9])([A-Z])/g, '$1 $2').split(/[^A-Za-z0-9]+/).filter((w) => w);
+  const letters = words.length >= 2 ? words[0][0] + words[1][0] : (words[0] ?? repo).substring(0, 2);
+  return letters.toUpperCase();
+}
+
 function read<T>(key: string, valid: (x: T) => boolean): T[] {
   try {
     const value = JSON.parse(localStorage.getItem(key) ?? '[]');
@@ -154,6 +205,31 @@ export class Workspace {
     [...this.recent(), ...read<RepoRef>(OLD_RECENT_REPOS_KEY, isRepo)].forEach((r) => known.set(repoKey(r), { provider: r.provider, owner: r.owner, repo: r.repo }));
     return [...known.values()].filter((r) => !pinned.has(repoKey(r))).slice(0, 6);
   });
+  /** The pull requests open as tabs, in the order they were opened; they come back with the browser. */
+  readonly tabs = signal<OpenTab[]>(read<OpenTab>(TABS_KEY, (tab) => isRepo(tab) && typeof tab.number === 'number' && typeof tab.color === 'number'));
+
+  tabOf(pr: PrKey): OpenTab | null {
+    const key = prKeyOf(pr);
+    return this.tabs().find((tab) => prKeyOf(tab) === key) ?? null;
+  }
+
+  /** A pull request was opened: it gets a tab (or keeps the one it has). */
+  openTab(pr: PrKey & { title: string }): void {
+    this.setTabs(addTab(this.tabs(), pr));
+  }
+
+  /** Closes the tab; returns the tab to show instead when the closed one was shown. */
+  closeTab(pr: PrKey): OpenTab | null {
+    const { tabs, next } = removeTab(this.tabs(), pr);
+    this.setTabs(tabs);
+    return next;
+  }
+
+  private setTabs(tabs: OpenTab[]): void {
+    this.tabs.set(tabs);
+    write(TABS_KEY, tabs);
+  }
+
   /** The open pull requests of every pinned repository, by repoKey. */
   readonly pinnedPrs = signal<ReadonlyMap<string, PinnedState>>(new Map());
   private loadedAt = 0;

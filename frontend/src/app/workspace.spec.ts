@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PullRequestSummary } from './api';
-import { groupByRepo, matchesQuery, relativeTime, rememberRecent, repoKey, togglePinned } from './workspace';
+import { addTab, groupByRepo, matchesQuery, relativeTime, rememberRecent, removeTab, repoInitials, repoKey, tabColor, togglePinned } from './workspace';
 
 const pr = (repo: string, number: number, updatedAt: string, title = 'Title'): PullRequestSummary => ({
   provider: 'gitlab', owner: 'group~sub', repo, number, title, author: 'ada', url: `https://git.example/${repo}/${number}`,
@@ -36,6 +36,47 @@ describe('togglePinned', () => {
 
     expect(both.map(repoKey)).toEqual(['gitlab/g/a', 'gitlab/g/b']);
     expect(togglePinned(both, { ...a }).map(repoKey)).toEqual(['gitlab/g/b']);
+  });
+});
+
+describe('tabs', () => {
+  const key = (repo: string, number: number) => ({ provider: 'gitlab', owner: 'g', repo, number, title: `${repo} ${number}` });
+
+  it('gives every new tab a colour no open tab has, and keeps tab and colour of one opened again', () => {
+    let tabs = addTab([], key('web', 1));
+    tabs = addTab(tabs, key('web', 2));
+    tabs = addTab(tabs, key('api', 1));
+    tabs = addTab(tabs, { ...key('web', 1), title: 'renamed' });
+
+    expect(tabs.map((tab) => tab.color)).toEqual([1, 2, 3]);
+    expect(tabs[0].title).toBe('renamed');
+  });
+
+  it('takes the colour a closed tab left free, and the one used least when all are taken', () => {
+    let tabs = [1, 2, 3].reduce((list, n) => addTab(list, key('web', n)), [] as ReturnType<typeof addTab>);
+    tabs = removeTab(tabs, key('web', 2)).tabs;
+    expect(addTab(tabs, key('web', 9)).at(-1)!.color).toBe(2);
+
+    const full = Array.from({ length: 8 }, (_, i) => i + 1).reduce((list, n) => addTab(list, key('web', n)), [] as ReturnType<typeof addTab>);
+    expect(addTab(full, key('web', 99)).at(-1)!.color).toBe(1);
+  });
+
+  it('goes on with the tab after the closed one, else the one before, else none', () => {
+    const tabs = [1, 2, 3].reduce((list, n) => addTab(list, key('web', n)), [] as ReturnType<typeof addTab>);
+
+    expect(removeTab(tabs, key('web', 2)).next?.number).toBe(3);
+    expect(removeTab(tabs, key('web', 3)).next?.number).toBe(2);
+    expect(removeTab(tabs.slice(0, 1), key('web', 1))).toEqual({ tabs: [], next: null });
+    expect(removeTab(tabs, key('web', 7))).toMatchObject({ next: null });
+  });
+
+  it('abbreviates a repository to two letters', () => {
+    expect(repoInitials('smart-code-review')).toBe('SC');
+    expect(repoInitials('StvBeroPlatform')).toBe('SB');
+    expect(repoInitials('spongecoach')).toBe('SP');
+    expect(repoInitials('x')).toBe('X');
+    expect(tabColor(3)).toBe('var(--edge-3)');
+    expect(tabColor(11)).toBe('var(--edge-3)');
   });
 });
 

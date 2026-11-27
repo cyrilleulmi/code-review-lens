@@ -94,7 +94,7 @@ Angular 22, standalone Komponenten, Signals, zoneless, `OnPush`.
 | `review.store.ts` | Zentraler Zustand (Signals), Hash-Routing (`#/github/o/r/12/c/<sha>/flow/flow-1`), optimistische Markierungen pro Ort («Slots» = Segment an einem Ort), Commit-Filter (filtert Slots, Fortschritt und Markierungen auf die Zeilen eines Commits), Blame-Cache, Neuladen des Status beim Fokus des Fensters (damit Änderungen von Agenten sofort erscheinen). |
 | `app.*` | IntelliJ-Shell: Main-Toolbar, Tool-Window-Stripe, verschiebbares Tool-Fenster, Breadcrumbs, Statusleiste, Shortcuts Alt+1/Alt+2. |
 | `pr-list.ts` | Tool-Fenster «Pull Requests»: Suche, Filter, zuletzt geöffnet, angepinnte Repositories, eigene Pull Requests nach Repository; die Verbindungen eingeklappt am Fuss. |
-| `workspace.ts` | Was zwischen den Pull Requests bleibt (pro Browser): zuletzt geöffnete, angepinnte Repositories samt ihren offenen Pull Requests; Regeln fürs Gruppieren, Filtern und «vor …». |
+| `workspace.ts` | Was zwischen den Pull Requests bleibt (pro Browser): die Tabs der offenen Pull Requests mit ihren Farben, zuletzt geöffnete, angepinnte Repositories samt ihren offenen Pull Requests; Regeln fürs Gruppieren, Filtern und «vor …». |
 | `pr-item.ts` | Ein Pull Request als Listeneintrag (Liste, Startseite, Schnellwechsel). |
 | `start-page.ts` | Startseite ohne offenen Pull Request: weiter reviewen, wartet auf Review, angepinnte Repositories. |
 | `quick-open.ts` | Schnellwechsel (Strg+K) zu einem anderen Pull Request. |

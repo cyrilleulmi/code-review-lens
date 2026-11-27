@@ -3,7 +3,7 @@ import { PrKey, PrRole, providerInfo } from './api';
 import { Icon } from './icon';
 import { t } from './i18n';
 import { ReviewStore } from './review.store';
-import { prKeyOf, relativeTime, repoLabel } from './workspace';
+import { Workspace, prKeyOf, relativeTime, repoLabel, tabColor } from './workspace';
 
 /** A pull request as the lists show it: one from a code host, or one remembered as opened here. */
 export interface PrEntry extends PrKey {
@@ -27,7 +27,8 @@ export interface PrEntry extends PrKey {
   imports: [Icon],
   template: `
     @let p = pr();
-    <button type="button" class="item" [class.selected]="current()" [class.active]="active()" (click)="open()" [title]="p.title">
+    <button type="button" class="item" [class.selected]="current()" [class.active]="active()" [class.tabbed]="!!color()" [style.--tab]="color()"
+            (click)="open()" [title]="tip()">
       <span class="line1">
         <app-icon [name]="p.number === 0 ? 'folder' : p.provider" [size]="14" [class]="draft() ? 'draft' : 'open'" />
         <span class="title">{{ p.title }}</span>
@@ -67,6 +68,10 @@ export interface PrEntry extends PrKey {
       color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
     .item:hover, .item.active { background: var(--bg-hover); }
     .item.selected { background: var(--bg-selected); }
+    /* open as a tab: the colour of its tab at the left edge, and as the ground of the one that is shown */
+    .item.tabbed { box-shadow: inset 3px 0 0 var(--tab); }
+    .item.tabbed.selected { background: color-mix(in srgb, var(--tab) 20%, transparent); }
+    .item.tabbed .here { background: var(--tab); color: var(--on-fill); }
     .line1 { display: flex; gap: 6px; align-items: flex-start; }
     .line1 .open { color: var(--ok); margin-top: 1px; flex: none; }
     .line1 .draft { color: var(--fg-dim); margin-top: 1px; flex: none; }
@@ -85,6 +90,7 @@ export interface PrEntry extends PrKey {
 })
 export class PrItem {
   private readonly store = inject(ReviewStore);
+  private readonly workspace = inject(Workspace);
   readonly pr = input.required<PrEntry>();
   /** the repository in the second line (not needed below the heading of its repository) */
   readonly showRepo = input(true);
@@ -101,6 +107,12 @@ export class PrItem {
     const open = this.store.prKey();
     return !!open && prKeyOf(open) === prKeyOf(this.pr());
   });
+  /** The colour of its tab while it is open as one. */
+  protected readonly color = computed(() => {
+    const tab = this.workspace.tabOf(this.pr());
+    return tab ? tabColor(tab.color) : null;
+  });
+  protected readonly tip = computed(() => this.pr().title + (this.color() && !this.current() ? '\n' + t('Offen als Tab') : ''));
   protected readonly roles = computed(() => (this.pr().roles?.length ? this.pr().roles! : this.known()?.roles ?? []));
   protected readonly draft = computed(() => this.pr().draft ?? this.known()?.draft ?? false);
   protected readonly progress = computed(() => this.pr().progress ?? this.known()?.progress ?? null);
