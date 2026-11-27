@@ -46,6 +46,11 @@ if [ "$PUSH" = 1 ]; then
   git push origin main "v$VERSION"
   docker push "$IMAGE:$VERSION"
   docker push "$IMAGE:latest"
+  if [ -n "${DOCKERHUB_TOKEN:-}" ]; then
+    ./dockerhub-overview.sh
+  else
+    echo "Docker Hub overview not updated: DOCKERHUB_TOKEN=... ./dockerhub-overview.sh"
+  fi
   echo "Released $VERSION: https://hub.docker.com/r/$IMAGE/tags"
 else
   echo "Built and tagged $VERSION locally. Push with:"
