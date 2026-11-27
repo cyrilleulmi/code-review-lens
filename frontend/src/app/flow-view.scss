@@ -825,6 +825,20 @@
   opacity: 0.8;
 }
 
+/* what a call gives back, at its connection (switch «Rückgabewerte») */
+.ret-label {
+  font: 500 10.5px var(--font-code);
+  paint-order: stroke;
+  stroke: var(--bg-panel-2);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  cursor: help;
+
+  &.dim {
+    opacity: 0.25;
+  }
+}
+
 .run-label {
   fill: var(--fg-muted);
   font: 500 9px var(--font-ui);

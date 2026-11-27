@@ -1,9 +1,10 @@
 import { Signature, TypeInfo } from './api';
 
 /**
- * How much of a method the diagrams of a data flow show: its name, or its signature (parameters and return type).
- * The signatures come from the analysis (Segment.signature); here they are put into the short texts the diagrams
- * have room for. The types they name (Analysis.types) show in full in the tooltips.
+ * How much of a method the diagrams of a data flow show: its name, or its signature (parameters and return type) -
+ * the switch «Signatur». Independent of it, the switch «Rückgabewerte» draws what a call gives back as an arrow back
+ * (returnType, returnsLabel). The signatures come from the analysis (Segment.signature); here they are put into the
+ * short texts the diagrams have room for. The types they name (Analysis.types) show in full in the tooltips.
  */
 export type MethodDetail = 'name' | 'signature';
 
@@ -11,6 +12,8 @@ export const METHOD_DETAILS: readonly MethodDetail[] = ['name', 'signature'];
 
 /** Longest signature a diagram shows in one line, and the longest line of a type in a tooltip. */
 export const SIGNATURE_MAX = 72;
+/** Longest text at a connection of the call graph for what its calls give back. */
+export const RETURNS_MAX = 36;
 const TYPE_LINE_MAX = 400;
 
 /**
@@ -48,6 +51,21 @@ export function returnType(signature: Signature | null | undefined, max = SIGNAT
     return null;
   }
   return type.length > max ? type.substring(0, max - 1) + '…' : type;
+}
+
+/**
+ * What the calls along one connection give back, in one text: the type - or, when several calls with different types
+ * share the connection (two classes), the first type and how many more: `Player, +2`. null: none gives anything back.
+ */
+export function returnsLabel(types: readonly (string | null)[], max = RETURNS_MAX): string | null {
+  const distinct = [...new Set(types.filter((type): type is string => !!type))];
+  if (!distinct.length) {
+    return null;
+  }
+  const tail = distinct.length > 1 ? `, +${distinct.length - 1}` : '';
+  const room = max - tail.length;
+  const first = distinct[0];
+  return (first.length > room ? first.substring(0, room - 1) + '…' : first) + tail;
 }
 
 /**

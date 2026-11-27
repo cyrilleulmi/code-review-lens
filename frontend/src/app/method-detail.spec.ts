@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Signature, TypeInfo } from './api';
-import { methodLabel, methodTooltip, returnType, signatureLabel, typeLine } from './method-detail';
+import { methodLabel, methodTooltip, returnType, returnsLabel, signatureLabel, typeLine } from './method-detail';
 
 const signature = (params: [string, string | null][], returns: string | null, types: string[] = []): Signature =>
   ({ declaration: 'as written', params: params.map(([name, type]) => ({ name, type })), returns, types });
@@ -83,6 +83,24 @@ describe('returnType', () => {
 
   it('cuts a long type', () => {
     expect(returnType(signature([], 'Map<String, List<VeryLongTypeName>>'), 20)).toBe('Map<String, List<Ve…');
+  });
+});
+
+describe('returnsLabel', () => {
+  it('is the type of the one call, and nothing when no call gives anything back', () => {
+    expect(returnsLabel(['Player'])).toBe('Player');
+    expect(returnsLabel([null, null])).toBeNull();
+    expect(returnsLabel([])).toBeNull();
+  });
+
+  it('names the first type and counts the other ones when several calls share the connection', () => {
+    expect(returnsLabel(['Player', null, 'Player'])).toBe('Player');
+    expect(returnsLabel(['Player', 'boolean', 'Team', 'Player'])).toBe('Player, +2');
+  });
+
+  it('cuts a long type so that the count still fits', () => {
+    expect(returnsLabel(['Observable<PlayerDetail>'], 12)).toBe('Observable<…');
+    expect(returnsLabel(['Observable<PlayerDetail>', 'int'], 12)).toBe('Observa…, +1');
   });
 });
 

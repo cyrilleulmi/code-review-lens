@@ -90,14 +90,16 @@
   </div>
 }
 
-<!-- how much of a method the diagram shows: for the call graph and the sequence alike -->
+<!-- what the diagram shows of a method, each on or off on its own: for the call graph and the sequence alike -->
 <ng-template #methodDetail>
   <span class="lbl sub">{{ t('Methoden') }}</span>
-  <div class="seg-switch text" role="group" [attr.aria-label]="t('Detail der Methoden')">
-    @for (d of details; track d.id) {
-      <button type="button" [class.on]="store.methodDetail() === d.id" [attr.aria-pressed]="store.methodDetail() === d.id" (click)="setDetail(d.id)"
-              [title]="t(d.tip)">{{ t(d.label) }}</button>
-    }
+  <div class="chips" role="group" [attr.aria-label]="t('Was die Diagramme von den Methoden zeigen')">
+    <button type="button" class="chip-toggle" [class.on]="store.showSignatures()" [attr.aria-pressed]="store.showSignatures()" (click)="toggleSignatures()"
+            [title]="t('Jede Methode mit Parametern und Rückgabetyp, in einer Schreibweise für alle Sprachen. Aus: nur ihr Name')">
+      <span class="tick"><app-icon name="check" [size]="10" /></span>{{ t('Signatur') }}</button>
+    <button type="button" class="chip-toggle" [class.on]="store.showReturns()" [attr.aria-pressed]="store.showReturns()" (click)="toggleReturns()"
+            [title]="t('Was ein Aufruf zurückgibt: ein Pfeil zurück zum Aufrufer mit dem Datentyp des Rückgabewerts. Ohne Rückgabe (void) kein Pfeil')">
+      <span class="tick"><app-icon name="check" [size]="10" /></span>{{ t('Rückgabewerte') }}</button>
   </div>
 </ng-template>
 
@@ -183,7 +185,7 @@
 
 @if (diagramKind() === 'sequence') {
   <app-sequence-diagram [sequence]="sequence()" [current]="player.index()" [duration]="player.duration()" [stepOf]="stepOf()"
-                        [detail]="store.methodDetail()" [(zoom)]="seqZoom"
+                        [detail]="store.methodDetail()" [returns]="store.showReturns()" [(zoom)]="seqZoom"
                         (pick)="pickCall($event)" (open)="openTarget($event)" />
 }
 
@@ -231,6 +233,10 @@
         <marker [attr.id]="'arrow-' + m" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0 0 L8 4 L0 8 z" [style.fill]="'var(--edge-' + m + ')'" />
         </marker>
+        <!-- what a call gives back: an open arrow head at the caller's end of the connection -->
+        <marker [attr.id]="'back-' + m" viewBox="0 0 8 8" refX="7.4" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+          <path d="M0.6 0.6 L7.4 4 L0.6 7.4" fill="none" stroke-width="1.4" [style.stroke]="'var(--edge-' + m + ')'" />
+        </marker>
       }
     </defs>
     @for (e of d.edges; track $index) {
@@ -238,14 +244,19 @@
             [class.dim]="!!hovered() && !isHot(e.ends)"
             [class.seq-later]="edgeLater(e.from, e.to)"
             [class.run-separate]="e.run === 'separate'" [class.run-faint]="e.run === 'partial' || e.run === 'none'"
-            [style.stroke]="'var(--edge-' + e.c + ')'" [attr.marker-end]="'url(#arrow-' + e.c + ')'"><title>{{ e.title }}</title></path>
+            [style.stroke]="'var(--edge-' + e.c + ')'" [attr.marker-end]="'url(#arrow-' + e.c + ')'"
+            [attr.marker-start]="e.ret ? 'url(#back-' + e.c + ')' : null"><title>{{ e.title }}</title></path>
       @if (e.http) {
-        <text class="http-label" [attr.x]="e.lx" [attr.y]="e.ly" text-anchor="middle" [style.fill]="'var(--edge-' + e.c + ')'">HTTP</text>
+        <text class="http-label" [attr.x]="e.lx" [attr.y]="e.httpY" text-anchor="middle" [style.fill]="'var(--edge-' + e.c + ')'">HTTP</text>
       }
       @if (e.both) {
-        <text class="run-label both" [attr.x]="e.lx" [attr.y]="e.ly + (e.http ? 22 : 12)" text-anchor="middle">{{ t(bothSidesLabel) }}<title>{{ e.title }}</title></text>
+        <text class="run-label both" [attr.x]="e.lx" [attr.y]="e.runY" text-anchor="middle">{{ t(bothSidesLabel) }}<title>{{ e.title }}</title></text>
       } @else if (e.run === 'separate') {
-        <text class="run-label" [attr.x]="e.lx" [attr.y]="e.ly + (e.http ? 22 : 12)" text-anchor="middle">{{ t('einzeln') }}<title>{{ e.title }}</title></text>
+        <text class="run-label" [attr.x]="e.lx" [attr.y]="e.runY" text-anchor="middle">{{ t('einzeln') }}<title>{{ e.title }}</title></text>
+      }
+      @if (e.ret; as r) {
+        <text class="ret-label" [attr.x]="e.lx" [attr.y]="e.retY" text-anchor="middle" [style.fill]="'var(--edge-' + e.c + ')'"
+              [class.dim]="!!hovered() && !isHot(e.ends)" [class.seq-later]="edgeLater(e.from, e.to)">↩ {{ r }}<title>{{ e.retTitle }}</title></text>
       }
     }
     <!-- playback: the connection of the current call is drawn again, on top -->

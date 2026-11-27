@@ -62,6 +62,41 @@ describe('layoutFlow', () => {
     expect(layout.boxes.get('a')!.x).toBeLessThan(layout.boxes.get('b')!.x);
     expect(layout.routes.size).toBe(2);
   });
+
+  it('keeps room free for the label of an edge: between the boxes, on none of them', async () => {
+    const box = (key: string) => ({ key, w: 200, h: 46 });
+    const layout = await layoutFlow({
+      boxes: [box('a'), box('b'), box('c')],
+      frames: [],
+      edges: [{ id: 'e0', from: 'a', to: 'b', label: { w: 150, h: 14 } }, { id: 'e1', from: 'a', to: 'c' }],
+    });
+
+    const [a, b, c] = ['a', 'b', 'c'].map((k) => layout.boxes.get(k)!);
+    const label = layout.labels.get('e0')!;
+    expect([...layout.labels.keys()]).toEqual(['e0']);
+    expect(label).toMatchObject({ w: 150, h: 14 });
+    expect(label.x).toBeGreaterThanOrEqual(a.x + a.w);
+    expect(label.x + label.w).toBeLessThanOrEqual(b.x);
+    for (const other of [a, b, c]) expect(overlap(label, other)).toBe(false);
+  });
+
+  it('places the label of an edge inside a class and between classes in diagram coordinates', async () => {
+    const box = (key: string, frame: string) => ({ key, w: 180, h: 32, frame });
+    const layout = await layoutFlow({
+      boxes: [box('a1', 'A'), box('a2', 'A'), box('b1', 'B')],
+      frames: [{ key: 'A' }, { key: 'B' }],
+      edges: [{ id: 'e0', from: 'a1', to: 'a2', label: { w: 90, h: 14 } }, { id: 'e1', from: 'a2', to: 'b1', label: { w: 120, h: 14 } }],
+    });
+
+    const [A, B] = ['A', 'B'].map((k) => layout.frames.get(k)!);
+    const boxes = ['a1', 'a2', 'b1'].map((k) => layout.boxes.get(k)!);
+    const [inner, across] = ['e0', 'e1'].map((k) => layout.labels.get(k)!);
+    expect(inside(inner, A)).toBe(true);
+    expect(across.x).toBeGreaterThanOrEqual(layout.boxes.get('a2')!.x + 180);
+    expect(across.x + across.w).toBeLessThanOrEqual(layout.boxes.get('b1')!.x);
+    expect(overlap(across, B)).toBe(false);
+    for (const label of [inner, across]) for (const b of boxes) expect(overlap(label, b)).toBe(false);
+  });
 });
 
 describe('routePath', () => {

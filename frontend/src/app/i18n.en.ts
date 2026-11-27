@@ -813,11 +813,12 @@ export const EN: Record<string, string> = {
   'Abfolge schliessen': 'Close the sequence',
 
   // ------------------------------------------------------------------ level of detail of the methods
-  'Detail der Methoden': 'Detail of the methods',
-  'Namen': 'Names',
+  'Was die Diagramme von den Methoden zeigen': 'What the diagrams show of the methods',
   'Signatur': 'Signature',
-  'Nur der Name jeder Methode': 'Only the name of every method',
-  'Name mit Parametern und Rückgabetyp, in einer Schreibweise für alle Sprachen': 'Name with parameters and return type, in one notation for all languages',
+  'Rückgabewerte': 'Return values',
+  'Jede Methode mit Parametern und Rückgabetyp, in einer Schreibweise für alle Sprachen. Aus: nur ihr Name': 'Every method with parameters and return type, in one notation for all languages. Off: only its name',
+  'Was ein Aufruf zurückgibt: ein Pfeil zurück zum Aufrufer mit dem Datentyp des Rückgabewerts. Ohne Rückgabe (void) kein Pfeil': 'What a call returns: an arrow back to the caller with the data type of the return value. No arrow when nothing is returned (void)',
+  '{to} gibt {type} an {from} zurück': '{to} returns {type} to {from}',
 
   // ------------------------------------------------------------------ what a call gives back
   'Was der Aufruf zurückgibt: am Ende des Aufrufs, nach allen Aufrufen, die er selbst macht': 'What the call returns: at the end of the call, after all the calls it makes itself',

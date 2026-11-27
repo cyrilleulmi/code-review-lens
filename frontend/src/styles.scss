@@ -651,6 +651,58 @@ kbd {
   }
 }
 
+/* settings that are each on or off on their own: a pill, filled with a tick while it is on. The tick keeps its
+   room when it is off, so switching never moves the pills */
+.chips {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+}
+
+.chip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 11px 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: 500 11.5px/1 var(--font-ui);
+  cursor: pointer;
+  white-space: nowrap;
+
+  .tick {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--fg-dim);
+    border-radius: 50%;
+    color: transparent;
+  }
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--fg);
+  }
+
+  &.on {
+    border-color: var(--accent);
+    background: var(--bg-selected);
+    color: var(--fg);
+
+    .tick {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--on-ok-all);
+    }
+  }
+}
+
 .focus-bar {
   display: flex;
   flex-wrap: wrap;

@@ -176,7 +176,11 @@ export class ReviewStore {
    */
   readonly diffMode = signal<DiffMode>(readChoice('scr.diffMode', ['unified', 'split'] as const) ?? 'unified');
   /** How much of a method the diagrams of the flows show: name or signature. Kept per browser. */
-  readonly methodDetail = signal<MethodDetail>(readChoice('scr.methodDetail', METHOD_DETAILS) ?? 'name');
+  /** Diagrams of a data flow: the methods with their signature (else their name only). Kept per browser. */
+  readonly showSignatures = signal(readChoice('scr.methodDetail', METHOD_DETAILS) === 'signature');
+  /** Diagrams of a data flow: what a call gives back, as an arrow back with the type. On unless switched off. */
+  readonly showReturns = signal(readText('scr.returns') !== 'false');
+  readonly methodDetail = computed<MethodDetail>(() => (this.showSignatures() ? 'signature' : 'name'));
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
   readonly blames = signal<ReadonlyMap<string, Blame | 'loading' | null>>(new Map());
   /** Whole files by path (code view "Ganze Klassen" of a flow): loaded on demand; null = could not be loaded. */
@@ -778,9 +782,14 @@ export class ReviewStore {
     writeFlag('scr.testInfo', on);
   }
 
-  setMethodDetail(detail: MethodDetail): void {
-    this.methodDetail.set(detail);
-    writeChoice('scr.methodDetail', detail);
+  setShowSignatures(on: boolean): void {
+    this.showSignatures.set(on);
+    writeChoice('scr.methodDetail', on ? 'signature' : 'name');
+  }
+
+  setShowReturns(on: boolean): void {
+    this.showReturns.set(on);
+    writeFlag('scr.returns', on);
   }
 
   setDiffMode(mode: DiffMode): void {

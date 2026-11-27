@@ -252,6 +252,8 @@ export class SequenceDiagram {
   readonly duration = input(1300);
   /** how much of a method the rows show: its name or its signature */
   readonly detail = input<MethodDetail>('name');
+  /** what a call gives back: a dashed arrow back with the type, in the list a row of its own */
+  readonly returns = input(true);
   /** step number of every segment in the flow (the number in the bubbles, as in the flow diagram and the code) */
   readonly stepOf = input.required<Record<string, number>>();
   /** the zoom chosen (buttons and Ctrl + wheel); while playing the diagram may show less (shownZoom) */
@@ -278,6 +280,7 @@ export class SequenceDiagram {
     const segs = this.store.segments();
     const components = this.store.componentBySegment();
     const areas = this.store.areaBySegment();
+    const returns = this.returns();
     return sequenceLayout(
       this.sequence(),
       (id) => {
@@ -285,7 +288,7 @@ export class SequenceDiagram {
         return seg ? { ...classOf(seg, components.get(id)), area: areaOfSegment(seg, areas) } : { key: id, name: id, area: null };
       },
       (id, call) => this.label(segs.get(id), call),
-      (call) => returnType(segs.get(call.to)?.signature, ROOM),
+      (call) => (returns ? returnType(segs.get(call.to)?.signature, ROOM) : null),
     );
   });
 

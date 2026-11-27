@@ -27,6 +27,8 @@ export interface LayoutEdge {
   id: string;
   from: string;
   to: string;
+  /** room for a text at the edge (what the call gives back): the engine keeps it free and says where it is */
+  label?: { w: number; h: number } | null;
 }
 
 export interface LayoutInput {
@@ -41,6 +43,8 @@ export interface Layout {
   frames: Map<string, Rect>;
   /** per edge id the points of its route: start, bends, end */
   routes: Map<string, Point[]>;
+  /** per edge id with a label the place the engine kept free for it (top left corner) */
+  labels: Map<string, Rect>;
 }
 
 /** Room inside a frame: the head with the name of the class on top, air around the boxes. */
@@ -68,6 +72,8 @@ const ROOT_OPTIONS: Record<string, string> = {
   'elk.layered.cycleBreaking.strategy': 'MODEL_ORDER',
   'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
   'elk.padding': '[top=0,left=0,bottom=0,right=0]',
+  // the text of an edge always on the same side: below its line
+  'elk.layered.edgeLabels.sideSelection': 'ALWAYS_DOWN',
   ...SPACING,
 };
 
@@ -86,6 +92,7 @@ interface ElkEdge {
   sources: string[];
   targets: string[];
   container?: string;
+  labels?: { id?: string; text?: string; x?: number; y?: number; width?: number; height?: number; layoutOptions?: Record<string, string> }[];
   sections?: { startPoint: Point; endPoint: Point; bendPoints?: Point[] }[];
 }
 
@@ -129,11 +136,14 @@ export async function layoutFlow(input: LayoutInput): Promise<Layout> {
     layoutOptions: ROOT_OPTIONS,
     children,
     edges: input.edges.filter((e) => known.has(e.from) && known.has(e.to) && e.from !== e.to)
-      .map((e) => ({ id: e.id, sources: [e.from], targets: [e.to] })),
+      .map((e) => ({
+        id: e.id, sources: [e.from], targets: [e.to],
+        ...(e.label ? { labels: [{ id: e.id + '-label', text: ' ', width: e.label.w, height: e.label.h, layoutOptions: { 'elk.edgeLabels.placement': 'CENTER' } }] } : {}),
+      })),
   };
   const done = await (await engine()).layout(graph);
 
-  const result: Layout = { boxes: new Map(), frames: new Map(), routes: new Map() };
+  const result: Layout = { boxes: new Map(), frames: new Map(), routes: new Map(), labels: new Map() };
   const rect = (n: ElkNode, dx = 0, dy = 0): Rect => ({ x: (n.x ?? 0) + dx, y: (n.y ?? 0) + dy, w: n.width ?? 0, h: n.height ?? 0 });
   for (const node of done.children ?? []) {
     if (frames.has(node.id)) {
@@ -151,6 +161,10 @@ export async function layoutFlow(input: LayoutInput): Promise<Layout> {
     const points = (edge.sections ?? []).flatMap((s) => [s.startPoint, ...(s.bendPoints ?? []), s.endPoint]).map(move);
     if (points.length >= 2) {
       result.routes.set(edge.id, points);
+    }
+    const label = edge.labels?.[0];
+    if (label?.x != null && label.y != null) {
+      result.labels.set(edge.id, { ...move({ x: label.x, y: label.y }), w: label.width ?? 0, h: label.height ?? 0 });
     }
   }
   return result;

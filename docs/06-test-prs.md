@@ -133,6 +133,13 @@ Für den PoC wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **
 * «Abfolge» mit «Signatur»: `CodeBlock` und `Api` stehen weiter auseinander, damit die Signatur Platz hat.
 * Im Backend-Flow `approve → approve → requirePullRequest (+2)` (Java): `ReviewResource.approve(@PathParam("provider") String provider, …)` erscheint als `approve(provider: String, owner: String, …): PrStatus`, im Tooltip die Records `ApprovalRequest { approved: boolean }` und `PrStatus` aus `Model.java` mit ihren Komponenten; `ReviewService.approve(PrRef ref, boolean approved)` gibt `Model.PrStatus` zurück und zeigt `PrRef` und `PrStatus` (der qualifizierte Name wird aufgelöst).
 
+**Schalter «Signatur» und «Rückgabewerte» (FR-UI-24)** – an spongecoach#13, Flow `saveJerseyNumber → setJerseyNumber → update → validateJerseyNumber (+2)`:
+
+* Beide Schalter sind Pillen; an = gefüllt mit Haken. Standard: «Signatur» aus, «Rückgabewerte» an. Nach dem Neuladen steht die Wahl wieder so da.
+* «Rückgabewerte» an, Abfolge: vier Pfeile zurück («↩ boolean» zweimal, «↩ PlayerDetailDto», «↩ Observable<PlayerDetail>»), in der Liste je eine Zeile. Aus: keine Zeile und kein Pfeil zurück, die Aufrufe rücken zusammen.
+* «Rückgabewerte» an, Aufrufgraph: an vier Verbindungen steht «↩ Typ» unter der Linie, am Ende des Aufrufers eine offene Pfeilspitze; kein Text liegt auf einem Knoten. Aus: die Texte verschwinden, das Diagramm rückt zusammen.
+* Beide an: Die Signatur steht am Aufruf (`setJerseyNumber(…): Observable<PlayerDetail>`), die Rückgabe zusätzlich als Pfeil zurück.
+
 **Rückgaben, Zoom und Hervorhebung beim Abspielen (FR-UI-22, -23, -25)** – an spongecoach#13, Flow `saveJerseyNumber → setJerseyNumber → update → validateJerseyNumber (+2)`:
 
 * Abfolge (Standardansicht): nach `isInRange` und `isJerseyNumberTaken` je eine Zeile «↩ boolean an PlayerResource.validateJerseyNumber», nach dem letzten inneren Aufruf «↩ PlayerDetailDto an PlayerApiService.setJerseyNumber» und «↩ Observable<PlayerDetail> an PlayerView.saveJerseyNumber»; `validateJerseyNumber` (`void`) hat keinen Pfeil zurück.

@@ -27,7 +27,7 @@ import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorI
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
 import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
 import { FlowDiagramKind, Progress, ReviewStore } from './review.store';
-import { MethodDetail, methodLabel, methodTooltip, returnType } from './method-detail';
+import { RETURNS_MAX, methodLabel, methodTooltip, returnType, returnsLabel } from './method-detail';
 import { comesLater, flowSequence, isUsedNotCalled, playbackOf, sequenceKey } from './flow-sequence';
 import { SequenceControls } from './sequence-controls';
 import { SequenceDiagram, SequenceTarget } from './sequence-diagram';
@@ -98,6 +98,10 @@ interface Link {
   /** around removed areas */
   bridged: boolean;
   title: string;
+  /** what its calls give back, as short as the diagram has room for (null: nothing, or «Rückgabewerte» is off) */
+  ret: string | null;
+  /** the same in full, for the tooltip */
+  retTitle: string;
 }
 
 /** What "Einzeln durchgehen" shows at a time: a step, or a class with all its steps. */
@@ -173,6 +177,9 @@ const CHAR_W = 7.3;
 const LINE_H = 14;
 const MAX_BOX_W = 560;
 const LINE_CHAR_W = 6.4;
+/** What a call gives back, at its connection: height of the text and width of a character of it (10.5px code font). */
+const RET_H = 14;
+const RET_CHAR_W = 6.5;
 const COL_GAP = 56;
 /** Padding of the drawing inside the diagram: the boxes start that much further in. */
 const DIAGRAM_PAD = 16;
@@ -271,11 +278,6 @@ export class FlowView {
   protected readonly stepLabels = STEP_LABELS;
   protected readonly edgeLabels = EDGE_LABELS;
   protected readonly runLegend: StepRunStatus[] = ['tested', 'mocked', 'none'];
-  /** The levels of detail of the methods, with their names and what they show. */
-  protected readonly details: { id: MethodDetail; label: string; tip: string }[] = [
-    { id: 'name', label: 'Namen', tip: 'Nur der Name jeder Methode' },
-    { id: 'signature', label: 'Signatur', tip: 'Name mit Parametern und Rückgabetyp, in einer Schreibweise für alle Sprachen' },
-  ];
 
   /** The flow's place: each step needs an ok here (a step can be part of several flows). */
   protected readonly place = computed(() => 'flows/' + this.flow().id);
@@ -450,7 +452,8 @@ export class FlowView {
       this.flow().id, this.level(),
       frames.map((f) => `${f.key}:${f.w}`).join(','),
       boxes.map((b) => `${b.key}:${b.w}:${b.h}:${b.frame ?? ''}`).join(','),
-      this.links().map((l) => l.from + '>' + l.to).join(','),
+      // what a call gives back needs room at its connection
+      this.links().map((l) => l.from + '>' + l.to + (l.ret ? ':' + l.ret.length : '')).join(','),
     ].join('|');
   });
   /** The layout of the engine (ELK) with the key it was computed for; null until the first one arrives. */
@@ -502,6 +505,9 @@ export class FlowView {
   private readonly stepLinks = computed<Link[]>(() => {
     const nodes = this.nodes();
     const shown = new Set(nodes.map((n) => n.step.segmentId));
+    const segs = this.store.segments();
+    const returns = this.store.showReturns();
+    const name = (id: string) => stepName(segs.get(id), id);
     const links: Link[] = this.flow().edges
       .map((e, i) => ({ e, c: edgeColorIndex(i) }))
       .filter(({ e }) => shown.has(e.from) && shown.has(e.to))
@@ -510,7 +516,13 @@ export class FlowView {
         const run = this.runs().edges.get(e.from + '>' + e.to);
         const contract = http ? contractLines(run, e.via, this.store.testName()) : [];
         const title = [http ? 'HTTP ' + e.via : e.via, ...(run ? [edgeTitle(run, this.store.testName())] : []), ...contract].join('\n');
-        return { from: e.from, to: e.to, ends: [e.from, e.to], c, http, run: run?.status ?? null, both: http && bothSides(run), bridged: false, title };
+        const signature = segs.get(e.to)?.signature;
+        const ret = returns ? returnType(signature, RETURNS_MAX) : null;
+        const retTitle = ret ? t('{to} gibt {type} an {from} zurück', { to: name(e.to), type: returnType(signature, 400)!, from: name(e.from) }) : '';
+        return {
+          from: e.from, to: e.to, ends: [e.from, e.to], c, http, run: run?.status ?? null, both: http && bothSides(run), bridged: false, title,
+          ret, retTitle,
+        };
       });
     // around removed areas: from the caller shown to the step, dashed, in the colour of the call into the step
     const direct = new Set(links.map((l) => l.from + '>' + l.to));
@@ -522,6 +534,7 @@ export class FlowView {
       links.push({
         from: n.caller, to: n.step.segmentId, ends: [n.caller, n.step.segmentId], c: edgeColorIndex(Math.max(0, into)), http: false, run: null,
         both: false, bridged: true, title: t('Über entfernte Bereiche: {areas}', { areas: n.bridged.join(', ') }),
+        ret: null, retTitle: '',
       });
     }
     return links;
@@ -542,6 +555,8 @@ export class FlowView {
         run: weakest(l.edges.map((e) => e.run), EDGE_RUNS), both: http.length > 0 && http.every((e) => e.both),
         bridged: l.edges.every((e) => e.bridged),
         title: l.edges.map((e) => `${name(e.from)} → ${name(e.to)}\n${e.title}`).join('\n\n'),
+        // several calls between two classes: what each of them gives back
+        ret: returnsLabel(l.edges.map((e) => e.ret)), retTitle: l.edges.map((e) => e.retTitle).filter((x) => x).join('\n'),
       };
     });
   });
@@ -560,15 +575,31 @@ export class FlowView {
       }
       // the route of the layout engine, at right angles around the boxes - unless an end was moved by hand
       const route = moved.has(l.from) || moved.has(l.to) ? undefined : auto?.routes.get(edgeId(i));
+      // the texts at a connection, one above the other around its middle: «HTTP» above the line, how the tests run
+      // it below; what the call gives back above the line too - below the other texts when the line has «HTTP»
+      const runText = l.both || l.run === 'separate';
+      const texts = (middle: Point) => {
+        const ly = middle.y - 5;
+        const runY = ly + (l.http ? 22 : 12);
+        return { lx: middle.x, httpY: ly, runY, retY: l.http ? (runText ? runY : ly) + 12 : ly };
+      };
       if (route) {
         right = Math.max(right, ...route.map((p) => p.x));
         bottom = Math.max(bottom, ...route.map((p) => p.y));
-        const middle = routeMiddle(route);
         // a call back to an earlier step runs to the left: dashed
-        return [{ ...l, d: routePath(route), back: route[route.length - 1].x < route[0].x - 1, lx: middle.x, ly: middle.y - 5 }];
+        const back = route[route.length - 1].x < route[0].x - 1;
+        const room = l.ret ? auto?.labels.get(edgeId(i)) : undefined;
+        if (room) {
+          // the engine kept room for what the call gives back, just below the line: «HTTP» stays above the line,
+          // how the tests run it goes below the type
+          right = Math.max(right, room.x + room.w);
+          bottom = Math.max(bottom, room.y + room.h);
+          return [{ ...l, d: routePath(route), back, lx: room.x + room.w / 2, httpY: room.y - 7, runY: room.y + room.h + 9, retY: room.y + room.h - 3 }];
+        }
+        return [{ ...l, d: routePath(route), back, ...texts(routeMiddle(route)) }];
       }
       const curve = curvePath(a, b);
-      return [{ ...l, d: curve.d, back: b.x + b.w <= a.x, lx: curve.middle.x, ly: curve.middle.y - 5 }];
+      return [{ ...l, d: curve.d, back: b.x + b.w <= a.x, ...texts(curve.middle) }];
     });
     const all = [...boxes, ...frames];
     const width = Math.max(right, ...all.map((b) => b.x + b.w), 0) + 48;
@@ -756,7 +787,10 @@ export class FlowView {
         layoutFlow({
           boxes: boxes.map((b) => ({ key: boxId(b.key), w: b.w, h: b.h, frame: b.frame ? frameId(b.frame) : null })),
           frames: frames.map((f) => ({ key: frameId(f.key), minW: f.w })),
-          edges: links.map((l, i) => ({ id: edgeId(i), from: boxId(l.from), to: boxId(l.to) })),
+          edges: links.map((l, i) => ({
+            id: edgeId(i), from: boxId(l.from), to: boxId(l.to),
+            label: l.ret ? { w: Math.round((l.ret.length + 2) * RET_CHAR_W), h: RET_H } : null,
+          })),
         }).then((layout) => {
           if (this.layoutKey() === key) {
             this.placed.set({ key, layout });
@@ -823,9 +857,14 @@ export class FlowView {
     this.store.setFlowPage(this.flow().id, { level });
   }
 
-  /** How much of a method the diagrams show (for all flows, kept per browser). */
-  protected setDetail(detail: MethodDetail): void {
-    this.store.setMethodDetail(detail);
+  /** The methods with their signature, or with their name only (for all flows, kept per browser). */
+  protected toggleSignatures(): void {
+    this.store.setShowSignatures(!this.store.showSignatures());
+  }
+
+  /** What the calls give back, as arrows back with the type - or not (for all flows, kept per browser). */
+  protected toggleReturns(): void {
+    this.store.setShowReturns(!this.store.showReturns());
   }
 
   /** Tooltip of a box: what the tests run in it, and the declarations of its methods with their types. */
@@ -866,9 +905,9 @@ export class FlowView {
     } }, { injector: this.injector });
   }
 
-  /** What a call gives back (its return type), for the line that says which call is played; null = nothing. */
+  /** What a call gives back (its return type), for the line that says which call is played; null = nothing, or not shown. */
   protected returnOf(call: { to: string }): string | null {
-    return returnType(this.store.segments().get(call.to)?.signature);
+    return this.store.showReturns() ? returnType(this.store.segments().get(call.to)?.signature) : null;
   }
 
   /** Call graph or sequence. */
