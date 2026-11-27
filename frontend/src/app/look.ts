@@ -30,6 +30,9 @@ const AREAS: Record<string, { label: string; token: string }> = {
   test: { label: 'Test', token: 'test' },
 };
 
+/** The layers from the outside in (the tests last): the order calls are expected to run in. */
+export const AREA_IDS: readonly string[] = Object.keys(AREAS);
+
 export function areaLabel(area: string | null | undefined): string {
   return area ? (AREAS[area] ? t(AREAS[area].label) : area) : '';
 }

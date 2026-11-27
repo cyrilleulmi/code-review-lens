@@ -35,6 +35,8 @@ import { LineBoxes, everywhereTargets, lineBoxes } from './accept-boxes';
 import { AcceptStatus, Acceptance, accept, statusOf } from './acceptance';
 import { laterExpectationsByTest } from './commit-findings';
 import { FlowCodeLevel, FlowDiagramLevel } from './flow-classes';
+import { INSIGHTS } from './insights';
+import { startSelection } from './start-selection';
 import { METHOD_DETAILS, MethodDetail } from './method-detail';
 import { groupWarnings, testNamer } from './mock-boundaries';
 import { reloadMessage } from './reload-message';
@@ -47,7 +49,9 @@ export type Selection =
   | { kind: 'flow'; id: string }
   | { kind: 'file'; path: string }
   /** coverage of the changed code on its own page (when there is no switched-on test category to show it in) */
-  | { kind: 'coverage' };
+  | { kind: 'coverage' }
+  /** a view across the whole pull request (insights.ts): components, metrics, fitness functions, ... */
+  | { kind: 'insight'; id: string };
 
 export type PrFilter = 'all' | 'authored' | 'review-requested' | 'involved';
 
@@ -501,7 +505,8 @@ export class ReviewStore {
     });
   }
 
-  open(pr: PrKey, selection: Selection = { kind: 'overview' }, commit: string | null = null): void {
+  /** selection null: nothing was asked for (opened from the list or by a plain link) - the first data flow, see startSelection. */
+  open(pr: PrKey, selection: Selection | null = null, commit: string | null = null): void {
     this.connectionsOpen.set(false);
     this.pendingCommit = commit;
     this.loading.set(t('Lade {pr} …', { pr: prLabel(pr) }));
@@ -580,7 +585,7 @@ export class ReviewStore {
     history.replaceState(null, '', location.pathname);
   }
 
-  private applyBundle(b: ReviewBundle, selection: Selection): void {
+  private applyBundle(b: ReviewBundle, selection: Selection | null): void {
     const previous = this.bundle()?.pr;
     if (!previous || prLabel(previous) !== prLabel(b.pr) || previous.headSha !== b.pr.headSha) {
       this.resetCommits(); // another PR, or new commits: blame and attribution are outdated
@@ -592,7 +597,7 @@ export class ReviewStore {
     this.bundle.set(b);
     this.applyState(b.state);
     this.loading.set(null);
-    this.select(this.isValidSelection(selection, b) ? selection : { kind: 'overview' });
+    this.select(selection && this.isValidSelection(selection, b) ? selection : startSelection(b, this.disabledCategories()));
     this.loadComments();
     this.loadStatus();
     this.loadCommits();
@@ -612,6 +617,8 @@ export class ReviewStore {
         return b.files.some((f) => f.path === sel.path);
       case 'coverage':
         return (b.analysis.coverage?.length ?? 0) > 0;
+      case 'insight':
+        return INSIGHTS.some((i) => i.id === sel.id);
     }
   }
 
@@ -906,6 +913,7 @@ export class ReviewStore {
           .sort((x, y) => (x.startLine ?? lineOf(x.lineKeys[0])) - (y.startLine ?? lineOf(y.lineKeys[0])))
           .map((s) => ({ segmentId: s.id, place: null }));
       case 'coverage':
+      case 'insight':
         return [];
     }
   }
@@ -1252,21 +1260,24 @@ function writeChoice(name: string, value: string | null): void {
 
 // ------------------------------------------------------------- hash routing: #/github/owner/repo/12[/c/<sha>]/flow/flow-1
 
-function formatHash(pr: PrKey, sel: Selection, commit: string | null): string {
+export function formatHash(pr: PrKey, sel: Selection, commit: string | null): string {
   const base = `/${pr.provider}/${pr.owner}/${pr.repo}/${pr.number}` + (commit ? `/c/${commit.substring(0, 12)}` : '');
   switch (sel.kind) {
-    case 'overview':
-      return base;
     case 'file':
       return `${base}/file/${encodeURIComponent(sel.path)}`;
+    case 'overview':
+      return `${base}/overview`;
     case 'coverage':
       return `${base}/coverage`;
+    case 'insight':
+      return `${base}/view/${encodeURIComponent(sel.id)}`;
     default:
       return `${base}/${sel.kind}/${encodeURIComponent(sel.id)}`;
   }
 }
 
-function parseHash(hash: string): { pr: PrKey; selection: Selection; commit: string | null } | null {
+/** selection null: the link names only the pull request (see startSelection). */
+export function parseHash(hash: string): { pr: PrKey; selection: Selection | null; commit: string | null } | null {
   const parts = hash.replace(/^#\/?/, '').split('/');
   if (parts.length < 4 || !/^\d+$/.test(parts[3])) {
     return null;
@@ -1279,11 +1290,15 @@ function parseHash(hash: string): { pr: PrKey; selection: Selection; commit: str
   }
   const kind = parts[4];
   const value = parts[5] ? decodeURIComponent(parts[5]) : '';
-  let selection: Selection = { kind: 'overview' };
+  let selection: Selection | null = null;
   if (kind === 'file' && value) {
     selection = { kind: 'file', path: value };
+  } else if (kind === 'overview') {
+    selection = { kind: 'overview' };
   } else if (kind === 'coverage') {
     selection = { kind: 'coverage' };
+  } else if (kind === 'view' && value) {
+    selection = { kind: 'insight', id: value };
   } else if ((kind === 'category' || kind === 'group' || kind === 'flow') && value) {
     selection = { kind, id: value };
   }

@@ -78,8 +78,8 @@
     <button type="button" class="tb-btn" (click)="store.loadPrs()" [title]="t('Pull Requests neu laden')"><app-icon name="refresh" /></button>
   }
   <button type="button" class="tb-btn" [class.on]="store.connectionsOpen()" [attr.aria-pressed]="store.connectionsOpen()"
-          (click)="store.connectionsOpen() ? store.connectionsOpen.set(false) : store.editConnection(null)" [title]="t('Verbindungen zu GitHub und GitLab')">
-    <app-icon name="plug" />
+          (click)="store.connectionsOpen() ? store.connectionsOpen.set(false) : store.editConnection(null)" [title]="t('Verbindungen zu GitHub und GitLab einstellen')">
+    <app-icon name="gear" />
   </button>
   <button type="button" class="tb-btn" (click)="toggleTheme()"
           [title]="theme() === 'dark' ? t('Helles Design') : t('Dunkles Design')" [attr.aria-label]="theme() === 'dark' ? t('Helles Design') : t('Dunkles Design')">
@@ -149,6 +149,9 @@
             @if (flow(); as f) {
               <app-flow-view [flow]="f" />
             }
+          }
+          @case ('insight') {
+            <app-insight-view [id]="c.insight!" />
           }
           @case ('coverage') {
             <div class="view-head">

@@ -71,6 +71,8 @@ Mögliche zukünftige Funktionen, grob nach Nutzen geordnet. Verbesserungen am B
 | F-33 | **Weitere Provider** | Bitbucket, Azure DevOps (mehrere GitHub- und GitLab-Hosts gleichzeitig: umgesetzt, FR-ZUG-12). | ★★ | M pro Provider |
 | F-34 | **Neue Commits melden** | Periodisch prüfen, ob ein offener PR einen neuen Head hat, und im UI anbieten, neu zu laden (zusammen mit F-01). | ★★ | S |
 | F-35 | **Team-Modus** | Review-Status mehrerer Personen zusammenführen (z. B. über einen geteilten Ordner oder als versteckter PR-Kommentar). Bricht mit «ein Benutzer, lokal» (A1) und braucht ein Konzept. | ★ | L |
+| F-36 | **Fitness-Funktionen einstellbar** | Die Grenzwerte (FR-UI-29, `FITNESS_LIMITS`) in `rules.json` überschreibbar machen, einzelne Funktionen ausschalten, eigene Regeln für erlaubte Abhängigkeiten zwischen Ordnern/Schichten (wie ArchUnit, als Muster); das Ergebnis zusätzlich in `analysis.json` für Agenten und als Status-Check für den Code-Host. | ★★ | M |
+| F-37 | **Verlauf der Kennzahlen** | Kennzahlen und Fitness-Funktionen pro Commit des PRs (wann wurde er gross, wann kam der Zyklus) und über die PRs eines Repos hinweg. | ★ | M |
 
 ## Bedienung
 

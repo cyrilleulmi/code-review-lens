@@ -12,6 +12,8 @@ import { ScrollMemory, viewKey } from './scroll-memory';
 import { FlowView } from './flow-view';
 import { GroupView } from './group-view';
 import { Icon } from './icon';
+import { INSIGHTS, INSIGHTS_LABEL } from './insights';
+import { InsightView } from './insight-view';
 import { Overview } from './overview';
 import { PrList } from './pr-list';
 import { ReviewStore, Slot } from './review.store';
@@ -20,7 +22,9 @@ import { ReviewTree } from './review-tree';
 type ToolWindow = 'prs' | 'review' | null;
 
 interface EditorContent {
-  kind: 'overview' | 'group' | 'flow' | 'coverage';
+  kind: 'overview' | 'group' | 'flow' | 'coverage' | 'insight';
+  /** id of the view across the pull request (kind insight) */
+  insight?: string;
   title?: string;
   description?: string | null;
   details?: { builds?: string | null; divides?: string | null } | null;
@@ -35,7 +39,7 @@ interface EditorContent {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, CoverageOverview, RuleCheckOverview, AccountCookie, CertificateDialog],
+  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, InsightView, CoverageOverview, RuleCheckOverview, AccountCookie, CertificateDialog],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -81,7 +85,7 @@ export class App {
     const cats = b.analysis.categories;
     switch (sel.kind) {
       case 'overview':
-        return { kind: 'overview', crumbs: [t('Übersicht')] };
+        return { kind: 'overview', crumbs: [t(INSIGHTS_LABEL), t('Übersicht')] };
       case 'category': {
         const c = cats.find((x) => x.id === sel.id)!;
         const label = serverText(c.label);
@@ -112,7 +116,9 @@ export class App {
         };
       }
       case 'coverage':
-        return { kind: 'coverage', crumbs: [t('Abdeckung')] };
+        return { kind: 'coverage', crumbs: [t(INSIGHTS_LABEL), t('Abdeckung')] };
+      case 'insight':
+        return { kind: 'insight', insight: sel.id, crumbs: [t(INSIGHTS_LABEL), t(INSIGHTS.find((i) => i.id === sel.id)?.label ?? sel.id)] };
     }
   });
 

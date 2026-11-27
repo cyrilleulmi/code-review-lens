@@ -3,7 +3,7 @@ import { Comment, isFlowView, isTestsView, ownerLabel } from './api';
 import { CommitList } from './commit-list';
 import { findingSummary, findingTotals } from './commit-findings';
 import { expectationTotals, expectationWarning } from './expectations';
-import { ComponentDiagram } from './component-diagram';
+import { INSIGHTS } from './insights';
 import { Icon } from './icon';
 import { locale, serverText, t } from './i18n';
 import { unmetWarning } from './rule-checks';
@@ -16,7 +16,7 @@ import { ReviewStore } from './review.store';
 @Component({
   selector: 'app-overview',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, ComponentDiagram, CommitList, ReviewActions],
+  imports: [Icon, CommitList, ReviewActions],
   templateUrl: './overview.html',
   styleUrl: './overview.scss',
 })
@@ -24,6 +24,8 @@ export class Overview {
   protected readonly store = inject(ReviewStore);
   protected readonly ownerLabel = ownerLabel;
   protected readonly t = t;
+  /** the views across the pull request, as links */
+  protected readonly insights = INSIGHTS;
   protected readonly serverText = serverText;
   protected readonly draft = signal('');
   protected readonly sending = signal(false);
