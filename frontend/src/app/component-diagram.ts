@@ -88,6 +88,7 @@ const LOOSE_GAP = 22;
     '[class.full]': '!!full.what()',
     '(document:fullscreenchange)': 'full.sync()',
     '(document:keydown.escape)': 'full.close()',
+    '(window:resize)': 'measure()',
   },
   imports: [Icon, Pan, SequenceControls, ZoomControls],
   template: `
@@ -285,8 +286,20 @@ export class ComponentDiagram {
   private readonly injector = inject(Injector);
   /** The diagram with its bars, shown full screen. */
   protected readonly full = new FullView(() => this.host.nativeElement);
-  /** Zoom as chosen (buttons, Ctrl + wheel), and while playing the zoom that shows the current call whole. */
-  protected readonly zoom = signal(1);
+  /**
+   * Zoom as chosen (buttons, Ctrl + wheel); null = not chosen: the whole diagram fits into the view (fitted), and
+   * follows its size. While playing, the zoom that shows the current call whole.
+   */
+  protected readonly zoom = signal<number | null>(null);
+  /** The room the diagram has: the width of its view and the height it may take at most. */
+  private readonly room = signal({ w: 0, h: 0 });
+  /** The zoom that shows the whole diagram (at most 100 %). */
+  private readonly fitted = computed(() => {
+    const { w, h } = this.size();
+    const room = this.room();
+    return fitZoom(w + 2 * CANVAS_MARGIN, h + 2 * CANVAS_MARGIN, room.w, room.h, 1);
+  });
+  private readonly chosen = computed(() => this.zoom() ?? this.fitted());
   private readonly playZoom = signal<number | null>(null);
 
   // ------------------------------------------------------------------ Abfolge: a data flow played back
@@ -312,7 +325,7 @@ export class ComponentDiagram {
   });
   protected readonly player = new SequencePlayer(() => this.sequence().calls.length);
   protected readonly currentCall = computed(() => this.sequence().calls[this.player.index() - 1] ?? null);
-  protected readonly shownZoom = computed(() => (this.player.index() > 0 ? this.playZoom() ?? this.zoom() : this.zoom()));
+  protected readonly shownZoom = computed(() => (this.player.index() > 0 ? this.playZoom() ?? this.chosen() : this.chosen()));
   private componentOf(segmentId: string): string | null {
     return this.store.componentBySegment().get(segmentId)?.id ?? null;
   }
@@ -424,7 +437,21 @@ export class ComponentDiagram {
   });
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.player.destroy());
+    const destroyRef = inject(DestroyRef);
+    destroyRef.onDestroy(() => this.player.destroy());
+    // The room of the diagram, for the zoom that shows all of it: measured whenever the view changes size, and when
+    // the diagram appears (it is not there while no component has changes).
+    afterNextRender(() => {
+      const observer = new ResizeObserver(() => this.measure());
+      observer.observe(this.host.nativeElement);
+      destroyRef.onDestroy(() => observer.disconnect());
+      this.measure();
+    });
+    effect(() => {
+      if (this.boxes().length) {
+        afterNextRender({ read: () => this.measure() }, { injector: this.injector });
+      }
+    });
     // Another flow (or another pull request, where none is chosen): the playback starts over.
     // The same calls computed again (the review was loaded anew) leave it where it is.
     const playing = computed(() => this.flowId() + '|' + sequenceKey(this.sequence()));
@@ -436,9 +463,10 @@ export class ComponentDiagram {
     // never further in than the zoom chosen - by scrolling the diagram, not the page.
     effect(() => {
       const pb = this.playback();
-      const chosen = this.zoom();
+      const chosen = this.chosen();
       const el = untracked(() => this.scroller());
-      if (!pb || !el) {
+      // fitted into the view (the default), the whole diagram is in view anyway: nothing to bring into view
+      if (!pb || !el || this.zoom() == null) {
         untracked(() => this.playZoom.set(null));
         return;
       }
@@ -451,7 +479,8 @@ export class ComponentDiagram {
           x1: Math.min(...ends.map((b) => b.x)), y1: Math.min(...ends.map((b) => b.y)),
           x2: Math.max(...ends.map((b) => b.x + b.w)), y2: Math.max(...ends.map((b) => b.y)) + H,
         };
-        const zoom = zoomToShow(span, el.clientWidth, el.clientHeight, chosen);
+        // the view grows with the drawing up to its largest height
+        const zoom = zoomToShow(span, el.clientWidth, Math.max(el.clientHeight, this.room().h), chosen);
         this.playZoom.set(zoom);
         afterNextRender({ write: () => {
           const at = (v: number) => (v + CANVAS_MARGIN) * zoom;
@@ -493,12 +522,26 @@ export class ComponentDiagram {
     this.zoom.set(zoom);
   }
 
-  /** The whole diagram into the view (at most 100 %). */
+  /** The whole diagram into the view (at most 100 %), as it starts: it then follows the size of the view. */
   protected fit(): void {
+    this.zoom.set(null);
+  }
+
+  /**
+   * How much room the diagram has: as wide as its view, as high as it may get at most (its max-height; full screen,
+   * where it has none, the height it has).
+   */
+  protected measure(): void {
     const el = this.scroller();
-    if (el) {
-      const { w, h } = this.size();
-      this.zoom.set(fitZoom(w + 2 * CANVAS_MARGIN, h + 2 * CANVAS_MARGIN, el.clientWidth, el.clientHeight, 1));
+    if (!el) {
+      return;
+    }
+    const limit = parseFloat(getComputedStyle(el).maxHeight);
+    const w = el.clientWidth;
+    const h = Number.isFinite(limit) ? limit : el.clientHeight;
+    const room = this.room();
+    if (room.w !== w || room.h !== h) {
+      this.room.set({ w, h });
     }
   }
 
