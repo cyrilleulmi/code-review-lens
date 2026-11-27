@@ -38,6 +38,7 @@ import { FlowCodeLevel, FlowDiagramLevel } from './flow-classes';
 import { INSIGHTS } from './insights';
 import { startSelection } from './start-selection';
 import { METHOD_DETAILS, MethodDetail } from './method-detail';
+import { Workspace } from './workspace';
 import { groupWarnings, testNamer } from './mock-boundaries';
 import { reloadMessage } from './reload-message';
 import { serverText, t } from './i18n';
@@ -108,6 +109,18 @@ export const SINCE_REVIEW = 'since-review';
 @Injectable({ providedIn: 'root' })
 export class ReviewStore {
   private readonly api = inject(Api);
+  private readonly workspace = inject(Workspace);
+  /** The quick switch to another pull request is open (toolbar, Ctrl+K). */
+  readonly quickOpen = signal(false);
+  /** A search handed to the list of pull requests (from the quick switch): it shows the list and searches there. */
+  readonly searchRequest = signal<{ query: string; seq: number } | null>(null);
+  /**
+   * How the next change of the address is written: as a new entry of the browser history (back returns to the view
+   * before), in place, or not at all - the address is already there (back / forward, see followAddress).
+   */
+  private historyMode: HistoryMode = 'push';
+  private pendingHistory: HistoryMode = 'push';
+  private prsLoadedAt = 0;
 
   readonly me = signal<Me | null>(null);
   /** Connections the config page can change (GitLab), null until loaded. */
@@ -463,9 +476,46 @@ export class ReviewStore {
     this.loadPrs();
     const fromHash = parseHash(location.hash);
     if (fromHash) {
-      this.open(fromHash.pr, fromHash.selection, fromHash.commit);
+      this.open(fromHash.pr, fromHash.selection, fromHash.commit, 'replace');
     }
-    window.addEventListener('focus', () => this.refreshState());
+    window.addEventListener('focus', () => {
+      this.refreshState();
+      this.refreshLists(LISTS_MAX_AGE_MS);
+    });
+    // back and forward of the browser, and an address typed in: show what it names
+    window.addEventListener('popstate', () => this.followAddress());
+  }
+
+  /** Shows what the address names, without writing the address: the pull request and view, or the start page. */
+  private followAddress(): void {
+    const target = parseHash(location.hash);
+    if (!target) {
+      if (this.bundle()) {
+        this.close('none');
+      }
+      return;
+    }
+    const b = this.bundle();
+    const key = this.prKey();
+    if (b && key && prLabel(key) === prLabel(target.pr)) {
+      this.historyMode = 'none';
+      this.select(target.selection && this.isValidSelection(target.selection, b) ? target.selection : startSelection(b, this.disabledCategories()));
+      this.historyMode = 'push';
+    } else {
+      this.open(target.pr, target.selection, target.commit, 'none');
+    }
+  }
+
+  /** The lists of pull requests (mine and the pinned repositories) again; maxAgeMs: only when older than that. */
+  refreshLists(maxAgeMs = 0): void {
+    if (Date.now() - this.prsLoadedAt >= maxAgeMs) {
+      this.loadPrs();
+    }
+  }
+
+  /** Hands a search to the list of pull requests (it searches the code hosts). */
+  searchFor(query: string): void {
+    this.searchRequest.set({ query, seq: (this.searchRequest()?.seq ?? 0) + 1 });
   }
 
   loadConnections(): void {
@@ -491,6 +541,8 @@ export class ReviewStore {
   }
 
   loadPrs(): void {
+    this.prsLoadedAt = Date.now();
+    this.workspace.refreshPinned();
     this.prsLoading.set(true);
     this.api.prs().subscribe({
       next: (prs) => {
@@ -505,8 +557,10 @@ export class ReviewStore {
   }
 
   /** selection null: nothing was asked for (opened from the list or by a plain link) - the first data flow, see startSelection. */
-  open(pr: PrKey, selection: Selection | null = null, commit: string | null = null): void {
+  open(pr: PrKey, selection: Selection | null = null, commit: string | null = null, history: HistoryMode = 'push'): void {
     this.connectionsOpen.set(false);
+    this.quickOpen.set(false);
+    this.pendingHistory = history;
     this.pendingCommit = commit;
     this.loading.set(t('Lade {pr} …', { pr: prLabel(pr) }));
     this.error.set(null);
@@ -573,7 +627,12 @@ export class ReviewStore {
     });
   }
 
-  close(): void {
+  /** Back to the start page. A new entry of the browser history: back returns to the pull request. */
+  close(history: HistoryMode = 'push'): void {
+    if (history !== 'none' && location.hash) {
+      window.history.pushState(null, '', location.pathname);
+    }
+    this.quickOpen.set(false);
     this.resetCommits();
     this.flowPages.set(new Map());
     this.bundle.set(null);
@@ -581,7 +640,8 @@ export class ReviewStore {
     this.status.set(null);
     this.ok.set(new Set());
     this.okAt.set(new Map());
-    history.replaceState(null, '', location.pathname);
+    // the lists show the progress of what was just reviewed
+    this.refreshLists();
   }
 
   private applyBundle(b: ReviewBundle, selection: Selection | null): void {
@@ -592,11 +652,14 @@ export class ReviewStore {
     if (!previous || prLabel(previous) !== prLabel(b.pr)) {
       this.flowPages.set(new Map()); // the flows of another PR
       this.status.set(null);
+      this.workspace.noteOpened(b.pr);
     }
     this.bundle.set(b);
     this.applyState(b.state);
     this.loading.set(null);
+    this.historyMode = this.pendingHistory;
     this.select(selection && this.isValidSelection(selection, b) ? selection : startSelection(b, this.disabledCategories()));
+    this.historyMode = this.pendingHistory = 'push';
     this.loadComments();
     this.loadStatus();
     this.loadCommits();
@@ -646,10 +709,20 @@ export class ReviewStore {
     this.updateHash();
   }
 
-  private updateHash(): void {
+  /** Writes the view into the address. Another view is a new entry of the browser history, unless told otherwise. */
+  private updateHash(mode: HistoryMode = this.historyMode): void {
     const key = this.prKey();
-    if (key) {
-      history.replaceState(null, '', '#' + formatHash(key, this.selection(), this.commitFilter()));
+    if (!key || mode === 'none') {
+      return;
+    }
+    const hash = '#' + formatHash(key, this.selection(), this.commitFilter());
+    if (location.hash === hash) {
+      return;
+    }
+    if (mode === 'replace') {
+      history.replaceState(null, '', hash);
+    } else {
+      history.pushState(null, '', hash);
     }
   }
 
@@ -694,7 +767,8 @@ export class ReviewStore {
   setCommitFilter(sha: string | null): void {
     this.commitFilter.set(sha);
     this.collapseCommand.set(null);
-    this.updateHash();
+    // the same view, narrowed: no new entry of the browser history
+    this.updateHash(this.historyMode === 'none' ? 'none' : 'replace');
   }
 
   /** Previous/next commit while filtering (commits without lines in the PR diff are skipped). */
@@ -1219,6 +1293,11 @@ function lineOf(key: string | undefined): number {
 }
 
 const PR_HOST_KEY = 'scr.prHost';
+/** Coming back to the window, the lists of pull requests are fetched again when they are older than this. */
+const LISTS_MAX_AGE_MS = 2 * 60 * 1000;
+
+/** How a change of the address is written to the browser history. */
+type HistoryMode = 'push' | 'replace' | 'none';
 
 function readText(name: string): string | null {
   try {

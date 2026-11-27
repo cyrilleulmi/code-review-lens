@@ -16,6 +16,8 @@ import { INSIGHTS, INSIGHTS_LABEL } from './insights';
 import { InsightView } from './insight-view';
 import { Overview } from './overview';
 import { PrList } from './pr-list';
+import { QuickOpen } from './quick-open';
+import { StartPage } from './start-page';
 import { ReviewStore, Slot } from './review.store';
 import { ReviewTree } from './review-tree';
 
@@ -39,7 +41,9 @@ interface EditorContent {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, InsightView, CoverageOverview, RuleCheckOverview, AccountCookie, CertificateDialog],
+  imports: [
+    Icon, PrList, ReviewTree, Overview, GroupView, FlowView, InsightView, CoverageOverview, RuleCheckOverview, AccountCookie, CertificateDialog, QuickOpen, StartPage,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -66,11 +70,8 @@ export class App {
 
   /** Providers whose connection the config page can change (status bar: a click opens it). */
   protected readonly configurable = computed(() => new Set((this.store.connections() ?? []).map((c) => c.provider)));
-  /** No code host is connected: the welcome screen offers the config page. */
-  protected readonly noAccount = computed(() => {
-    const me = this.store.me();
-    return !!me && !me.accounts.some((a) => a.user);
-  });
+  /** Pull requests that wait for my review: the number at the button of the list. */
+  protected readonly waiting = computed(() => this.store.prs().filter((p) => p.roles.includes('review-requested')).length);
 
   protected readonly flow = computed(() => {
     const sel = this.store.selection();
@@ -171,15 +172,30 @@ export class App {
         }
       });
     });
-    // Switch to the review tool window whenever another PR has been opened.
+    // Switch to the review tool window whenever another PR has been opened, and back to the list when it is closed.
     let lastPr: string | null = null;
     effect(() => {
       const key = this.store.prKey();
       const id = key ? prLabel(key) : null;
       if (id && id !== lastPr) {
         untracked(() => this.tool.set('review'));
+      } else if (!id && lastPr) {
+        untracked(() => this.tool.set('prs'));
       }
       lastPr = id;
+    });
+    // A search handed to the list of pull requests (quick switch) shows the list.
+    effect(() => {
+      if (this.store.searchRequest()) {
+        untracked(() => this.tool.set('prs'));
+      }
+    });
+    // The tab of the browser (and its history) says what is open.
+    effect(() => {
+      const pr = this.store.bundle()?.pr;
+      document.title = pr
+        ? (pr.number === 0 ? t('Ganzes Repository') : this.store.provider().sigil + pr.number + ' ' + pr.title) + ' · ' + pr.repo + ' – SmartCodeReview'
+        : 'SmartCodeReview';
     });
     // The connections live at the top of the pull request tool window: opening them (toolbar, status bar) shows it.
     effect(() => {
@@ -187,6 +203,14 @@ export class App {
         untracked(() => this.tool.set('prs'));
       }
     });
+  }
+
+  /** The start page: closes the pull request (back of the browser returns to it) and shows the list. */
+  protected home(): void {
+    if (this.store.bundle()) {
+      this.store.close();
+    }
+    this.tool.set('prs');
   }
 
   protected toggleTool(t: ToolWindow): void {
@@ -219,7 +243,10 @@ export class App {
 
   @HostListener('window:keydown', ['$event'])
   protected shortcuts(event: KeyboardEvent): void {
-    if (event.altKey && event.key === '1') {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      this.store.quickOpen.set(!this.store.quickOpen());
+    } else if (event.altKey && event.key === '1') {
       event.preventDefault();
       this.toggleTool('prs');
     } else if (event.altKey && event.key === '2' && this.store.bundle()) {

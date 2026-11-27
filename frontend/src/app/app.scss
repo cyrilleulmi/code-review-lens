@@ -23,6 +23,9 @@
   place-items: center;
   width: 24px;
   height: 24px;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
   margin-right: 6px;
   border-radius: 6px;
   background: linear-gradient(135deg, #3574f0, #9b5de5);
@@ -110,11 +113,51 @@
 
 .pr-title {
   margin-left: 8px;
+  padding: 0 4px;
+  height: 28px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
   color: var(--fg-muted);
+  font: inherit;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+
+button.pr-title {
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--fg);
+  }
+}
+
+/* closes the pull request: right at its title, apart from the settings of the view */
+.close-pr {
+  flex: none;
+}
+
+/* how many pull requests wait for my review, at the button of their list */
+.stripe button {
+  position: relative;
+
+  .count {
+    position: absolute;
+    top: 1px;
+    right: 0;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    box-sizing: border-box;
+    border-radius: 7px;
+    background: var(--cat-amber);
+    color: var(--on-fill);
+    font: 700 9.5px/14px var(--font-ui);
+    text-align: center;
+  }
 }
 
 .spacer {

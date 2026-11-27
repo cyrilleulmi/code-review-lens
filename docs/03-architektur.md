@@ -93,7 +93,11 @@ Angular 22, standalone Komponenten, Signals, zoneless, `OnPush`.
 |---|---|
 | `review.store.ts` | Zentraler Zustand (Signals), Hash-Routing (`#/github/o/r/12/c/<sha>/flow/flow-1`), optimistische Markierungen pro Ort («Slots» = Segment an einem Ort), Commit-Filter (filtert Slots, Fortschritt und Markierungen auf die Zeilen eines Commits), Blame-Cache, Neuladen des Status beim Fokus des Fensters (damit Änderungen von Agenten sofort erscheinen). |
 | `app.*` | IntelliJ-Shell: Main-Toolbar, Tool-Window-Stripe, verschiebbares Tool-Fenster, Breadcrumbs, Statusleiste, Shortcuts Alt+1/Alt+2. |
-| `pr-list.ts` | Tool-Fenster «Pull Requests» mit Filter und Suche. |
+| `pr-list.ts` | Tool-Fenster «Pull Requests»: Suche, Filter, zuletzt geöffnet, angepinnte Repositories, eigene Pull Requests nach Repository; die Verbindungen eingeklappt am Fuss. |
+| `workspace.ts` | Was zwischen den Pull Requests bleibt (pro Browser): zuletzt geöffnete, angepinnte Repositories samt ihren offenen Pull Requests; Regeln fürs Gruppieren, Filtern und «vor …». |
+| `pr-item.ts` | Ein Pull Request als Listeneintrag (Liste, Startseite, Schnellwechsel). |
+| `start-page.ts` | Startseite ohne offenen Pull Request: weiter reviewen, wartet auf Review, angepinnte Repositories. |
+| `quick-open.ts` | Schnellwechsel (Strg+K) zu einem anderen Pull Request. |
 | `review-actions.ts` | Auf der Übersicht: Stand des PRs auf dem Host, «Genehmigen» / «Genehmigung zurückziehen» und «Mergen …» mit Rückfrage. |
 | `account-cookie.ts` | Dialog aus der Statusleiste: Session-Cookies eines SSO-Proxys vor dem Code-Host zur Laufzeit setzen oder entfernen. |
 | `connection-panel.ts` | Bereich «Verbindungen» oben in der Liste «Pull/Merge Requests» (`ConnectionPanel`): nichts verbunden ein hervorgehobener Kasten zum Verbinden, sonst «Alle» und eine Zeile pro Verbindung als Filter der Liste (`store.chooseHost`), Zahnrad pro Verbindung für ihr Formular, «Verbindung hinzufügen» (`NewConnectionForm`: Art, URL, Token, Cookie; setzt die Verbindung der Startkonfiguration, solange sie nicht eingerichtet ist). |

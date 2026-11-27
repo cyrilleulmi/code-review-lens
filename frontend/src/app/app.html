@@ -1,10 +1,12 @@
 @let b = store.bundle();
 <header class="toolbar">
-  <div class="logo" title="SmartCodeReview">SC</div>
+  <button type="button" class="logo" (click)="home()" [title]="b ? t('Zur Startseite – {noun} schliessen', { noun: store.provider().noun }) : t('Startseite')"
+          [attr.aria-label]="t('Startseite')">SC</button>
   @if (b) {
-    <button type="button" class="widget project" (click)="store.select({ kind: 'overview' })" [title]="t('Übersicht')">
+    <button type="button" class="widget project" (click)="store.quickOpen.set(true)" [title]="t('Pull/Merge Request wechseln (Strg+K): andere dieses Repositorys, zuletzt geöffnete, angepinnte')">
       <span class="avatar-sq">{{ b.pr.repo.charAt(0).toUpperCase() }}</span>
       {{ b.pr.repo }}
+      <app-icon name="chevronDown" [size]="12" />
     </button>
     <span class="widget branch" [title]="b.pr.headRef + ' → ' + b.pr.baseRef">
       <app-icon name="branch" [size]="14" /> {{ b.pr.headRef }}
@@ -36,12 +38,18 @@
       <span class="pr-title" [title]="t('Das ganze Repository am Stand des Default-Branches, analysiert wie ein Pull Request, in dem jede Datei neu ist')">
         {{ t('Ganzes Repository') }} @ {{ b.pr.headSha.substring(0, 7) }}</span>
     } @else {
-      <span class="pr-title" [title]="b.pr.title">{{ store.provider().sigil }}{{ b.pr.number }} {{ b.pr.title }}</span>
+      <button type="button" class="pr-title" (click)="store.select({ kind: 'overview' })" [title]="b.pr.title + ' – ' + t('Übersicht')">
+        {{ store.provider().sigil }}{{ b.pr.number }} {{ b.pr.title }}</button>
     }
+    <button type="button" class="tb-btn small close-pr" (click)="store.close()" [title]="t('{noun} schliessen – zurück zur Startseite', { noun: store.provider().noun })"
+            [attr.aria-label]="t('{noun} schliessen', { noun: store.provider().noun })"><app-icon name="close" [size]="13" /></button>
   } @else {
-    <span class="widget project"><span class="avatar-sq">S</span> SmartCodeReview</span>
+    <span class="widget"><span class="avatar-sq">S</span> SmartCodeReview</span>
   }
   <span class="spacer"></span>
+  <button type="button" class="tb-btn" (click)="store.quickOpen.set(true)" [title]="t('Pull/Merge Request wechseln (Strg+K)')" [attr.aria-label]="t('Pull/Merge Request wechseln')">
+    <app-icon name="search" />
+  </button>
   @if (b) {
     @if (!store.isRepo()) {
       <button type="button" class="tb-btn" (click)="store.openRepository()"
@@ -73,7 +81,6 @@
       <app-icon name="refresh" />
     </button>
     <a class="tb-btn" [href]="b.pr.url" target="_blank" rel="noopener" [title]="t('Auf {host} öffnen', { host: store.provider().label })"><app-icon name="external" /></a>
-    <button type="button" class="tb-btn" (click)="store.close()" [title]="t('{noun} schliessen', { noun: store.provider().noun })"><app-icon name="close" /></button>
   } @else {
     <button type="button" class="tb-btn" (click)="store.loadPrs()" [title]="t('Pull Requests neu laden')"><app-icon name="refresh" /></button>
   }
@@ -103,8 +110,12 @@
 
 <div class="main">
   <nav class="stripe" [attr.aria-label]="t('Tool-Fenster')">
-    <button type="button" [class.active]="tool() === 'prs'" (click)="toggleTool('prs')" [title]="t('Pull Requests (Alt+1)')">
+    <button type="button" [class.active]="tool() === 'prs'" (click)="toggleTool('prs')"
+            [title]="t('Pull Requests (Alt+1)') + (waiting() ? ' – ' + t('{n} warten auf dein Review', { n: waiting() }) : '')">
       <app-icon name="pr" [size]="18" />
+      @if (waiting()) {
+        <span class="count">{{ waiting() }}</span>
+      }
     </button>
     <button type="button" [class.active]="tool() === 'review'" (click)="toggleTool('review')" [disabled]="!b" [title]="t('Review (Alt+2)')">
       <app-icon name="review" [size]="18" />
@@ -143,7 +154,9 @@
       <div class="editor-scroll" #scroller>
         @switch (c.kind) {
           @case ('overview') {
-            <app-overview />
+            @defer {
+              <app-overview />
+            }
           }
           @case ('flow') {
             @if (flow(); as f) {
@@ -151,7 +164,10 @@
             }
           }
           @case ('insight') {
-            <app-insight-view [id]="c.insight!" />
+            <!-- loaded when first shown: the views across the pull request are not needed to start -->
+            @defer {
+              <app-insight-view [id]="c.insight!" />
+            }
           }
           @case ('coverage') {
             <div class="view-head">
@@ -161,9 +177,11 @@
                 <p>{{ t('Welche geänderten Funktionen ein geänderter Test erreicht – und welche nicht. Ohne geänderte Tests steht hier alles unter «Ohne Test».') }}</p>
               </div>
             </div>
-            <app-coverage-overview (testClick)="store.reveal($event)" (lineClick)="store.revealLine($event.segmentId, $event.line)" />
-            @if (store.bundle()?.analysis?.ruleChecks) {
-              <app-rule-check-overview (testClick)="store.reveal($event)" (lineClick)="store.revealLine($event.segmentId, $event.line)" />
+            @defer {
+              <app-coverage-overview (testClick)="store.reveal($event)" (lineClick)="store.revealLine($event.segmentId, $event.line)" />
+              @if (store.bundle()?.analysis?.ruleChecks) {
+                <app-rule-check-overview (testClick)="store.reveal($event)" (lineClick)="store.revealLine($event.segmentId, $event.line)" />
+              }
             }
           }
           @default {
@@ -173,18 +191,8 @@
         }
       </div>
     } @else {
-      <div class="welcome">
-        <div class="mark">SC</div>
-        <h1>SmartCodeReview</h1>
-        <p>{{ t('Reviews nach Bedeutung statt nach Dateien: zuerst die Quick wins abhaken, dann die Datenflüsse am Stück lesen.') }}</p>
-        @if (store.loading(); as l) {
-          <p class="loading"><span class="spinner"></span> {{ l }}</p>
-        } @else {
-          <p class="hint">{{ t('Wähle links einen Pull/Merge Request oder füge eine URL ein') }} · <kbd>Alt</kbd>+<kbd>1</kbd> Pull Requests · <kbd>Alt</kbd>+<kbd>2</kbd> Review</p>
-          @if (noAccount()) {
-            <p><button type="button" class="btn primary" (click)="store.connectionsOpen.set(true)"><app-icon name="plug" [size]="14" /> {{ t('Code-Host verbinden') }}</button></p>
-          }
-        }
+      <div class="editor-scroll">
+        <app-start-page />
       </div>
     }
     @if (b && store.loading(); as l) {
@@ -227,12 +235,22 @@
   }
 </footer>
 
+@if (store.quickOpen()) {
+  @defer {
+    <app-quick-open />
+  }
+}
+
 @if (cookieAccount(); as a) {
-  <app-account-cookie [account]="a" (closed)="cookieFor.set(null)" />
+  @defer {
+    <app-account-cookie [account]="a" (closed)="cookieFor.set(null)" />
+  }
 }
 
 @if (store.certificateFor(); as target) {
-  <app-certificate-dialog [target]="target" (closed)="store.certificateFor.set(null)" />
+  @defer {
+    <app-certificate-dialog [target]="target" (closed)="store.certificateFor.set(null)" />
+  }
 }
 
 @if (store.error(); as e) {
