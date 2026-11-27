@@ -159,7 +159,7 @@ export function removeTab(tabs: readonly OpenTab[], pr: PrKey): { tabs: OpenTab[
 
 /**
  * Two letters for a repository, for the square of its tab: the first letters of its first two words
- * ("smart-code-review" → SC, "StvBeroPlatform" → SB), of a name in one word its first two letters ("spongecoach" → SP).
+ * ("code-review-lens" → CR, "StvBeroPlatform" → SB), of a name in one word its first two letters ("spongecoach" → SP).
  */
 export function repoInitials(repo: string): string {
   const words = repo.replace(/([a-z0-9])([A-Z])/g, '$1 $2').split(/[^A-Za-z0-9]+/).filter((w) => w);

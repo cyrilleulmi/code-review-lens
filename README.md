@@ -1,6 +1,6 @@
-# SmartCodeReview (PoC)
+# CodeReviewLens
 
-Code review **by meaning instead of by file**. SmartCodeReview loads your open pull requests from **GitHub** and merge
+Code review **by meaning instead of by file**. CodeReviewLens loads your open pull requests from **GitHub** and merge
 requests from **GitLab** (gitlab.com or self-managed), splits every change into meaningful units (functions, types,
 hunks) and sorts them so you review what belongs together, in the order it runs:
 
@@ -176,7 +176,7 @@ The *Tests* category shows what the changed tests really check:
 * **Whole repository:** analyse every file of the default branch like a pull request in which every file is new.
 * **Marks survive new commits:** when a pull request moves on, unchanged lines keep their marks, new and changed lines are open.
 * **Dark and light theme** in the style of IntelliJ New UI, **German and English** UI.
-* **Agents:** the review state lives in plain JSON files in the data directory (`~/.smart-code-review`); agents can read
+* **Agents:** the review state lives in plain JSON files in the data directory (`~/.code-review-lens`); agents can read
   the analysis and set marks (see [docs/04-persistenz-und-agenten.md](docs/04-persistenz-und-agenten.md)).
 
 | Light theme | Blame and commits |
@@ -237,10 +237,11 @@ the **whole repository**.
 
 ```powershell
 docker run --rm -p 127.0.0.1:8080:8080 -v ${PWD}/data:/data `
-  -e GITHUB_TOKEN=$(gh auth token) -e GITLAB_TOKEN=glpat-... culmi/smart-code-review:latest
+  -e GITHUB_TOKEN=$(gh auth token) -e GITLAB_TOKEN=glpat-... culmi/code-review-lens:latest
 ```
 
 Native executable (Mandrel, linux/amd64), image about 120 MB, starts in about 50 ms. All tokens are optional.
+Until 0.11.0 the tool was called SmartCodeReview; those images remain at `culmi/smart-code-review`.
 
 ### Build the native binary yourself (Docker)
 
@@ -296,7 +297,7 @@ The detailed documentation is in German:
 | Document | Content |
 |---|---|
 | [docs/01-konzept.md](docs/01-konzept.md) | Requirements and decisions from the kick-off |
-| [docs/02-annahmen.md](docs/02-annahmen.md) | Assumptions and deliberate simplifications of the PoC |
+| [docs/02-annahmen.md](docs/02-annahmen.md) | Assumptions and deliberate simplifications |
 | [docs/03-architektur.md](docs/03-architektur.md) | Structure, REST API, technology |
 | [docs/04-persistenz-und-agenten.md](docs/04-persistenz-und-agenten.md) | File format in the data directory, working with agents |
 | [docs/05-analyse.md](docs/05-analyse.md) | How quick wins and data flows are detected without AI; `rules.json` |

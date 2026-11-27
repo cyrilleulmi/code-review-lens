@@ -19,9 +19,9 @@ const SHOWN = 6;
   imports: [Icon, PrItem],
   template: `
     <header class="hero">
-      <div class="mark">SC</div>
+      <div class="mark">CL</div>
       <div class="titles">
-        <h1>SmartCodeReview</h1>
+        <h1>CodeReviewLens</h1>
         <p>{{ t('Reviews nach Bedeutung statt nach Dateien: zuerst die Quick wins abhaken, dann die Datenflüsse am Stück lesen.') }}</p>
       </div>
     </header>

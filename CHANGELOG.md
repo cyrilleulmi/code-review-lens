@@ -1,10 +1,19 @@
 # Changelog
 
-Alle nennenswerten Änderungen an SmartCodeReview. Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); wie das hier ausgelegt wird und wie man ein Release macht, steht in [docs/08-versionierung.md](docs/08-versionierung.md).
+Alle nennenswerten Änderungen an CodeReviewLens (bis 0.11.0: SmartCodeReview). Die Versionen folgen [Semantic Versioning](https://semver.org/lang/de/); wie das hier ausgelegt wird und wie man ein Release macht, steht in [docs/08-versionierung.md](docs/08-versionierung.md).
 
-Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Release).
+Docker-Images: `culmi/code-review-lens:<version>` und `:latest` (= letztes Release); bis 0.11.0 `culmi/smart-code-review`.
 
 ## [Unreleased]
+
+## [1.0.0] – 2026-11-27
+
+Erste stabile Version, unter neuem Namen. Funktional entspricht sie 0.11.0.
+
+### Geändert
+- **Neuer Name: CodeReviewLens** (bisher SmartCodeReview). Das GitHub-Repository heisst `cyrilleulmi/code-review-lens` (alte Links leiten weiter), das Docker-Image `culmi/code-review-lens`; die Images bis 0.11.0 bleiben unter `culmi/smart-code-review`. Logo «CL», Titel im Browser-Tab, Startseite und User-Agent gegenüber GitHub und GitLab tragen den neuen Namen.
+- **Datenverzeichnis:** Standard ist neu `~/.code-review-lens`. Gibt es dieses noch nicht, aber `~/.smart-code-review`, wird das alte weiter benutzt – Markierungen, Verbindungen und Zertifikate bleiben erhalten. `SCR_DATA_DIR` und alle übrigen Einstellungen (`SCR_…`, `scr.…`) heissen gleich wie bisher; das Dateiformat ist unverändert.
+- **Versionierung:** Ab 1.0.0 bedeutet eine neue Hauptversion ein inkompatibles Dateiformat oder eine inkompatible API (siehe docs/08-versionierung.md). Die Bezeichnung «PoC» ist aus der Dokumentation entfernt.
 
 ## [0.11.0] – 2026-11-27
 
@@ -200,18 +209,19 @@ Docker-Images: `culmi/smart-code-review:<version>` und `:latest` (= letztes Rele
 ## [0.1.0] – 2026-11-13
 
 ### Neu
-- Erster PoC: offene GitHub-PRs (eigene und Review-Anfragen), Zerlegung in Segmente, Quick wins per Regeln (ohne KI), Datenflüsse in Aufrufreihenfolge mit Diagramm, zeilenweises «ok» lokal in JSON-Dateien für Agenten, Inline-Kommentare werden sofort veröffentlicht, IntelliJ-artiges UI.
+- Erste Version: offene GitHub-PRs (eigene und Review-Anfragen), Zerlegung in Segmente, Quick wins per Regeln (ohne KI), Datenflüsse in Aufrufreihenfolge mit Diagramm, zeilenweises «ok» lokal in JSON-Dateien für Agenten, Inline-Kommentare werden sofort veröffentlicht, IntelliJ-artiges UI.
 
-[Unreleased]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.11.0...HEAD
-[0.11.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.10.1...v0.11.0
-[0.10.1]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.10.0...v0.10.1
-[0.10.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.9.0...v0.10.0
-[0.9.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/cyrilleulmi/smart-code-review/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/cyrilleulmi/smart-code-review/releases/tag/v0.1.0
+[Unreleased]: https://github.com/cyrilleulmi/code-review-lens/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/cyrilleulmi/code-review-lens/compare/v0.11.0...v1.0.0
+[0.11.0]: https://github.com/cyrilleulmi/code-review-lens/compare/v0.10.1...v0.11.0
+[0.10.1]: https://github.com/cyrilleulmi/code-review-lens/compare/v0.10.0...v0.10.1
+[0.10.0]: https://github.com/cyrilleulmi/code-review-lens/compare/v0.9.0...v0.10.0
+[0.9.0]: https://github.com/cyrilleulmi/code-review-lens/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/cyrilleulmi/code-review-lens/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/cyrilleulmi/code-review-lens/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/cyrilleulmi/code-review-lens/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/cyrilleulmi/code-review-lens/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/cyrilleulmi/code-review-lens/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/cyrilleulmi/code-review-lens/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/cyrilleulmi/code-review-lens/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/cyrilleulmi/code-review-lens/releases/tag/v0.1.0

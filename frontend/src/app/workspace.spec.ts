@@ -71,7 +71,7 @@ describe('tabs', () => {
   });
 
   it('abbreviates a repository to two letters', () => {
-    expect(repoInitials('smart-code-review')).toBe('SC');
+    expect(repoInitials('code-review-lens')).toBe('CR');
     expect(repoInitials('StvBeroPlatform')).toBe('SB');
     expect(repoInitials('spongecoach')).toBe('SP');
     expect(repoInitials('x')).toBe('X');

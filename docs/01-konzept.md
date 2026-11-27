@@ -1,12 +1,12 @@
 # Konzept
 
-Stand: 13.11.2026, Kick-off des PoC.
+Stand: 13.11.2026, Kick-off.
 
 ## Problem
 
 Auf GitHub sieht man bei einem Pull Request alle geänderten Zeilen aller Dateien untereinander, alphabetisch nach Pfad. Wichtige Logik ist zwischen DTOs, Übersetzungen, Lockfiles und Mappern versteckt, und einen Aufrufpfad (Komponente → Service → Repository) muss man sich über mehrere Dateien selbst zusammensuchen.
 
-## Ziel des PoC
+## Ziel
 
 Ein lokal startbares Werkzeug, das
 
@@ -34,7 +34,7 @@ Ein lokal startbares Werkzeug, das
 | Native ohne lokales GraalVM? | Entwicklung im Quarkus-Dev-Mode (JVM); **Native-Build im Docker-Container** |
 | Test-PRs | In `spongecoach`, `camperquiz` und `stv-bero-website`, als Draft, klar mit **[TEST-MR]** markiert |
 | GitLab (Nachtrag 13.11.2026) | Zweiter Provider neben GitHub: gitlab.com und self-managed, Merge Requests werden wie Pull Requests behandelt |
-| Verteilung | Natives Image auf Docker Hub: `culmi/smart-code-review` |
+| Verteilung | Natives Image auf Docker Hub: `culmi/code-review-lens` |
 | Tests und mehrfache Zuordnung (Nachtrag 13.11.2026) | Tests werden mit dem getesteten Code verknüpft (Komponenten + abgedeckte Codestellen). Eine Zeile kann in mehreren Kategorien/Flows sein und braucht dann pro Ort ein Ok; die Dateiansicht zeigt die Orte mit Sprüngen. Flows und Listen lassen sich teilweise aus- und einblenden bzw. einzeln durchgehen. |
 
 ## Kernbegriffe

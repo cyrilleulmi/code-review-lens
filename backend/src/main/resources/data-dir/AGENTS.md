@@ -1,6 +1,6 @@
-# SmartCodeReview data directory - guide for agents
+# CodeReviewLens data directory - guide for agents
 
-This directory is the complete local state of SmartCodeReview. Everything is plain, pretty-printed JSON
+This directory is the complete local state of CodeReviewLens. Everything is plain, pretty-printed JSON
 or text. The app re-reads files on every request, so your edits show up in the UI immediately.
 
 ## Layout

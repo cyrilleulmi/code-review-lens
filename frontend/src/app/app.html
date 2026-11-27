@@ -1,7 +1,7 @@
 @let b = store.bundle();
 <header class="toolbar">
   <button type="button" class="logo" (click)="home()" [title]="b ? t('Zur Startseite – die Tabs bleiben offen') : t('Startseite')"
-          [attr.aria-label]="t('Startseite')">SC</button>
+          [attr.aria-label]="t('Startseite')">CL</button>
   @if (b) {
     <button type="button" class="widget project" (click)="store.quickOpen.set(true)" [title]="t('Pull/Merge Request wechseln (Strg+K): andere dieses Repositorys, zuletzt geöffnete, angepinnte')">
       <span class="avatar-sq" [style.background]="currentColor()">{{ b.pr.repo.charAt(0).toUpperCase() }}</span>
@@ -44,7 +44,7 @@
     <button type="button" class="tb-btn small close-pr" (click)="store.closeTab(b.pr)" [title]="t('Tab schliessen: {noun} nicht mehr offen halten', { noun: store.provider().noun })"
             [attr.aria-label]="t('Tab schliessen')"><app-icon name="close" [size]="13" /></button>
   } @else {
-    <span class="widget"><span class="avatar-sq">S</span> SmartCodeReview</span>
+    <span class="widget"><span class="avatar-sq">C</span> CodeReviewLens</span>
   }
   <span class="spacer"></span>
   <button type="button" class="tb-btn" (click)="store.quickOpen.set(true)" [title]="t('Pull/Merge Request wechseln (Strg+K)')" [attr.aria-label]="t('Pull/Merge Request wechseln')">
@@ -247,7 +247,7 @@
     <span class="spacer"></span>
   }
   @if (store.me()?.version; as v) {
-    <span [title]="t('SmartCodeReview-Version')">v{{ v }}</span>
+    <span [title]="t('CodeReviewLens-Version')">v{{ v }}</span>
   }
   @for (a of statusAccounts(); track a.provider) {
     @if (a.cookie != null) {

@@ -1,4 +1,4 @@
-# Starts SmartCodeReview locally: builds the UI on first run (or with -Rebuild), then Quarkus dev mode.
+# Starts CodeReviewLens locally: builds the UI on first run (or with -Rebuild), then Quarkus dev mode.
 param([switch]$Rebuild)
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot

@@ -1,6 +1,6 @@
 # Annahmen und Vereinfachungen
 
-Es handelt sich um einen PoC. Die folgenden Punkte sind bewusst einfach gehalten; jeder ist ein Kandidat für später.
+Die folgenden Punkte sind bewusst einfach gehalten; jeder ist ein Kandidat für später.
 
 ## Produkt
 
@@ -75,4 +75,4 @@ Es handelt sich um einen PoC. Die folgenden Punkte sind bewusst einfach gehalten
 | C2 | GitHub-Zugriff mit `java.net.http` und Jackson-Bäumen statt REST-Client-Generator: wenig Magie, Native-tauglich. |
 | C3 | Das Angular-UI wird ins Quarkus-Jar bzw. Native-Binary eingebettet (`META-INF/resources`) und mit Hash-Routing (`#/github/owner/repo/12/flow/flow-1`) betrieben – keine Server-Routen nötig. |
 | C4 | Keine Authentifizierung der lokalen API. Sie ist nur auf `127.0.0.1` erreichbar (in Docker auf `127.0.0.1:8080` gemappt). |
-| C5 | Tests: der PoC wurde gegen die echten Test-PRs geprüft (siehe [06-test-prs.md](06-test-prs.md)); es gibt nur wenige Unit-Tests für Parser und Analyse. |
+| C5 | Tests: Unit-Tests im Backend (`./mvnw test`) und im Frontend (`npx ng test`); was sich nur im Browser zeigt, wird von Hand gegen die echten Test-PRs geprüft (siehe [06-test-prs.md](06-test-prs.md)). |

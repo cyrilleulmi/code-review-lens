@@ -1,6 +1,6 @@
 # Test-PRs
 
-Für den PoC wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **[TEST-MR]** im Titel, einen Warnhinweis in der Beschreibung und gehören **nicht gemergt**. Nach den Tests einfach schliessen und den Branch löschen (siehe unten).
+Zum Prüfen des Tools wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **[TEST-MR]** im Titel, einen Warnhinweis in der Beschreibung und gehören **nicht gemergt**. Nach den Tests einfach schliessen und den Branch löschen (siehe unten).
 
 | PR | Repo / Basis | Inhalt | Was es testet |
 |---|---|---|---|
@@ -9,7 +9,7 @@ Für den PoC wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **
 | [stv-bero-website#2](https://github.com/cyrilleulmi/stv-bero-website/pull/2) | `wave-1/new-site` | Anmeldeschluss für Anlässe | Payload-Collection, generierte Typen, Next.js-Komponente, Helfer, Konstante im Flow |
 | [stv-bero-website#1](https://github.com/cyrilleulmi/stv-bero-website/pull/1) | `main` | (bestehender, echter PR «Wave 1») | Stresstest: 294 Dateien, ca. 900 Segmente |
 
-## Ergebnisse (Stand PoC)
+## Ergebnisse der ersten Version
 
 **spongecoach#13**
 
@@ -119,13 +119,13 @@ Für den PoC wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **
 
 **Abfolge und Abspielen (FR-UI-22, -23)** – geprüft an gemergten PRs dieses Repos, weil sie Flüsse über mehrere Klassen mit mehrfachen Aufrufen enthalten:
 
-* [smart-code-review#11](https://github.com/cyrilleulmi/smart-code-review/pull/11), Flow `resolve → resolveThread (+4)`: 3 Lebenslinien (`CodeBlock`, `Api`, `ReviewStore`), 7 Aufrufe. `Api.resolveThread` wird zweimal aufgerufen (Zeile 805 und aus `ReviewStore.resolveThread`, Zeile 1097) und steht beim zweiten Mal als «erneut»; `ReviewStore.samePr` zweimal aus `loadStatus` (Zeilen 1040 und 1041); `loadStatus` und `samePr` sind Schleifen auf der Lebenslinie von `ReviewStore`, mit verschachtelten Balken.
-* smart-code-review#11, Flow `status → status → status`: Frontend → REST → Backend. Der Aufruf `Api.status` → `ReviewResource.status` ist gestrichelt und trägt `GET /prs/{}/{}/{}/{}/status`. Bereich «API» entfernen: ein Aufruf `Api.status` → `ReviewService.status`, «überbrückt».
-* smart-code-review#11, Flow `approve → approve (+3)`: Die Aufrufstelle von `ReviewActions.approve` → `ReviewStore.approve` ist Zeile 225 (der Aufruf), nicht 223 (die eigene Deklaration; FR-ANA-27).
-* Ganzes Repository (`#/github/cyrilleulmi/smart-code-review/0`), Flow `App → …`: 162 Aufrufe, 23 Lebenslinien – Liste und Köpfe bleiben beim Scrollen stehen, beim Abspielen bleibt der aktuelle Aufruf im Bild.
-* Übersicht von smart-code-review#11 → Komponenten → «Abfolge» → `resolve → resolveThread (+4)`: `CodeBlock`, `ReviewStore` und `Api` bleiben, der Rest tritt zurück; der Punkt läuft `CodeBlock` → `Api`, `CodeBlock` → `ReviewStore`, `ReviewStore` → `Api`; die Aufrufe innerhalb von `ReviewStore` und `CodeBlock` lassen die jeweilige Komponente aufleuchten.
+* [code-review-lens#11](https://github.com/cyrilleulmi/code-review-lens/pull/11), Flow `resolve → resolveThread (+4)`: 3 Lebenslinien (`CodeBlock`, `Api`, `ReviewStore`), 7 Aufrufe. `Api.resolveThread` wird zweimal aufgerufen (Zeile 805 und aus `ReviewStore.resolveThread`, Zeile 1097) und steht beim zweiten Mal als «erneut»; `ReviewStore.samePr` zweimal aus `loadStatus` (Zeilen 1040 und 1041); `loadStatus` und `samePr` sind Schleifen auf der Lebenslinie von `ReviewStore`, mit verschachtelten Balken.
+* code-review-lens#11, Flow `status → status → status`: Frontend → REST → Backend. Der Aufruf `Api.status` → `ReviewResource.status` ist gestrichelt und trägt `GET /prs/{}/{}/{}/{}/status`. Bereich «API» entfernen: ein Aufruf `Api.status` → `ReviewService.status`, «überbrückt».
+* code-review-lens#11, Flow `approve → approve (+3)`: Die Aufrufstelle von `ReviewActions.approve` → `ReviewStore.approve` ist Zeile 225 (der Aufruf), nicht 223 (die eigene Deklaration; FR-ANA-27).
+* Ganzes Repository (`#/github/cyrilleulmi/code-review-lens/0`), Flow `App → …`: 162 Aufrufe, 23 Lebenslinien – Liste und Köpfe bleiben beim Scrollen stehen, beim Abspielen bleibt der aktuelle Aufruf im Bild.
+* Übersicht von code-review-lens#11 → Komponenten → «Abfolge» → `resolve → resolveThread (+4)`: `CodeBlock`, `ReviewStore` und `Api` bleiben, der Rest tritt zurück; der Punkt läuft `CodeBlock` → `Api`, `CodeBlock` → `ReviewStore`, `ReviewStore` → `Api`; die Aufrufe innerhalb von `ReviewStore` und `CodeBlock` lassen die jeweilige Komponente aufleuchten.
 
-**Detail der Methoden (FR-UI-24, FR-ANA-28)** – an smart-code-review#11, Flow `resolve → resolveThread (+4)`:
+**Detail der Methoden (FR-UI-24, FR-ANA-28)** – an code-review-lens#11, Flow `resolve → resolveThread (+4)`:
 
 * «Signatur», Ebene «Klassen + Methoden»: `resolve(thread: Thread): void`, `resolveThread(pr: PrKey, thread: string, …): Observable<Comment[]>` (gekürzt, der Tooltip zeigt die ganze Deklaration), `loadStatus(): void`.
 * Tooltip eines Knotens: unter der Deklaration von `resolve` steht `Thread { root: Comment, replies: Comment[] }`, bei `Api.resolveThread` stehen `PrKey { provider: string, owner: string, repo: string, number: number }` und `Comment` mit seinen Feldern. `PrKey` und `Comment` sind in `api.ts` deklariert, `Thread` in `code-block.ts`.

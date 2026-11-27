@@ -1,12 +1,12 @@
 # Persistenz und Zusammenarbeit mit Agenten
 
-Alles, was SmartCodeReview lokal weiss, liegt als **lesbare Dateien** in einem Verzeichnis. Es gibt keine Datenbank und keinen versteckten Zustand: was in den Dateien steht, zeigt das UI.
+Alles, was CodeReviewLens lokal weiss, liegt als **lesbare Dateien** in einem Verzeichnis. Es gibt keine Datenbank und keinen versteckten Zustand: was in den Dateien steht, zeigt das UI.
 
 ## Datenverzeichnis
 
 | Betrieb | Pfad |
 |---|---|
-| Lokal (Default) | `~/.smart-code-review/` (Windows: `C:\Users\<du>\.smart-code-review\`) |
+| Lokal (Default) | `~/.code-review-lens/` (Windows: `C:\Users\<du>\.code-review-lens\`). Gibt es dieses Verzeichnis noch nicht, aber `~/.smart-code-review/` aus der Zeit vor 1.0.0, bleibt das alte in Gebrauch. |
 | Anders | Env `SCR_DATA_DIR` oder Property `scr.data-dir` |
 | Docker Compose | `./data/` im Repo (Volume nach `/data`) |
 
