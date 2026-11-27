@@ -4,11 +4,12 @@
 #   2. builds the native Docker image (runs the unit tests) as culmi/code-review-lens:X.Y.Z and :latest
 #   3. commits "Release X.Y.Z" and tags vX.Y.Z
 #   4. pushes main + tag to GitHub and both image tags to Docker Hub
+#   5. updates the Docker Hub overview (when DOCKERHUB_TOKEN is set) and creates the GitHub release (github-release.sh)
 #
 #   ./release.sh 0.4.0              full release
 #   ./release.sh 0.4.0 --no-push    everything except the pushes
 #
-# Windows: run in Git Bash. Needs: git, docker (logged in to Docker Hub for the push), npm.
+# Windows: run in Git Bash. Needs: git, docker (logged in to Docker Hub for the push), npm, gh (logged in).
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -51,8 +52,9 @@ if [ "$PUSH" = 1 ]; then
   else
     echo "Docker Hub overview not updated: DOCKERHUB_TOKEN=... ./dockerhub-overview.sh"
   fi
+  ./github-release.sh "$VERSION"
   echo "Released $VERSION: https://hub.docker.com/r/$IMAGE/tags"
 else
   echo "Built and tagged $VERSION locally. Push with:"
-  echo "  git push origin main v$VERSION && docker push $IMAGE:$VERSION && docker push $IMAGE:latest"
+  echo "  git push origin main v$VERSION && docker push $IMAGE:$VERSION && docker push $IMAGE:latest && ./github-release.sh $VERSION"
 fi
