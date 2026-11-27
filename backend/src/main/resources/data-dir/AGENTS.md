@@ -41,7 +41,7 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
 
 ## Reading a review
 
-1. `analysis.json` → `categories[]` (Quick wins, Datenflüsse, Einzelne Änderungen, Tests, Styles & Assets)
+1. `analysis.json` → `categories[]` (Datenflüsse, Quick wins, Einzelne Änderungen, Tests, Styles & Assets)
    → `groups[].segmentIds`.
 2. `segments[]` → `path`, `symbol`, `category`, `group`, `reason`, `lineKeys`, `lines` (display lines incl.
    context; `refs` on call sites point to called segments).
