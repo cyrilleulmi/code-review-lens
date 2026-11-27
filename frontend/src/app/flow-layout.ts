@@ -267,3 +267,20 @@ export function packRows(sizes: readonly { w: number; h: number }[], maxWidth: n
   }
   return result;
 }
+
+/**
+ * Left edge of each column of a staircase by call depth, every column as wide as its widest item, with `gap` between
+ * the columns: boxes as wide as their names never overlap the next column. Index = depth; a depth without items
+ * takes no room.
+ */
+export function columnStarts(items: readonly { depth: number; w: number }[], gap: number): number[] {
+  const deepest = Math.max(-1, ...items.map((i) => i.depth));
+  const widths = Array.from({ length: deepest + 1 }, (_, d) => Math.max(0, ...items.filter((i) => i.depth === d).map((i) => i.w)));
+  const starts: number[] = [];
+  let x = 0;
+  widths.forEach((w) => {
+    starts.push(x);
+    x += w > 0 ? w + gap : 0;
+  });
+  return starts;
+}

@@ -189,6 +189,19 @@ export const SERVER_EN: Record<string, string> = {
     'The cookie contains characters that are not allowed in an HTTP header (e.g. line breaks).',
   'PR zuerst öffnen': 'Open the PR first',
   'Abgebrochen': 'Cancelled',
+  // certificates (tls/)
+  'Das Zertifikat ist abgelaufen.': 'The certificate has expired.',
+  'Das Zertifikat ist noch nicht gültig.': 'The certificate is not valid yet.',
+  'Das Zertifikat gilt nicht für diesen Hostnamen.': 'The certificate is not valid for this host name.',
+  'Es ist von einer unbekannten Zertifizierungsstelle ausgestellt (z. B. einer Firmen-CA) oder selbst signiert.':
+    'It is issued by an unknown certificate authority (e.g. a company CA) or self-signed.',
+  'Kein Zertifikat gefunden. Erwartet wird PEM («-----BEGIN CERTIFICATE-----» …).':
+    'No certificate found. Expected is PEM (“-----BEGIN CERTIFICATE-----” …).',
+  'Der Host fehlt': 'The host is missing',
+  'host und fingerprint fehlen': 'host and fingerprint missing',
+  'host fehlt': 'host missing',
+  'Das Zertifikat kommt aus der Startkonfiguration (scr.tls.ca-certs) und lässt sich nur dort entfernen.':
+    'The certificate comes from the startup configuration (scr.tls.ca-certs) and can only be removed there.',
   'Eintrag zu gross': 'Entry too large',
   'path fehlt': 'path missing',
   'approved fehlt': 'approved missing',
@@ -328,5 +341,18 @@ export const SERVER_EN_PATTERNS: [RegExp, Replace][] = [
     (m) => `Invalid response from ${m[1]}: HTML instead of JSON. Login page of an SSO proxy? Has the cookie expired?`],
   [/^Ungültige Antwort von (\S+): ([\s\S]*)$/, (m) => `Invalid response from ${m[1]}: ${m[2]}`],
   [/^(\S+) nicht erreichbar: ([\s\S]*)$/, (m) => `${m[1]} not reachable: ${m[2]}`],
+  // certificates (tls/)
+  [/^Zertifikat von (\S+) wird nicht vertraut: ([\s\S]*)$/, (m, tr) => `Certificate of ${m[1]} is not trusted: ${tr(m[2])}`],
+  [/^Zertifikat der Startkonfiguration nicht gefunden: ([\s\S]*)$/, (m) => `Certificate of the startup configuration not found: ${m[1]}`],
+  [/^Zertifikat nicht lesbar: (\S+) \(([\s\S]*)\)$/, (m, tr) => `Certificate not readable: ${m[1]} (${tr(m[2])})`],
+  [/^Verzeichnis nicht lesbar: (\S+) \(([\s\S]*)\)$/, (m) => `Directory not readable: ${m[1]} (${m[2]})`],
+  [/^Kein gültiges Zertifikat: ([\s\S]*)$/, (m) => `Not a valid certificate: ${m[1]}`],
+  [/^Das Zertifikat (\S+) ist nicht \(mehr\) in der Kette von (\S+)\. Schau es dir nochmals an\.$/,
+    (m) => `The certificate ${m[1]} is not (or no longer) in the chain of ${m[2]}. Look at it again.`],
+  [/^Kein Zertifikat (\S*)$/, (m) => `No certificate ${m[1]}`],
+  [/^Für (\S+) ist die Prüfung in der Startkonfiguration \(scr\.tls\.insecure-hosts\) ausgeschaltet und lässt sich nur dort wieder einschalten\.$/,
+    (m) => `For ${m[1]} the check is switched off in the startup configuration (scr.tls.insecure-hosts) and can only be switched on again there.`],
+  [/^Ungültiger Host: «([\s\S]*)»\. Erwartet wird z\. B\. ([\s\S]*)$/, (m) => `Invalid host: “${m[1]}”. Expected e.g. ${m[2].replace(' oder ', ' or ')}`],
+  [/^scr\.tls\.insecure-hosts: ([\s\S]*)$/, (m, tr) => `scr.tls.insecure-hosts: ${tr(m[1])}`],
   [/^(\S+) (\d{3}) auf (\S+)(: [\s\S]*)?$/, (m) => `${m[1]} ${m[2]} on ${m[3]}${m[4] ?? ''}`],
 ];

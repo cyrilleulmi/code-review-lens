@@ -69,6 +69,66 @@ export interface ConnectionRequest {
   saveCookie: boolean | null;
 }
 
+/**
+ * A certificate trusted besides the default ones of the runtime, or one of the chain a host presents.
+ * fingerprint: SHA-256 (hex pairs with ":"); source: "startup" (SCR_TLS_CA_CERTS), "saved" (<data>/certificates), null
+ * for a certificate of a host.
+ */
+export interface CertificateInfo {
+  fingerprint: string;
+  subject: string;
+  issuer: string;
+  notBefore: string;
+  notAfter: string;
+  ca: boolean;
+  selfSigned: boolean;
+  source: 'startup' | 'saved' | null;
+  file: string | null;
+}
+
+/** A host (host:port) whose certificate is not checked: from the startup configuration or switched off in the UI. */
+export interface InsecureHost {
+  host: string;
+  source: 'startup' | 'saved';
+}
+
+export interface TlsSettings {
+  certificates: CertificateInfo[];
+  insecureHosts: InsecureHost[];
+  /** files of the startup configuration that could not be read */
+  warnings: string[];
+  /** where saved certificates live (<data>/certificates) */
+  directory: string;
+}
+
+/** The chain a host presents (server first), whether it is trusted now and if not why. */
+export interface CertificateProbe {
+  host: string;
+  port: number;
+  trusted: boolean;
+  insecure: boolean;
+  problem: string | null;
+  chain: CertificateInfo[];
+}
+
+/** The host of a request that failed on its certificate. */
+export interface CertificateTarget {
+  host: string;
+  port: number;
+}
+
+/** The host whose certificate an API error is about (the backend names it), else null. */
+export function certificateTarget(err: unknown): CertificateTarget | null {
+  const c = (err as { error?: { certificate?: CertificateTarget } })?.error?.certificate;
+  return c && typeof c.host === 'string' && typeof c.port === 'number' ? { host: c.host, port: c.port } : null;
+}
+
+/** The host named in a (German) error text of the backend about a certificate, e.g. the error of an account. */
+export function certificateTargetIn(message: string | null | undefined): CertificateTarget | null {
+  const m = /^Zertifikat von (\S+):(\d+) wird nicht vertraut: /.exec(message ?? '');
+  return m ? { host: m[1], port: Number(m[2]) } : null;
+}
+
 export interface Me {
   accounts: Account[];
   dataDir: string;
@@ -1000,6 +1060,42 @@ export class Api {
   /** Signs in with these values without using or saving them. */
   testConnection(provider: string, request: ConnectionRequest): Observable<User> {
     return this.http.post<User>(`/api/connections/${provider}/test`, request);
+  }
+
+  /** Certificates trusted besides the default ones, and hosts whose certificate is not checked. */
+  tls(): Observable<TlsSettings> {
+    return this.http.get<TlsSettings>('/api/tls');
+  }
+
+  /** Trusts the certificates of a PEM text: saved in <data>/certificates, used at once. */
+  addCertificate(pem: string): Observable<TlsSettings> {
+    return this.http.post<TlsSettings>('/api/tls/certificates', { pem });
+  }
+
+  removeCertificate(fingerprint: string): Observable<TlsSettings> {
+    return this.http.delete<TlsSettings>(`/api/tls/certificates/${encodeURIComponent(fingerprint)}`);
+  }
+
+  /** Reads the certificate files again (e.g. one put into <data>/certificates by hand). */
+  reloadTls(): Observable<TlsSettings> {
+    return this.http.post<TlsSettings>('/api/tls/reload', {});
+  }
+
+  /** The chain of certificates a host presents (host, host:port or URL). */
+  probeCertificate(host: string, port: number | null): Observable<CertificateProbe> {
+    const params: Record<string, string> = { host };
+    if (port != null) params['port'] = String(port);
+    return this.http.get<CertificateProbe>('/api/tls/probe', { params });
+  }
+
+  /** Trusts the certificate of the chain of the host with this fingerprint. */
+  trustCertificate(host: string, port: number, fingerprint: string): Observable<TlsSettings> {
+    return this.http.post<TlsSettings>('/api/tls/trust', { host, port, fingerprint });
+  }
+
+  /** Switches the certificate check of a host off (insecure) or on again. */
+  setInsecure(host: string, port: number, insecure: boolean): Observable<TlsSettings> {
+    return this.http.put<TlsSettings>('/api/tls/insecure', { host, port, insecure });
   }
 
   settings(): Observable<Settings> {

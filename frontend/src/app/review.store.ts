@@ -1,5 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import {
+  CertificateTarget,
+  TlsSettings,
   Api,
   Blame,
   CodeCoverage,
@@ -124,6 +126,10 @@ export class ReviewStore {
   readonly loading = signal<string | null>(null);
   readonly error = signal<string | null>(null);
   readonly toast = signal<string | null>(null);
+  /** The host whose certificate dialog is open: a request failed on its certificate, or the user asked. */
+  readonly certificateFor = signal<CertificateTarget | null>(null);
+  /** Certificates trusted besides the default ones and hosts without check; null until «Zertifikate» was opened. */
+  readonly tls = signal<TlsSettings | null>(null);
   /** lines ok at all their places ("path\0key") */
   readonly ok = signal<ReadonlySet<string>>(new Set());
   /** place -> lines ok at that place only */
@@ -461,6 +467,16 @@ export class ReviewStore {
 
   loadConnections(): void {
     this.api.connections().subscribe({ next: (c) => this.connections.set(c), error: () => this.connections.set([]) });
+  }
+
+  loadTls(): void {
+    this.api.tls().subscribe({ next: (s) => this.tls.set(s), error: (e) => this.error.set(errorMessage(e)) });
+  }
+
+  /** After the trusted certificates changed: connections that failed on a certificate may work now. */
+  tlsChanged(settings: TlsSettings): void {
+    this.tls.set(settings);
+    this.connectionChanged();
   }
 
   /** After a connection changed: accounts, connections and the list of pull requests are fetched again. */

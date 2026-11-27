@@ -142,10 +142,11 @@ flowchart LR
 
 | Paket | Verantwortung | Darf kennen | Darf **nicht** kennen |
 |---|---|---|---|
-| `api` | REST-Ressource, Fehler → `{"message"}` | `ReviewService`, `ConnectionService`, `model`, `provider.ProviderException`, `store` (nur Pfad des Datenverzeichnisses für `/api/me`) | Provider-Implementierungen, Analyse |
+| `api` | REST-Ressource, Fehler → `{"message"}` (Zertifikatsfehler zusätzlich `certificate`) | `ReviewService`, `ConnectionService`, `tls.CertificateService`, `model`, `provider.ProviderException`, `store` (nur Pfad des Datenverzeichnisses für `/api/me`) | Provider-Implementierungen, Analyse |
 | (Wurzel) `ReviewService` | Orchestrierung, Caching, Sperren, Markieren, Fortschritt | alles darunter | Host-Details (GitHub/GitLab) |
 | (Wurzel) `ConnectionService` | Verbindungen des Bereichs «Verbindungen»: `connections.json` beim Start lesen, bei jeder Änderung schreiben | `ReviewService` (Provider, Konto), `store`, `provider`, `model` | Host-Details |
-| `provider` | Schnittstelle zu Code-Hosts, HTTP, Token-Suche, Verbindungswerte (`ConnectionSettings`: Startkonfiguration, Seite, Arbeitsspeicher) | `model` | Analyse, Speicher |
+| `provider` | Schnittstelle zu Code-Hosts, HTTP, Token-Suche, Verbindungswerte (`ConnectionSettings`: Startkonfiguration, Seite, Arbeitsspeicher) | `model`, `tls` (HTTP-Client mit dem Vertrauen in Gebrauch) | Analyse, Speicher |
+| `tls` | Vertrauen in Zertifikate für alle Anfragen an Code-Hosts: zusätzliche Zertifikate (Startkonfiguration, `<data>/certificates`, UI), Hosts ohne Prüfung (`tls.json`), Kette eines Hosts ansehen, Zertifikatsfehler erkennen (`CertificateProblem`) | `model`, `store`, `provider.ProviderException` | Provider, Analyse |
 | `github`, `gitlab` | je ein Host | `provider`, `model`, `diff`, `analysis.Languages`/`OpenApi` (Sprache, Vertragsdateien erkennen) | einander, `ReviewService` |
 | `diff` | Unified-Diff → Hunks und Zeilenschlüssel | `model` | — |
 | `analysis` | Segmente, Regeln, Aufrufe, Flüsse, Tests, Komponenten, Anzeigezeilen | `model`, `analysis.category` | Provider, Speicher, Netzwerk |
@@ -304,6 +305,7 @@ Die Reihenfolge ist die von `Analyzer.analyze`; die Nummern entsprechen den Absc
 |---|---|
 | Netz | Bindet an `127.0.0.1`; in Docker nur auf `127.0.0.1` veröffentlicht. Keine Authentifizierung der lokalen API (Annahme C4). |
 | Tokens | Aus Config → Env → CLI (`gh`/`glab`), nur im Speicher, nie in Logs. Ausnahme: Token und Cookie, die im Bereich «Verbindungen» gespeichert werden, stehen im Klartext in `<data>/connections.json` (auf POSIX nur für den Besitzer lesbar, weil die Datei über `Files.createTempFile` entsteht); die API gibt sie nie zurück. Token und Cookie gelten nur für die URL, für die sie gesetzt wurden: die der Startkonfiguration gehen nie an eine im UI eingetragene URL, eine neue URL verwirft die gespeicherten. Kommentare laufen unter dem Konto der Person, die das Tool startet. |
+| TLS | Anfragen an Code-Hosts prüfen das Zertifikat gegen die Standard-Zertifikate der Laufzeit plus die zusätzlich vertrauten (`scr.tls.ca-certs`, `<data>/certificates`). Ein Zertifikat wird nur auf ausdrücklichen Wunsch vertraut (Fingerabdruck im UI gezeigt). Die Prüfung lässt sich pro Host ausschalten (`scr.tls.insecure-hosts`, `tls.json`) – verschlüsselt, aber nicht gegen Man-in-the-Middle geschützt; das UI warnt davor. |
 | Dateisystem | Alle Pfade aus PR-Daten gehen durch `DataStore.resolveInside` (kein Path-Traversal aus Dateinamen im Diff). |
 | Fremdinhalte | Code und Kommentare werden als Text bzw. durch highlight.js escaped angezeigt, Markdown wird nicht gerendert (A7). |
 
@@ -322,6 +324,8 @@ Alle Records tragen `@RegisterForReflection`; fremdes JSON wird als `JsonNode` g
 | `scr.gitlab.url` | `SCR_GITLAB_URL` | `https://gitlab.com` |
 | `scr.gitlab.token` | `GITLAB_TOKEN`, `GL_TOKEN` | `glab config get token` |
 | `scr.gitlab.cookie` | `SCR_GITLAB_COOKIE` | — (kein `Cookie`-Header) |
+| `scr.tls.ca-certs` | `SCR_TLS_CA_CERTS` | — (nur die Standard-Zertifikate der Laufzeit und `<data>/certificates`) |
+| `scr.tls.insecure-hosts` | `SCR_TLS_INSECURE_HOSTS` | — (jedes Zertifikat wird geprüft) |
 
 Die drei `scr.gitlab.*`-Werte sind die **Startkonfiguration**. Der Bereich «Verbindungen» kann jeden davon im Betrieb überschreiben; was sie speichert, steht in `<data>/connections.json` und gilt Feld für Feld vor der Startkonfiguration, auch nach einem Neustart. Ohne diese Datei verhält sich das Tool wie vorher. «Auf Startkonfiguration zurücksetzen» löscht den Eintrag.
 | `quarkus.http.host` / `.port` | — | `127.0.0.1` / `8080` |
@@ -354,6 +358,7 @@ Kurzform; die Begründung steht jeweils in der verlinkten Stelle.
 | AD-12 | **Native mit Mandrel im Docker-Build** | JVM-Image, lokales GraalVM | Kleines Image, schneller Start, keine lokale Toolchain | Längerer Build; Reflection muss bewusst registriert werden. |
 | AD-13 | **Kommentare sofort veröffentlichen** | Pending Review | Wunsch aus dem Kick-off | Kein Sammeln, kein Approve (A5). |
 | AD-14 | **Verbindung im UI als Schicht über der Startkonfiguration** (`connections.json`, Feld für Feld) | Nur Startkonfiguration; UI ersetzt die Startkonfiguration ganz | Einrichten ohne Neustart und ohne Umgebungsvariablen, bestehende Setups (Env, Docker) laufen unverändert weiter, «zurücksetzen» führt immer zur Startkonfiguration | Gespeicherte Geheimnisse im Datenverzeichnis, das auch Agenten lesen; weiterhin nur eine GitLab-Instanz (A9c). |
+| AD-15 | **Eigenes Vertrauen in Zertifikate im Prozess** (`tls`: Standard-Zertifikate + zusätzliche, Hosts ohne Prüfung; im Betrieb austauschbar) | Nur `javax.net.ssl.trustStore` beim Start; Zertifikat in den Truststore des Images bauen | Firmen-CA ohne Neustart und ohne eigenen Truststore (auch im nativen Image: Datei ins Datenverzeichnis legen oder im UI vertrauen); der Standard-Truststore gilt weiter | Eigene Logik für Vertrauen; «ohne Prüfung» ist bewusst möglich und muss im UI deutlich als unsicher markiert sein. |
 
 ## 11. Risiken und technische Schulden (Kurzfassung)
 

@@ -215,6 +215,17 @@ GitHub and the first GitLab connection: what the UI saves takes precedence field
 configuration» discards it again; further connections can be removed. Token and cookie are stored in that file in plain
 text.
 
+**Company certificates (self-managed GitLab behind a company CA):** when the certificate of a code host is not trusted
+(unknown CA, self-signed, expired, wrong host name), the request reports «Certificate of host:port is not trusted: …» and
+a dialog opens with the chain the host presents and its SHA-256 fingerprints. «Trust this certificate» trusts the chosen
+one (by default the topmost, usually the company CA, so other hosts of that CA work too) at once for all connections,
+saved in `<data>/certificates`. «Certificates» below the connections lists what is trusted, takes a pasted PEM (e.g. the
+root certificate from your IT) and shows the certificate of any host. To hand certificates over at start instead: set
+`SCR_TLS_CA_CERTS` (property `scr.tls.ca-certs`) to PEM files or directories, comma separated, or put PEM files into
+`<data>/certificates` (with Docker: `./data/certificates`). As a last resort, the check can be switched off per host
+(«Connect without check (insecure)» in the dialog, or `SCR_TLS_INSECURE_HOSTS`): still encrypted, but no longer
+protected against someone posing as the host.
+
 When the cookie of an SSO proxy expires, the tool reports «HTML instead of JSON … has the cookie expired?». A click on
 the GitLab account in the status bar (bottom right, with a lock) opens a field for the new cookie; no restart needed.
 

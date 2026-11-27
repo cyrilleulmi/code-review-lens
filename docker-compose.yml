@@ -4,6 +4,8 @@
 # Self-managed GitLab: also set SCR_GITLAB_URL (default https://gitlab.com); behind an SSO proxy also
 # SCR_GITLAB_COOKIE (the proxy's session cookies, "name=value; name2=value2").
 # All of this can also be set in the UI instead (page "Verbindungen"); it is saved in ./data/connections.json.
+# Company CA (certificate not trusted): put its root certificate (PEM) into ./data/certificates/, or mount it and set
+# SCR_TLS_CA_CERTS to its path in the container; or trust it in the UI («Zertifikate»).
 services:
   smart-code-review:
     build: .
@@ -15,6 +17,7 @@ services:
       GITLAB_TOKEN: ${GITLAB_TOKEN:-}
       SCR_GITLAB_URL: ${SCR_GITLAB_URL:-https://gitlab.com}
       SCR_GITLAB_COOKIE: ${SCR_GITLAB_COOKIE:-}
+      SCR_TLS_CA_CERTS: ${SCR_TLS_CA_CERTS:-}
     volumes:
       # Same layout as ~/.smart-code-review when running locally; agents can read/write it here.
       - ./data:/data

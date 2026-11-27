@@ -228,6 +228,10 @@
   <app-account-cookie [account]="a" (closed)="cookieFor.set(null)" />
 }
 
+@if (store.certificateFor(); as target) {
+  <app-certificate-dialog [target]="target" (closed)="store.certificateFor.set(null)" />
+}
+
 @if (store.error(); as e) {
   <div class="error" role="alert">
     <span>{{ e }}</span>

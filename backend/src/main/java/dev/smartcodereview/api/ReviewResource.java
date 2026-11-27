@@ -3,6 +3,11 @@ package dev.smartcodereview.api;
 import dev.smartcodereview.ConnectionService;
 import dev.smartcodereview.ReviewService;
 import dev.smartcodereview.model.Model.ApprovalRequest;
+import dev.smartcodereview.model.Model.CertificateProbe;
+import dev.smartcodereview.model.Model.InsecureRequest;
+import dev.smartcodereview.model.Model.PemRequest;
+import dev.smartcodereview.model.Model.TlsSettings;
+import dev.smartcodereview.model.Model.TrustRequest;
 import dev.smartcodereview.model.Model.Blame;
 import dev.smartcodereview.model.Model.Comment;
 import dev.smartcodereview.model.Model.Commits;
@@ -25,6 +30,8 @@ import dev.smartcodereview.model.Model.User;
 import dev.smartcodereview.model.Model.WholeFile;
 import dev.smartcodereview.provider.ProviderException;
 import dev.smartcodereview.store.DataStore;
+import dev.smartcodereview.tls.CertificateProblem;
+import dev.smartcodereview.tls.CertificateService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -59,6 +66,9 @@ public class ReviewResource {
 
     @Inject
     ConnectionService connectionService;
+
+    @Inject
+    CertificateService certificates;
 
     @GET
     @Path("/me")
@@ -124,6 +134,64 @@ public class ReviewResource {
     @Path("/connections/{provider}/test")
     public User testConnection(@PathParam("provider") String provider, ConnectionRequest request) {
         return connectionService.test(provider, request);
+    }
+
+    /**
+     * Certificates trusted besides the default ones of the runtime (startup configuration and {@code <data>/certificates})
+     * and hosts whose certificate is not checked.
+     */
+    @GET
+    @Path("/tls")
+    public TlsSettings tls() {
+        return certificates.settings();
+    }
+
+    /** Trusts the certificates of a PEM text (e.g. the root certificate of a company CA): saved, used at once. */
+    @POST
+    @Path("/tls/certificates")
+    public TlsSettings addCertificate(PemRequest request) {
+        return certificates.add(request == null ? null : request.pem());
+    }
+
+    /** Removes a certificate saved in {@code <data>/certificates} (by its SHA-256 fingerprint). */
+    @DELETE
+    @Path("/tls/certificates/{fingerprint}")
+    public TlsSettings removeCertificate(@PathParam("fingerprint") String fingerprint) {
+        return certificates.remove(fingerprint);
+    }
+
+    /** Reads the certificate files again (e.g. after putting one into {@code <data>/certificates} by hand). */
+    @POST
+    @Path("/tls/reload")
+    public TlsSettings reloadTls() {
+        return certificates.reload();
+    }
+
+    /** The chain of certificates a host presents and whether the tool trusts it. host: host, host:port or URL. */
+    @GET
+    @Path("/tls/probe")
+    public CertificateProbe probe(@QueryParam("host") String host, @QueryParam("port") Integer port) {
+        return certificates.probe(host, port);
+    }
+
+    /** Trusts one certificate of the chain of a host (named by its fingerprint): saved, used at once. */
+    @POST
+    @Path("/tls/trust")
+    public TlsSettings trust(TrustRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("host und fingerprint fehlen");
+        }
+        return certificates.trust(request.host(), request.port(), request.fingerprint());
+    }
+
+    /** Switches the certificate check for a host off ({"insecure":true}, insecure) or on again; saved in tls.json. */
+    @PUT
+    @Path("/tls/insecure")
+    public TlsSettings insecure(InsecureRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("host fehlt");
+        }
+        return certificates.insecure(request.host(), request.port(), request.insecure());
     }
 
     /** Switched-off categories (global, <data>/settings.json): hidden in the UI, their places need no ok. */
@@ -309,6 +377,11 @@ public class ReviewResource {
 
     @ServerExceptionMapper
     public Response providerError(ProviderException e) {
+        if (e instanceof CertificateProblem c) {
+            // the UI offers to look at the certificate of that host and trust it
+            return Response.status(e.status()).entity(Map.of("message", e.getMessage(),
+                    "certificate", Map.of("host", c.host(), "port", c.port()))).build();
+        }
         return Response.status(e.status()).entity(Map.of("message", e.getMessage())).build();
     }
 

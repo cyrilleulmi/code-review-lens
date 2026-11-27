@@ -19,7 +19,7 @@ import { CodeBlock, flashLine } from './code-block';
 import { WholeBlock, startOf, wholeBlock, wholeId } from './whole-class';
 import { FlowCodeLevel, FlowDiagramLevel, InlineStep, classLinks, codeLevelFor, inlineTree, classOf, classRuns, groupByClass, inFileOrder, intersect, shortName, stepName, weakest } from './flow-classes';
 import { outsideBranch, sameSet, withoutAreas } from './flow-focus';
-import { FRAME_PADDING, Layout, Point, curvePath, frameAround, layoutFlow, routeMiddle, routePath } from './flow-layout';
+import { FRAME_PADDING, Layout, Point, columnStarts, curvePath, frameAround, layoutFlow, routeMiddle, routePath } from './flow-layout';
 import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
@@ -155,8 +155,15 @@ interface Connector {
   http: boolean;
 }
 
+/** Smallest width of a box of the diagram; a longer name makes it wider, never cut off. */
 const NODE_W = 236;
 const NODE_H = 46;
+/** Room in a box beside its name: padding, number, badge, test icon, progress, hide and focus button. */
+const NODE_CHROME = 170;
+const MINI_CHROME = 158;
+/** Width of a character of the second line of a box (11px UI font, estimated) and of the layer tag in it. */
+const HINT_CHAR_W = 6.3;
+const TAG_CHAR_W = 6.5;
 /** Combined level of the diagram: the smaller boxes of the steps inside the frame of their class. */
 const MINI_H = 32;
 const MINI_GAP = 14;
@@ -366,57 +373,64 @@ export class FlowView {
         tip: g.members.map((m) => methodTooltip(m.segment.signature, types)).filter((x) => x).join('\n\n'),
       };
     };
-    // a box grows with its lines: higher by a line each, as wide as the longest (up to a limit, then it is cut off)
+    const runs = this.hasRuns();
+    type Sized = { name: string; hint: string; area: string | null; lines: { text: string; sub: boolean }[] };
+    // a box grows with its lines: higher by a line each
     const linesHeight = (b: { lines: unknown[] }) => (b.lines.length ? b.lines.length * LINE_H + 4 : 0);
-    const widthFor = (b: { name: string; lines: { text: string; sub: boolean }[] }, chrome: number, least: number) => {
-      const chars = Math.max(detail === 'name' ? 0 : b.name.length * CHAR_W, ...b.lines.map((l) => (l.sub ? 12 : 0) + l.text.length * LINE_CHAR_W));
-      return Math.min(MAX_BOX_W, Math.max(least, Math.round(chrome + chars)));
+    // a box is as wide as its name (and, with `withHint`, the class and file in its second line) needs: never cut off;
+    // the lines below it (signatures, data) widen it up to MAX_BOX_W, beyond that they are cut
+    const widthFor = (b: Sized, chrome: number, least: number, withHint: boolean) => {
+      const second = !withHint || !b.hint ? 0 : (areaLabel(b.area).length ? areaLabel(b.area).length * TAG_CHAR_W + 14 : 0) + b.hint.length * HINT_CHAR_W;
+      const lines = Math.max(0, ...b.lines.map((l) => (l.sub ? 12 : 0) + l.text.length * LINE_CHAR_W));
+      return Math.max(least, Math.round(chrome + Math.max(b.name.length * CHAR_W, second)), Math.min(MAX_BOX_W, Math.round(chrome + lines)));
     };
-    /** A staircase by call depth: every column as wide as the widest box, the rows one below the other. */
-    const staircase = <T extends { name: string; lines: { text: string; sub: boolean }[] }>(items: (T & { depth: number })[]) => {
-      // beside the texts: number, badge, progress, hide and focus button
-      const sized = items.map((b) => ({ ...b, w: widthFor(b, 160, NODE_W), h: NODE_H + linesHeight(b) }));
-      const column = Math.max(NODE_W, ...sized.map((b) => b.w)) + COL_GAP;
+    // the staircase by call depth: each column as wide as its widest box, the rows one below the other
+    const staircase = <T extends Sized>(items: { box: T; depth: number }[], withHint: boolean) => {
+      const sized = items.map(({ box, depth }) => ({
+        box, depth, w: widthFor(box, NODE_CHROME + (runs ? 20 : 0), NODE_W, withHint), h: NODE_H + linesHeight(box),
+      }));
+      const columns = columnStarts(sized.map((b) => ({ depth: b.depth, w: b.w })), COL_GAP);
       let y = 0;
-      return sized.map((b) => {
-        const box = { ...b, x: b.depth * column, y, mini: false, frame: null };
-        y += b.h + ROW_GAP;
-        return box;
+      return sized.map(({ box, depth, w, h }) => {
+        const placed = { ...box, depth, x: columns[depth], y, w, h, mini: false, frame: null };
+        y += h + ROW_GAP;
+        return placed;
       });
     };
     const level = this.level();
-    const runs = this.hasRuns();
     if (level === 'method') {
-      return { frames: [], boxes: staircase(this.nodes().map((n) => ({ ...step(n), depth: n.depth }))) };
+      return { frames: [], boxes: staircase(this.nodes().map((n) => ({ box: step(n), depth: n.depth })), true) };
     }
     if (level === 'class') {
-      return { frames: [], boxes: staircase(this.classes().map((g) => ({ ...cls(g), depth: g.depth }))) };
+      // the second line of a class lists its methods: it may be cut, the name of the class not
+      return { frames: [], boxes: staircase(this.classes().map((g) => ({ box: cls(g), depth: g.depth })), false) };
     }
-    const frames: Box[] = [];
-    const boxes: Box[] = [];
-    const column = (detail === 'name' ? 280 : MAX_BOX_W) + FRAME_PADDING.left + FRAME_PADDING.right + COL_GAP;
-    let y = 0;
-    for (const g of this.classes()) {
-      const x = g.depth * column;
-      let top = y + FRAME_PADDING.top;
+    const sized = this.classes().map((g) => {
       const minis = g.members.map((n) => {
         const box = step(n);
         // one line: number, badge, name, test icon (with the test infos), progress, hide and focus button
-        const w = detail === 'name'
-          ? Math.min(340, Math.max(180, Math.round(158 + (runs ? 20 : 0) + box.name.length * CHAR_W)))
-          : widthFor(box, 158 + (runs ? 20 : 0), 180);
-        const mini = { ...box, depth: g.depth, x: x + FRAME_PADDING.left, y: top, w, h: MINI_H + linesHeight(box), mini: true, frame: g.key };
-        top += mini.h + MINI_GAP;
-        return mini;
+        return { box, w: widthFor(box, MINI_CHROME + (runs ? 20 : 0), 180, false), h: MINI_H + linesHeight(box) };
       });
-      const h = top - MINI_GAP - y + FRAME_PADDING.bottom;
       // the frame of a class shows its name only: its methods stand inside it
       const frame = { ...cls(g), lines: [] };
       // the head: badge, name of the class, layer, progress, hide and focus button
-      const head = Math.min(380, Math.round(134 + frame.name.length * CHAR_W + areaLabel(frame.area).length * 6.5));
+      const head = Math.round(134 + frame.name.length * CHAR_W + areaLabel(frame.area).length * TAG_CHAR_W);
       const w = Math.max(head, Math.max(...minis.map((m) => m.w)) + FRAME_PADDING.left + FRAME_PADDING.right);
+      return { g, frame, minis, w };
+    });
+    const columns = columnStarts(sized.map((c) => ({ depth: c.g.depth, w: c.w })), COL_GAP);
+    const frames: Box[] = [];
+    const boxes: Box[] = [];
+    let y = 0;
+    for (const { g, frame, minis, w } of sized) {
+      const x = columns[g.depth];
+      let top = y + FRAME_PADDING.top;
+      for (const { box, w: mw, h: mh } of minis) {
+        boxes.push({ ...box, depth: g.depth, x: x + FRAME_PADDING.left, y: top, w: mw, h: mh, mini: true, frame: g.key });
+        top += mh + MINI_GAP;
+      }
+      const h = top - MINI_GAP - y + FRAME_PADDING.bottom;
       frames.push({ ...frame, depth: g.depth, x, y, w, h, mini: false, frame: null });
-      boxes.push(...minis);
       y += h + ROW_GAP + 8;
     }
     return { frames, boxes };

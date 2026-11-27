@@ -3,19 +3,18 @@ package dev.smartcodereview.provider;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import dev.smartcodereview.tls.CertificateProblem;
+import dev.smartcodereview.tls.Tls;
+
 import java.io.IOException;
-import java.net.http.HttpClient;
+import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Duration;
+import java.util.Optional;
 
 /** Small JSON-over-HTTP helper shared by the providers (java.net.http + Jackson trees: native friendly). */
 public final class JsonHttp {
 
-    private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
     private final ObjectMapper mapper;
     private final String host;
 
@@ -27,8 +26,14 @@ public final class JsonHttp {
 
     public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> handler) {
         try {
-            return http.send(request, handler);
+            // the client with the TLS trust in use (extra certificates, hosts without check: changeable while running)
+            return Tls.client(request.uri()).send(request, handler);
         } catch (IOException e) {
+            Optional<String> certificate = Tls.problem(e);
+            if (certificate.isPresent()) {
+                URI uri = request.uri();
+                throw new CertificateProblem(uri.getHost(), Tls.port(uri), certificate.get());
+            }
             // e.g. a ConnectException has no text: name the exception instead of "null"
             throw new ProviderException(502, host + " nicht erreichbar: "
                     + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
