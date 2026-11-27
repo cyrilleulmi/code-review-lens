@@ -1,7 +1,7 @@
-# SmartCodeReview as a native executable - no local GraalVM needed.
+# CodeReviewLens as a native executable - no local GraalVM needed.
 #   docker compose up --build        (see docker-compose.yml)
 #   ./release.sh X.Y.Z               (builds, tags and pushes a release - docs/08-versionierung.md)
-#   docker build --build-arg VERSION=0.3.0 -t culmi/smart-code-review:0.3.0 .
+#   docker build --build-arg VERSION=0.3.0 -t culmi/code-review-lens:0.3.0 .
 # Stage 1 builds the Angular UI, stage 2 compiles the Quarkus backend (with the UI inside) to a
 # native binary using the Mandrel builder image, stage 3 is a minimal runtime image.
 
@@ -22,7 +22,7 @@ RUN chmod +x mvnw && ./mvnw -B -q -Dnative package
 
 FROM quay.io/quarkus/ubi9-quarkus-micro-image:2.0
 ARG VERSION=dev
-LABEL org.opencontainers.image.title="SmartCodeReview"       org.opencontainers.image.description="Code reviews by meaning instead of by file: quick wins and data flows for GitHub pull requests and GitLab merge requests"       org.opencontainers.image.version="${VERSION}"       org.opencontainers.image.source="https://github.com/cyrilleulmi/smart-code-review"
+LABEL org.opencontainers.image.title="CodeReviewLens"       org.opencontainers.image.description="Code reviews by meaning instead of by file: quick wins and data flows for GitHub pull requests and GitLab merge requests"       org.opencontainers.image.version="${VERSION}"       org.opencontainers.image.source="https://github.com/cyrilleulmi/code-review-lens"
 WORKDIR /work/
 RUN mkdir -p /data && chown 1001:root /work /data && chmod g+rwX /work /data
 COPY --from=native --chown=1001:root --chmod=0755 /code/target/*-runner /work/application

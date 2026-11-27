@@ -7,9 +7,9 @@
 # Company CA (certificate not trusted): put its root certificate (PEM) into ./data/certificates/, or mount it and set
 # SCR_TLS_CA_CERTS to its path in the container; or trust it in the UI («Zertifikate»).
 services:
-  smart-code-review:
+  code-review-lens:
     build: .
-    image: culmi/smart-code-review:latest
+    image: culmi/code-review-lens:latest
     ports:
       - "127.0.0.1:8080:8080"
     environment:
@@ -19,5 +19,5 @@ services:
       SCR_GITLAB_COOKIE: ${SCR_GITLAB_COOKIE:-}
       SCR_TLS_CA_CERTS: ${SCR_TLS_CA_CERTS:-}
     volumes:
-      # Same layout as ~/.smart-code-review when running locally; agents can read/write it here.
+      # Same layout as ~/.code-review-lens when running locally; agents can read/write it here.
       - ./data:/data

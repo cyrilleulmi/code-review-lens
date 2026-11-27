@@ -217,8 +217,8 @@ export class App {
     effect(() => {
       const pr = this.store.bundle()?.pr;
       document.title = pr
-        ? (pr.number === 0 ? t('Ganzes Repository') : this.store.provider().sigil + pr.number + ' ' + pr.title) + ' · ' + pr.repo + ' – SmartCodeReview'
-        : 'SmartCodeReview';
+        ? (pr.number === 0 ? t('Ganzes Repository') : this.store.provider().sigil + pr.number + ' ' + pr.title) + ' · ' + pr.repo + ' – CodeReviewLens'
+        : 'CodeReviewLens';
     });
     // The connections live at the top of the pull request tool window: opening them (toolbar, status bar) shows it.
     effect(() => {

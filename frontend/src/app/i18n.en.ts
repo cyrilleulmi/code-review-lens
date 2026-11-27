@@ -59,7 +59,7 @@ export const EN: Record<string, string> = {
     'Reviews by meaning instead of by file: check off the quick wins first, then read the data flows in one go.',
   'Lokale Daten (für Agenten lesbar)': 'Local data (readable by agents)',
   '{ok}/{total} Zeilen ok': '{ok}/{total} lines ok',
-  'SmartCodeReview-Version': 'SmartCodeReview version',
+  'CodeReviewLens-Version': 'CodeReviewLens version',
   'kein Token': 'no token',
   'Genehmigen': 'Approve',
   'Genehmigung zurückziehen': 'Revoke approval',

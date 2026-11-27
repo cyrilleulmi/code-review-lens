@@ -1,4 +1,4 @@
-# Working on SmartCodeReview
+# Working on CodeReviewLens
 
 Review tool: Quarkus backend (`backend/`) + Angular UI (`frontend/`). Start with `README.md`, the
 design decisions are in `docs/` (German): architecture overview `docs/09`, requirements `docs/10`, known improvements
@@ -39,7 +39,7 @@ design decisions are in `docs/` (German): architecture overview `docs/09`, requi
 cd frontend && npm run build          # writes into backend/src/main/resources/META-INF/resources
 cd backend && ./mvnw quarkus:dev      # http://localhost:8080
 cd backend && ./mvnw test             # unit tests (parser, symbols, analysis)
-docker compose up --build             # native image (culmi/smart-code-review)
+docker compose up --build             # native image (culmi/code-review-lens)
 ./release.sh X.Y.Z                    # release: version, image, tag, push (Git Bash; see docs/08-versionierung.md)
 ```
 

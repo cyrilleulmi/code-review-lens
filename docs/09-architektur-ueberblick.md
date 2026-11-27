@@ -1,6 +1,6 @@
 # Architektur-Überblick für Software-Architekt:innen
 
-Dieses Dokument erklärt den Aufbau von SmartCodeReview so, dass man das System beurteilen, erweitern und betreiben kann, ohne zuerst den Code zu lesen. Es folgt grob [arc42](https://arc42.org) und verweist für Details auf die Fachdokumente:
+Dieses Dokument erklärt den Aufbau von CodeReviewLens so, dass man das System beurteilen, erweitern und betreiben kann, ohne zuerst den Code zu lesen. Es folgt grob [arc42](https://arc42.org) und verweist für Details auf die Fachdokumente:
 
 | Wenn du wissen willst … | lies |
 |---|---|
@@ -17,7 +17,7 @@ Stand: Version 0.5.0 + Unreleased (Commits, Blame, ganzes Repository, Kategorien
 
 ## 1. Zweck und Qualitätsziele
 
-SmartCodeReview zeigt einen Pull Request (GitHub) oder Merge Request (GitLab) **nach Bedeutung statt nach Dateien**: triviale Änderungen gesammelt zum Abhaken, zusammenhängende Aufrufketten als Datenfluss, Architektur- und Querschnittsthemen als eigene Kategorien. Jede geänderte Zeile lässt sich als «ok» markieren.
+CodeReviewLens zeigt einen Pull Request (GitHub) oder Merge Request (GitLab) **nach Bedeutung statt nach Dateien**: triviale Änderungen gesammelt zum Abhaken, zusammenhängende Aufrufketten als Datenfluss, Architektur- und Querschnittsthemen als eigene Kategorien. Jede geänderte Zeile lässt sich als «ok» markieren.
 
 Die Architektur folgt aus fünf Qualitätszielen, in dieser Rangfolge:
 
@@ -35,8 +35,8 @@ Die Architektur folgt aus fünf Qualitätszielen, in dieser Rangfolge:
 flowchart LR
     dev([Reviewer:in<br/>Browser])
     agent([Agent<br/>z. B. Claude Code])
-    scr[SmartCodeReview<br/>Quarkus + Angular<br/>127.0.0.1:8080]
-    fs[(Datenverzeichnis<br/>~/.smart-code-review)]
+    scr[CodeReviewLens<br/>Quarkus + Angular<br/>127.0.0.1:8080]
+    fs[(Datenverzeichnis<br/>~/.code-review-lens)]
     gh[GitHub<br/>REST + GraphQL]
     gl[GitLab<br/>REST v4]
     cli[gh / glab CLI<br/>nur Token-Suche]
@@ -80,7 +80,7 @@ flowchart TB
     subgraph local["Lokal (start.sh / start.ps1)"]
         qj["Quarkus JVM :8080<br/>UI aus META-INF/resources"]
     end
-    subgraph docker["Docker (culmi/smart-code-review)"]
+    subgraph docker["Docker (culmi/code-review-lens)"]
         nat["Native-Binary (Mandrel)<br/>ubi9-micro, User 1001<br/>-Dquarkus.http.host=0.0.0.0"]
         vol[("/data (Volume)")]
         nat --- vol
@@ -319,7 +319,7 @@ Alle Records tragen `@RegisterForReflection`; fremdes JSON wird als `JsonNode` g
 
 | Property | Env | Default |
 |---|---|---|
-| `scr.data-dir` | `SCR_DATA_DIR` | `~/.smart-code-review` |
+| `scr.data-dir` | `SCR_DATA_DIR` | `~/.code-review-lens` |
 | `scr.github.token` | `GITHUB_TOKEN`, `GH_TOKEN` | `gh auth token` |
 | `scr.gitlab.url` | `SCR_GITLAB_URL` | `https://gitlab.com` |
 | `scr.gitlab.token` | `GITLAB_TOKEN`, `GL_TOKEN` | `glab config get token` |

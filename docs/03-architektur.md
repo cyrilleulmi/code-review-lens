@@ -11,11 +11,11 @@
 └──────────────────────┘           │                    │  │   └ GitLabProvider ───┼────────▶ │ GitLab       │
                                    │                    │  ├─ Analyzer (ohne KI)   │          └──────────────┘
                                    │                    │  ├─ Attribution          │
-                                   │                    │  └─ DataStore ───────────┼──▶ ~/.smart-code-review/
+                                   │                    │  └─ DataStore ───────────┼──▶ ~/.code-review-lens/
                                    └──────────────────────────────────────────────┘     (JSON + Quelltexte)
 ```
 
-## Backend (`backend/`, Paket `dev.smartcodereview`)
+## Backend (`backend/`, Paket `dev.codereviewlens`)
 
 | Klasse | Aufgabe |
 |---|---|

@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { serverText, t } from './i18n';
 
-// Mirrors backend dev.smartcodereview.model.Model
+// Mirrors backend dev.codereviewlens.model.Model
 
 export interface User {
   login: string;
