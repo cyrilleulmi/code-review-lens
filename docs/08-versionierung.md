@@ -37,7 +37,7 @@ Zwischen zwei Releases steht in `pom.xml` die **letzte veröffentlichte** Versio
 
 Das Skript prüft (Branch `main`, sauberer Arbeitsstand, Tag noch frei, Changelog-Abschnitt vorhanden), setzt die Version, baut das native Image (inkl. Unit-Tests), committet «Release X.Y.Z», setzt den Tag `vX.Y.Z` und pusht Git und beide Image-Tags. Schlägt der Image-Build fehl, wird die Versionsänderung zurückgenommen und nichts committet.
 
-**Beschreibung auf Docker Hub:** Die Seite des Images zeigt `DOCKERHUB.md` (Startbefehle zum Kopieren, mit und ohne Token; Konfiguration) und eine Kurzbeschreibung. Ist `DOCKERHUB_TOKEN` gesetzt (Personal Access Token von Docker Hub mit «Read & Write»), aktualisiert `release.sh` sie am Ende; sonst separat: `DOCKERHUB_TOKEN=… ./dockerhub-overview.sh`. Wer `DOCKERHUB.md` ändert, führt das Skript nach dem Merge aus – die Seite folgt der Datei nicht von selbst.
+**Beschreibung auf Docker Hub:** Die Seite des Images zeigt `DOCKERHUB.md` (Startbefehle zum Kopieren, mit und ohne Token; Konfiguration) und eine Kurzbeschreibung. Ist `DOCKERHUB_TOKEN` gesetzt (Personal Access Token von Docker Hub mit «Read, Write, Delete» – «Read & Write» genügt für die Beschreibung nicht), aktualisiert `release.sh` sie am Ende; sonst separat: `DOCKERHUB_TOKEN=… ./dockerhub-overview.sh`. Wer `DOCKERHUB.md` ändert, führt das Skript nach dem Merge aus – die Seite folgt der Datei nicht von selbst.
 
 ## Bisherige Versionen
 
