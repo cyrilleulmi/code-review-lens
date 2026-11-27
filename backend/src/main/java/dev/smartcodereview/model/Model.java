@@ -197,6 +197,8 @@ public final class Model {
      * place needs its own "ok" (see ReviewState.okAt). testedBy: ids of test segments that reach this one.
      * layer: domain | application | usecase | adapter when the project uses ports & adapters (else null).
      * frontend: the file belongs to a web frontend (Angular, React, Vue, templates, ...).
+     * signature: for a function, method or component what it takes and returns (see Signature); null for everything
+     * else, when the declaration could not be read, and in analyses of older versions.
      */
     @RegisterForReflection
     public record Segment(String id, String path, String language, String kind,
@@ -204,7 +206,47 @@ public final class Model {
                           String category, String group, String ruleId, String reason,
                           List<String> lineKeys, List<DisplayLine> lines,
                           List<String> places, List<String> testedBy,
-                          String layer, boolean frontend) {
+                          String layer, boolean frontend, Signature signature) {
+        public Segment(String id, String path, String language, String kind,
+                       String symbol, String symbolKind, Integer startLine, Integer endLine,
+                       String category, String group, String ruleId, String reason,
+                       List<String> lineKeys, List<DisplayLine> lines,
+                       List<String> places, List<String> testedBy,
+                       String layer, boolean frontend) {
+            this(id, path, language, kind, symbol, symbolKind, startLine, endLine, category, group, ruleId, reason,
+                    lineKeys, lines, places, testedBy, layer, frontend, null);
+        }
+    }
+
+    /** A parameter of a function. type: as declared, null when the code gives none (untyped JavaScript). name: "" when only a type is written (Go). */
+    @RegisterForReflection
+    public record Parameter(String name, String type) {
+    }
+
+    /**
+     * What a function takes and returns, read from its declaration (pattern-based, see analysis/Signatures).
+     * declaration: the head as written, on one line (without the body). params: in order. returns: the declared
+     * return type, null when none is written (constructors, untyped code, Kotlin Unit). types: ids of Analysis.types
+     * for the types named in params and returns that an analysed file declares - their fields are the data structure
+     * of the call.
+     */
+    @RegisterForReflection
+    public record Signature(String declaration, List<Parameter> params, String returns, List<String> types) {
+    }
+
+    /** A field of a type. type: as declared; null for enum constants and fields without a written type. */
+    @RegisterForReflection
+    public record TypeField(String name, String type) {
+    }
+
+    /**
+     * A class, interface, type or enum that a signature names and an analysed file declares. id: "<path>#<name>".
+     * kind: class | interface | type | enum. line: where it starts (new file). fields: its fields in the order of the
+     * code (record components and constructor properties included, methods left out), at most 12; more: how many
+     * further fields there are.
+     */
+    @RegisterForReflection
+    public record TypeInfo(String id, String name, String path, String kind, Integer line, List<TypeField> fields, int more) {
     }
 
     @RegisterForReflection
@@ -227,11 +269,18 @@ public final class Model {
     }
 
     /**
-     * line: new-file line in the caller where the callee is referenced. kind: "call" (name reference) or
-     * "http" (a frontend REST call matched to a backend endpoint; via is then e.g. "PUT /api/players/{}").
+     * line: new-file line in the caller where the callee is referenced: where it is called (the first call on a
+     * changed line, else the first call), for something that is only named the first mention. kind: "call" (name
+     * reference) or "http" (a frontend REST call matched to a backend endpoint; via is then e.g.
+     * "PUT /api/players/{}"). lines: every new-file line of the caller that calls the callee (call syntax), ascending,
+     * line among them - the caller calls it once per entry, which gives the order of the calls (Abfolge); only line
+     * for what is not called (a constant, a type, a component). null in analyses of older versions.
      */
     @RegisterForReflection
-    public record FlowEdge(String from, String to, Integer line, String via, String kind) {
+    public record FlowEdge(String from, String to, Integer line, String via, String kind, List<Integer> lines) {
+        public FlowEdge(String from, String to, Integer line, String via, String kind) {
+            this(from, to, line, via, kind, line == null ? List.of() : List.of(line));
+        }
     }
 
     @RegisterForReflection
@@ -604,7 +653,8 @@ public final class Model {
      * test of the expected form exists (see RuleCheck), by segment and line; empty for a whole repository, null in
      * analyses of older versions. setupImpacts: changed setup blocks, fixtures and test helpers with the tests they
      * affect (Wirkung von Setup und Testdaten, see SetupImpact), by path and line; empty for a whole repository, null in
-     * analyses of older versions.
+     * analyses of older versions. types: the types named in the signatures of the segments, as far as analysed files
+     * declare them, with their fields (see TypeInfo), by path and line; null in analyses of older versions.
      */
     @RegisterForReflection
     public record Analysis(int schemaVersion, String generatedAt, String headSha, String rulesHash,
@@ -614,7 +664,19 @@ public final class Model {
                            List<CodeCoverage> coverage, List<SpecFile> specs, List<CaseMatrix> caseMatrices,
                            List<ExistingTest> existingTests, RelatedTests relatedTests,
                            List<MockWarning> mockWarnings, List<FlowCoverage> flowCoverage,
-                           List<RuleCheck> ruleChecks, List<SetupImpact> setupImpacts) {
+                           List<RuleCheck> ruleChecks, List<SetupImpact> setupImpacts, List<TypeInfo> types) {
+        public Analysis(int schemaVersion, String generatedAt, String headSha, String rulesHash,
+                        List<Segment> segments, List<Category> categories, List<Flow> flows,
+                        List<TestInfo> tests, ArchitectureInfo architecture,
+                        List<Component> components, List<ComponentEdge> componentEdges,
+                        List<CodeCoverage> coverage, List<SpecFile> specs, List<CaseMatrix> caseMatrices,
+                        List<ExistingTest> existingTests, RelatedTests relatedTests,
+                        List<MockWarning> mockWarnings, List<FlowCoverage> flowCoverage,
+                        List<RuleCheck> ruleChecks, List<SetupImpact> setupImpacts) {
+            this(schemaVersion, generatedAt, headSha, rulesHash, segments, categories, flows, tests, architecture, components,
+                    componentEdges, coverage, specs, caseMatrices, existingTests, relatedTests, mockWarnings, flowCoverage,
+                    ruleChecks, setupImpacts, null);
+        }
     }
 
     /**
@@ -816,5 +878,61 @@ public final class Model {
     /** version: the running SmartCodeReview release (from pom.xml), e.g. "0.3.0". */
     @RegisterForReflection
     public record Me(List<Account> accounts, String dataDir, String version) {
+    }
+
+    // ---------------------------------------------------------------- TLS: certificates and hosts without check
+
+    /**
+     * A certificate the tool trusts in addition to the default ones of the runtime, or one of the chain a host
+     * presents. fingerprint: SHA-256, hex pairs separated by ":". notBefore/notAfter: ISO instants. ca: may sign other
+     * certificates. source: "startup" (scr.tls.ca-certs / SCR_TLS_CA_CERTS) or "saved" ({@code <data>/certificates/},
+     * added in the UI or put there by hand); null for a certificate of a host. file: where it was read from.
+     */
+    @RegisterForReflection
+    public record CertificateInfo(String fingerprint, String subject, String issuer, String notBefore, String notAfter,
+                                  boolean ca, boolean selfSigned, String source, String file) {
+    }
+
+    /** A host (host:port) whose certificate is not checked: "startup" (scr.tls.insecure-hosts) or "saved" (tls.json). */
+    @RegisterForReflection
+    public record InsecureHost(String host, String source) {
+    }
+
+    /**
+     * What the tool trusts besides the default certificates of the runtime. directory: where saved certificates live
+     * ({@code <data>/certificates}); warnings: files of the startup configuration that could not be read.
+     */
+    @RegisterForReflection
+    public record TlsSettings(List<CertificateInfo> certificates, List<InsecureHost> insecureHosts, List<String> warnings,
+                              String directory) {
+    }
+
+    /**
+     * A look at the certificate of a host: the chain it presents (server first), whether the tool trusts it now, and if
+     * not why. insecure: the host is on the list of hosts without check.
+     */
+    @RegisterForReflection
+    public record CertificateProbe(String host, int port, boolean trusted, boolean insecure, String problem,
+                                   List<CertificateInfo> chain) {
+    }
+
+    /** Trust a certificate of the chain of host (host, host:port or URL; port default 443), named by its fingerprint. */
+    @RegisterForReflection
+    public record TrustRequest(String host, Integer port, String fingerprint) {
+    }
+
+    /** Switch the certificate check for a host off (insecure = true) or on again. */
+    @RegisterForReflection
+    public record InsecureRequest(String host, Integer port, boolean insecure) {
+    }
+
+    /** One or more certificates in PEM (as exported by a browser or the IT), or Base64 DER. */
+    @RegisterForReflection
+    public record PemRequest(String pem) {
+    }
+
+    /** {@code <data>/tls.json}: hosts (host:port) whose certificate is not checked, switched off in the UI. */
+    @RegisterForReflection
+    public record SavedTls(List<String> insecureHosts) {
     }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FRAME_PADDING, Rect, curvePath, frameAround, layoutFlow, packRows, routeMiddle, routePath } from './flow-layout';
+import { FRAME_PADDING, Rect, columnStarts, curvePath, frameAround, layoutFlow, packRows, routeMiddle, routePath } from './flow-layout';
 
 const overlap = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 const inside = (inner: Rect, outer: Rect) =>
@@ -62,6 +62,41 @@ describe('layoutFlow', () => {
     expect(layout.boxes.get('a')!.x).toBeLessThan(layout.boxes.get('b')!.x);
     expect(layout.routes.size).toBe(2);
   });
+
+  it('keeps room free for the label of an edge: between the boxes, on none of them', async () => {
+    const box = (key: string) => ({ key, w: 200, h: 46 });
+    const layout = await layoutFlow({
+      boxes: [box('a'), box('b'), box('c')],
+      frames: [],
+      edges: [{ id: 'e0', from: 'a', to: 'b', label: { w: 150, h: 14 } }, { id: 'e1', from: 'a', to: 'c' }],
+    });
+
+    const [a, b, c] = ['a', 'b', 'c'].map((k) => layout.boxes.get(k)!);
+    const label = layout.labels.get('e0')!;
+    expect([...layout.labels.keys()]).toEqual(['e0']);
+    expect(label).toMatchObject({ w: 150, h: 14 });
+    expect(label.x).toBeGreaterThanOrEqual(a.x + a.w);
+    expect(label.x + label.w).toBeLessThanOrEqual(b.x);
+    for (const other of [a, b, c]) expect(overlap(label, other)).toBe(false);
+  });
+
+  it('places the label of an edge inside a class and between classes in diagram coordinates', async () => {
+    const box = (key: string, frame: string) => ({ key, w: 180, h: 32, frame });
+    const layout = await layoutFlow({
+      boxes: [box('a1', 'A'), box('a2', 'A'), box('b1', 'B')],
+      frames: [{ key: 'A' }, { key: 'B' }],
+      edges: [{ id: 'e0', from: 'a1', to: 'a2', label: { w: 90, h: 14 } }, { id: 'e1', from: 'a2', to: 'b1', label: { w: 120, h: 14 } }],
+    });
+
+    const [A, B] = ['A', 'B'].map((k) => layout.frames.get(k)!);
+    const boxes = ['a1', 'a2', 'b1'].map((k) => layout.boxes.get(k)!);
+    const [inner, across] = ['e0', 'e1'].map((k) => layout.labels.get(k)!);
+    expect(inside(inner, A)).toBe(true);
+    expect(across.x).toBeGreaterThanOrEqual(layout.boxes.get('a2')!.x + 180);
+    expect(across.x + across.w).toBeLessThanOrEqual(layout.boxes.get('b1')!.x);
+    expect(overlap(across, B)).toBe(false);
+    for (const label of [inner, across]) for (const b of boxes) expect(overlap(label, b)).toBe(false);
+  });
 });
 
 describe('routePath', () => {
@@ -111,5 +146,17 @@ describe('packRows', () => {
     const at = packRows([{ w: 100, h: 50 }, { w: 100, h: 80 }, { w: 100, h: 40 }, { w: 400, h: 40 }], 250, 10);
 
     expect(at).toEqual([{ x: 0, y: 0 }, { x: 110, y: 0 }, { x: 0, y: 90 }, { x: 0, y: 140 }]);
+  });
+});
+
+describe('columnStarts', () => {
+  it('makes every column as wide as its widest box, so long names never reach into the next column', () => {
+    const starts = columnStarts([{ depth: 0, w: 236 }, { depth: 1, w: 480 }, { depth: 1, w: 236 }, { depth: 2, w: 300 }], 56);
+
+    expect(starts).toEqual([0, 236 + 56, 236 + 56 + 480 + 56]);
+  });
+
+  it('takes no room for a depth without boxes', () => {
+    expect(columnStarts([{ depth: 0, w: 100 }, { depth: 2, w: 100 }], 10)).toEqual([0, 110, 110]);
   });
 });

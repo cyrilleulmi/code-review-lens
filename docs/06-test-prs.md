@@ -117,6 +117,44 @@ Für den PoC wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **
 
 **stv-bero-website#1:** Snapshot rund 15 s (194 Quelltexte), Analyse rund 5 s, 69 Flüsse, 20 Testfälle. Einzelne Flüsse sind bei so einem «ganze neue Website»-PR noch gross (bis 80 Schritte), siehe Annahme B4; 24 Blöcke liegen an mehreren Orten.
 
+**Abfolge und Abspielen (FR-UI-22, -23)** – geprüft an gemergten PRs dieses Repos, weil sie Flüsse über mehrere Klassen mit mehrfachen Aufrufen enthalten:
+
+* [smart-code-review#11](https://github.com/cyrilleulmi/smart-code-review/pull/11), Flow `resolve → resolveThread (+4)`: 3 Lebenslinien (`CodeBlock`, `Api`, `ReviewStore`), 7 Aufrufe. `Api.resolveThread` wird zweimal aufgerufen (Zeile 805 und aus `ReviewStore.resolveThread`, Zeile 1097) und steht beim zweiten Mal als «erneut»; `ReviewStore.samePr` zweimal aus `loadStatus` (Zeilen 1040 und 1041); `loadStatus` und `samePr` sind Schleifen auf der Lebenslinie von `ReviewStore`, mit verschachtelten Balken.
+* smart-code-review#11, Flow `status → status → status`: Frontend → REST → Backend. Der Aufruf `Api.status` → `ReviewResource.status` ist gestrichelt und trägt `GET /prs/{}/{}/{}/{}/status`. Bereich «API» entfernen: ein Aufruf `Api.status` → `ReviewService.status`, «überbrückt».
+* smart-code-review#11, Flow `approve → approve (+3)`: Die Aufrufstelle von `ReviewActions.approve` → `ReviewStore.approve` ist Zeile 225 (der Aufruf), nicht 223 (die eigene Deklaration; FR-ANA-27).
+* Ganzes Repository (`#/github/cyrilleulmi/smart-code-review/0`), Flow `App → …`: 162 Aufrufe, 23 Lebenslinien – Liste und Köpfe bleiben beim Scrollen stehen, beim Abspielen bleibt der aktuelle Aufruf im Bild.
+* Übersicht von smart-code-review#11 → Komponenten → «Abfolge» → `resolve → resolveThread (+4)`: `CodeBlock`, `ReviewStore` und `Api` bleiben, der Rest tritt zurück; der Punkt läuft `CodeBlock` → `Api`, `CodeBlock` → `ReviewStore`, `ReviewStore` → `Api`; die Aufrufe innerhalb von `ReviewStore` und `CodeBlock` lassen die jeweilige Komponente aufleuchten.
+
+**Detail der Methoden (FR-UI-24, FR-ANA-28)** – an smart-code-review#11, Flow `resolve → resolveThread (+4)`:
+
+* «Signatur», Ebene «Klassen + Methoden»: `resolve(thread: Thread): void`, `resolveThread(pr: PrKey, thread: string, …): Observable<Comment[]>` (gekürzt, der Tooltip zeigt die ganze Deklaration), `loadStatus(): void`.
+* Tooltip eines Knotens: unter der Deklaration von `resolve` steht `Thread { root: Comment, replies: Comment[] }`, bei `Api.resolveThread` stehen `PrKey { provider: string, owner: string, repo: string, number: number }` und `Comment` mit seinen Feldern. `PrKey` und `Comment` sind in `api.ts` deklariert, `Thread` in `code-block.ts`.
+* Ebene «Klassen» mit «Signatur»: Der Knoten `CodeBlock` listet `resolve(…)` und `toggleThread(…)` zeilenweise, `ReviewStore` seine drei Methoden.
+* «Abfolge» mit «Signatur»: `CodeBlock` und `Api` stehen weiter auseinander, damit die Signatur Platz hat.
+* Im Backend-Flow `approve → approve → requirePullRequest (+2)` (Java): `ReviewResource.approve(@PathParam("provider") String provider, …)` erscheint als `approve(provider: String, owner: String, …): PrStatus`, im Tooltip die Records `ApprovalRequest { approved: boolean }` und `PrStatus` aus `Model.java` mit ihren Komponenten; `ReviewService.approve(PrRef ref, boolean approved)` gibt `Model.PrStatus` zurück und zeigt `PrRef` und `PrStatus` (der qualifizierte Name wird aufgelöst).
+
+**Beide Diagramme, Abspielen mit Code, Vollbild (FR-UI-22, -23, -25, -34)** – an spongecoach#13, Flow `saveJerseyNumber → setJerseyNumber → update → validateJerseyNumber (+2)`:
+
+* Der Flow zeigt oben den Aufrufgraph, darunter die Abfolge, dann den Code. Der Aufrufgraph ist eingepasst: alle vier Klassen sind zu sehen (bei 1500 px Fensterbreite 37 %, Ebene «Klassen» 57 %), kein Scrollbalken.
+* «Einen Aufruf weiter» bis Aufruf 3: In beiden Diagrammen sind `PlayerResource.update` und `validateJerseyNumber` hervorgehoben; unter den Diagrammen stehen nur diese zwei Blöcke, die Leiste «Code» zeigt «Aufruf 3: nur der betroffene Code». «Beenden» zeigt wieder alle sechs Blöcke.
+* «Vollbild» am Aufrufgraph: Er füllt mit seiner Leiste und der Leiste «Abfolge» den Bildschirm (50 %), «Einen Aufruf weiter» spielt dort weiter; Esc beendet. «Vollbild» an der Abfolge zeigt Liste und Sequenzdiagramm, der Knopf beendet es wieder.
+* Komponenten → «Vollbild»: Das Komponentendiagramm füllt den Bildschirm, Esc beendet.
+* Nach unten in den Code scrollen: Die Leiste mit «Einzeln durchgehen» und die Leiste «Abfolge» bleiben am oberen Rand des Editors stehen, darüber scrollt nichts durch. «Einen Aufruf weiter» von dort: Der Aufrufgraph kommt unter den Leisten ins Bild.
+* Navigieren: In der Abfolge (breiter als ihr Bereich) eine leere Stelle nach links ziehen – der Ausschnitt folgt. Aufrufgraph auf 100 % stellen und ziehen: ebenso; eingepasst gibt es nichts zu verschieben. Ein Knoten lässt sich weiterhin ziehen, ohne dass sich der Ausschnitt bewegt.
+
+**Schalter «Signatur» und «Rückgabewerte» (FR-UI-24)** – an spongecoach#13, Flow `saveJerseyNumber → setJerseyNumber → update → validateJerseyNumber (+2)`:
+
+* Beide Schalter sind Pillen und stehen einmal, in der Leiste des Aufrufgraphs; an = gefüllt mit Haken. Standard: «Signatur» aus, «Rückgabewerte» an. Nach dem Neuladen steht die Wahl wieder so da.
+* «Rückgabewerte» an, Abfolge: vier Pfeile zurück («↩ boolean» zweimal, «↩ PlayerDetailDto», «↩ Observable<PlayerDetail>»), in der Liste je eine Zeile. Aus: keine Zeile und kein Pfeil zurück, die Aufrufe rücken zusammen.
+* «Rückgabewerte» an, Aufrufgraph: an vier Verbindungen steht «↩ Typ» unter der Linie, am Ende des Aufrufers eine offene Pfeilspitze; kein Text liegt auf einem Knoten. Aus: die Texte verschwinden, das Diagramm rückt zusammen.
+* Beide an: Die Signatur steht am Aufruf (`setJerseyNumber(…): Observable<PlayerDetail>`), die Rückgabe zusätzlich als Pfeil zurück.
+
+**Rückgaben, Zoom und Hervorhebung beim Abspielen (FR-UI-22, -23, -25)** – an spongecoach#13, Flow `saveJerseyNumber → setJerseyNumber → update → validateJerseyNumber (+2)`:
+
+* Abfolge (Standardansicht): nach `isInRange` und `isJerseyNumberTaken` je eine Zeile «↩ boolean an PlayerResource.validateJerseyNumber», nach dem letzten inneren Aufruf «↩ PlayerDetailDto an PlayerApiService.setJerseyNumber» und «↩ Observable<PlayerDetail> an PlayerView.saveJerseyNumber»; `validateJerseyNumber` (`void`) hat keinen Pfeil zurück.
+* Abspielen bei Aufruf 3 (`update` → `validateJerseyNumber`, innerhalb `PlayerResource`): Das Sequenzdiagramm scrollt so, dass Schleife und Beschriftung ganz im Bild sind; im Aufrufgraph sind `update` und `validateJerseyNumber` hervorgehoben, die anderen Knoten treten zurück.
+* Zoom: Strg + Mausrad und die Knöpfe in allen drei Diagrammen; «Einpassen» zeigt den ganzen Aufrufgraph.
+
 ## Ports & Adapters
 
 [thombergs/buckpal#41](https://github.com/thombergs/buckpal/pull/41) (öffentliches Beispielprojekt für Hexagonal Architecture, 47 Dateien, nur gelesen): erkannt über `adapter`, `application`, `application/domain`, `application/port`. Kategorien *Domäne* (Account, Activity, Money …), *Use Cases* (SendMoneyUseCase, GetAccountBalanceUseCase), *Application Layer* (SendMoneyService, LoadAccountPort …), *Adapter* (eingehend: SendMoneyController; ausgehend: AccountPersistenceAdapter, AccountMapper …). 38 Komponenten im Diagramm.

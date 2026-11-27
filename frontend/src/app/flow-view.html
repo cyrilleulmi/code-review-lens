@@ -26,6 +26,8 @@
   }
 </div>
 
+<!-- the two bars one works with all the way down the flow: they stay at the top of the editor while it scrolls -->
+<div class="sticky-bars" #sticky>
 <div class="focus-bar">
   @if (stepIndex() === null) {
     <button type="button" class="ftool" (click)="startSteps()" [title]="t('Immer nur einen Schritt zeigen, mit «Ok & weiter»')">
@@ -51,6 +53,39 @@
     <span class="spacer"></span>
     <button type="button" class="ftool" (click)="stepIndex.set(null)"><app-icon name="close" [size]="13" /> {{ t('Beenden') }}</button>
   }
+</div>
+<div class="seq-bar">
+  <span class="lbl"><app-icon name="sequence" [size]="14" /> {{ t('Abfolge') }}</span>
+  <app-sequence-controls [player]="player" [length]="sequence().calls.length">
+    @if (currentCall(); as c) {
+      <span class="who">{{ stepName(c.from) }}</span>
+      <app-icon name="arrowRight" [size]="12" />
+      <span class="no" [style.background]="c.bridged ? 'var(--fg-muted)' : 'var(--edge-' + playback()?.c + ')'">{{ stepOf()[c.to] }}</span>
+      <b class="who">{{ stepName(c.to) }}</b>
+      @if (c.http) {
+        <span class="via">HTTP {{ c.via }}</span>
+      }
+      @if (returnOf(c); as r) {
+        <span class="via ret" [title]="t('Was der Aufruf zurückgibt: am Ende des Aufrufs, nach allen Aufrufen, die er selbst macht')">↩ {{ r }}</span>
+      }
+      <button type="button" class="ftool" (click)="openTarget({ segmentId: c.from, line: c.line })"
+              [title]="c.line != null ? t('Zur Aufrufstelle im Code springen') : t('Zum Code des Aufrufers springen')">
+        <app-icon name="code" [size]="12" />
+        @if (c.line != null) {
+          {{ t('Zeile {line}', { line: c.line }) }}
+        }
+      </button>
+    }
+  </app-sequence-controls>
+  @if (usedSteps() > 0) {
+    <button type="button" class="ftool" [class.on]="callsOnly()" [attr.aria-pressed]="callsOnly()" (click)="toggleCallsOnly()"
+            [title]="t('Konstanten und Typen aus der Abfolge nehmen: sie werden verwendet, nicht aufgerufen ({n} im Flow)', { n: usedSteps() })">
+      <app-icon name="eyeOff" [size]="13" /> {{ t('Nur Aufrufe') }}
+    </button>
+  }
+  <span class="hint" [title]="t('Die Abfolge ist statisch aus dem Code gelesen: jeder Aufrufer Zeile für Zeile, jeder Schritt wird beim ersten Aufruf aufgeklappt. Bedingungen, Schleifen und asynchrone Aufrufe sind nicht bekannt – ob und wie oft ein Aufruf wirklich läuft, sagt sie nicht')">
+    <app-icon name="info" [size]="12" /> {{ t('statisch: Reihenfolge der Aufrufstellen') }}</span>
+</div>
 </div>
 
 @if (areas().length > 1) {
@@ -90,8 +125,14 @@
   </div>
 }
 
+<!-- both diagrams of the flow, one below the other; either can be shown full screen, with the bar of the playback -->
+<div class="diagrams">
+@let pb = playback();
+<section class="part graph-part" [attr.aria-label]="t('Aufrufgraph')">
 <div class="level-bar">
-  <span class="lbl">{{ t('Diagramm') }}</span>
+  <span class="lbl" [title]="t('Aufrufgraph: wer wen aufruft, jeder Schritt einmal') + '
+' + t('Knoten und Klassen lassen sich ziehen')">
+    <app-icon name="flow" [size]="14" /> {{ t('Aufrufgraph') }}</span>
   <div class="seg-switch text" role="group" [attr.aria-label]="t('Ebene des Diagramms')">
     <button type="button" [class.on]="level() === 'class'" [attr.aria-pressed]="level() === 'class'" (click)="setLevel('class')"
             [title]="t('Ein Knoten pro Klasse: ihre Methoden des Flows zusammengefasst, Verbindungen zwischen den Klassen')">{{ t('Klassen') }}</button>
@@ -99,6 +140,16 @@
             [title]="t('Klassen als Rahmen, ihre Methoden als kleinere Knoten darin; Verbindungen zwischen den Methoden')">{{ t('Klassen + Methoden') }}</button>
     <button type="button" [class.on]="level() === 'method'" [attr.aria-pressed]="level() === 'method'" (click)="setLevel('method')"
             [title]="t('Ein Knoten pro Methode bzw. Funktion')">{{ t('Methoden') }}</button>
+  </div>
+  <!-- what both diagrams show of a method, each on or off on its own -->
+  <span class="lbl sub">{{ t('Methoden') }}</span>
+  <div class="chips" role="group" [attr.aria-label]="t('Was die Diagramme von den Methoden zeigen')">
+    <button type="button" class="chip-toggle" [class.on]="store.showSignatures()" [attr.aria-pressed]="store.showSignatures()" (click)="toggleSignatures()"
+            [title]="t('Jede Methode mit Parametern und Rückgabetyp, in einer Schreibweise für alle Sprachen. Aus: nur ihr Name')">
+      <span class="tick"><app-icon name="check" [size]="10" /></span>{{ t('Signatur') }}</button>
+    <button type="button" class="chip-toggle" [class.on]="store.showReturns()" [attr.aria-pressed]="store.showReturns()" (click)="toggleReturns()"
+            [title]="t('Was ein Aufruf zurückgibt: ein Pfeil zurück zum Aufrufer mit dem Datentyp des Rückgabewerts. Ohne Rückgabe (void) kein Pfeil')">
+      <span class="tick"><app-icon name="check" [size]="10" /></span>{{ t('Rückgabewerte') }}</button>
   </div>
   @let classCount = level() === 'class' ? boxes().length : frames().length;
   @let methodCount = level() === 'class' ? 0 : boxes().length;
@@ -119,15 +170,18 @@
       <app-icon name="refresh" [size]="13" /> {{ t('Anordnung zurücksetzen') }}
     </button>
   }
-  <span class="hint">{{ t('Knoten und Klassen lassen sich ziehen') }}</span>
+  <app-zoom-controls [zoom]="graphShownZoom()" (zoomChange)="setGraphZoom($event)" (fit)="fitGraph()"
+                     [full]="full.what() === 'graph'" (fullChange)="full.toggle('graph')" />
 </div>
-
-<div class="diagram" role="list" [class.dragging]="dragging()">
+<div class="diagram" #graph appPan [class.dragging]="dragging()"
+     [class.playing]="!!pb" [style.--seq-dur]="player.duration() + 'ms'" (wheel)="graphWheel($event)">
+ <div class="zoomed" role="list" [style.zoom]="graphShownZoom()">
   @for (f of frames(); track f.key) {
     @let fp = progressOf(f.ids);
     @let fl = accepted(fp);
     <div class="frame" [style.left.px]="f.x" [style.top.px]="f.y" [style.width.px]="f.w" [style.height.px]="f.h" [style.--area]="areaColor(f.area)"
-         [class.done]="fl !== 'open'" [class.acc-all]="fl === 'all'" [class.off]="isOff(f.ids)" [class.root]="focused() === f.key">
+         [class.done]="fl !== 'open'" [class.acc-all]="fl === 'all'" [class.off]="isOff(f.ids)" [class.root]="focused() === f.key"
+         [class.seq-later]="frameLater(f.ids)" [class.seq-hit]="!!pb && (pb.fromFrame === f.key || pb.toFrame === f.key)">
       <div class="frame-head" role="button" tabindex="0" [title]="f.hint"
            (mouseenter)="hover(f.ids)" (mouseleave)="hover(null)" (click)="openBox(f)" (keydown.enter)="openBox(f)"
            (pointerdown)="dragStart($event, f.ids)" (pointermove)="dragMove($event)" (pointerup)="dragEnd($event)" (pointercancel)="dragEnd($event)">
@@ -162,23 +216,43 @@
         <marker [attr.id]="'arrow-' + m" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0 0 L8 4 L0 8 z" [style.fill]="'var(--edge-' + m + ')'" />
         </marker>
+        <!-- what a call gives back: an open arrow head at the caller's end of the connection -->
+        <marker [attr.id]="'back-' + m" viewBox="0 0 8 8" refX="7.4" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+          <path d="M0.6 0.6 L7.4 4 L0.6 7.4" fill="none" stroke-width="1.4" [style.stroke]="'var(--edge-' + m + ')'" />
+        </marker>
       }
     </defs>
     @for (e of d.edges; track $index) {
       <path [attr.d]="e.d" class="edge" [class.hot]="isHot(e.ends)" [class.back]="e.back" [class.http]="e.http" [class.bridged]="e.bridged"
             [class.dim]="!!hovered() && !isHot(e.ends)"
+            [class.seq-later]="edgeLater(e.from, e.to)"
             [class.run-separate]="e.run === 'separate'" [class.run-faint]="e.run === 'partial' || e.run === 'none'"
-            [style.stroke]="'var(--edge-' + e.c + ')'" [attr.marker-end]="'url(#arrow-' + e.c + ')'"><title>{{ e.title }}</title></path>
+            [style.stroke]="'var(--edge-' + e.c + ')'" [attr.marker-end]="'url(#arrow-' + e.c + ')'"
+            [attr.marker-start]="e.ret ? 'url(#back-' + e.c + ')' : null"><title>{{ e.title }}</title></path>
       @if (e.http) {
-        <text class="http-label" [attr.x]="e.lx" [attr.y]="e.ly" text-anchor="middle" [style.fill]="'var(--edge-' + e.c + ')'">HTTP</text>
+        <text class="http-label" [attr.x]="e.lx" [attr.y]="e.httpY" text-anchor="middle" [style.fill]="'var(--edge-' + e.c + ')'">HTTP</text>
       }
       @if (e.both) {
-        <text class="run-label both" [attr.x]="e.lx" [attr.y]="e.ly + (e.http ? 22 : 12)" text-anchor="middle">{{ t(bothSidesLabel) }}<title>{{ e.title }}</title></text>
+        <text class="run-label both" [attr.x]="e.lx" [attr.y]="e.runY" text-anchor="middle">{{ t(bothSidesLabel) }}<title>{{ e.title }}</title></text>
       } @else if (e.run === 'separate') {
-        <text class="run-label" [attr.x]="e.lx" [attr.y]="e.ly + (e.http ? 22 : 12)" text-anchor="middle">{{ t('einzeln') }}<title>{{ e.title }}</title></text>
+        <text class="run-label" [attr.x]="e.lx" [attr.y]="e.runY" text-anchor="middle">{{ t('einzeln') }}<title>{{ e.title }}</title></text>
+      }
+      @if (e.ret; as r) {
+        <text class="ret-label" [attr.x]="e.lx" [attr.y]="e.retY" text-anchor="middle" [style.fill]="'var(--edge-' + e.c + ')'"
+              [class.dim]="!!hovered() && !isHot(e.ends)" [class.seq-later]="edgeLater(e.from, e.to)">↩ {{ r }}<title>{{ e.retTitle }}</title></text>
       }
     }
+    <!-- playback: the connection of the current call is drawn again, on top -->
+    @for (r of playbackRuns(); track r.no) {
+      <path [attr.d]="r.d" class="seq-run" pathLength="1" [style.stroke]="'var(--edge-' + r.c + ')'" />
+    }
   </svg>
+  <!-- playback: a dot runs along the connection of the current call, from the caller to the step called -->
+  <div class="seq-layer" aria-hidden="true">
+    @for (r of playbackRuns(); track r.no) {
+      <span class="seq-dot" [style.offset-path]="r.motion" [style.color]="'var(--edge-' + r.c + ')'"></span>
+    }
+  </div>
   @for (b of boxes(); track b.key) {
     @let p = progressOf(b.ids);
     @let pl = accepted(p);
@@ -188,8 +262,10 @@
             [class.done]="pl !== 'open'" [class.acc-all]="pl === 'all'" [class.quick]="b.quick" [class.cls]="level() === 'class'" [class.mini]="b.mini"
             [class.off]="isOff(b.ids)" [class.other-commit]="otherCommit(b.ids)" [class.current]="isCurrent(b.ids)" [class.root]="focused() === b.key"
             [style.--area]="areaColor(b.area)"
+            [class.seq-from]="pb?.from === b.key" [class.seq-to]="pb?.to === b.key" [class.seq-even]="!!pb && pb.no % 2 === 0"
+            [class.seq-later]="boxLater(b.key)"
             [class.run-tested]="run === 'tested'" [class.run-mocked]="run === 'mocked'" [class.run-none]="run === 'none'"
-            [title]="runTitle(b.ids)"
+            [title]="boxTitle(b)"
             (mouseenter)="hover(b.ids)" (mouseleave)="hover(null)"
             (pointerdown)="dragStart($event, [b.key])" (pointermove)="dragMove($event)" (pointerup)="dragEnd($event)" (pointercancel)="dragEnd($event)"
             (click)="openBox(b)" (keydown.enter)="openBox(b)">
@@ -202,6 +278,9 @@
               <b class="area">{{ a }}</b>
             }
             {{ b.hint }}</span>
+        }
+        @for (line of b.lines; track $index) {
+          <span class="more">{{ line }}</span>
         }
       </span>
       @if (run) {
@@ -226,6 +305,23 @@
       </span>
     </div>
   }
+ </div>
+</div>
+</section>
+
+<section class="part seq-part" [attr.aria-label]="t('Abfolge')">
+<div class="level-bar">
+  <span class="lbl" [title]="t('Abfolge: die Aufrufe der Reihe nach als Liste und als Sequenzdiagramm – eine Lebenslinie pro Klasse, ein Pfeil pro Aufruf')">
+    <app-icon name="sequence" [size]="14" /> {{ t('Abfolge') }}</span>
+  <span class="spacer"></span>
+  <span class="hint">{{ t('Klick auf einen Aufruf zeigt ihn; die Zeilennummer springt zur Aufrufstelle') }}</span>
+  <app-zoom-controls [zoom]="seqDiagram()?.shownZoom() ?? seqZoom()" (zoomChange)="seqZoom.set($event)" (fit)="seqDiagram()?.fit()"
+                     [full]="full.what() === 'sequence'" (fullChange)="full.toggle('sequence')" />
+</div>
+<app-sequence-diagram [sequence]="sequence()" [current]="player.index()" [duration]="player.duration()" [stepOf]="stepOf()"
+                      [detail]="store.methodDetail()" [returns]="store.showReturns()" [(zoom)]="seqZoom" [full]="full.what() === 'sequence'"
+                      (pick)="pickCall($event)" (open)="openTarget($event)" />
+</section>
 </div>
 
 <div class="level-bar">
@@ -244,6 +340,10 @@
           [title]="codeFollows() ? t('Der Code folgt dem Diagramm: Klassen bei «Klassen», sonst Methoden. Klick: die Ebene des Codes eigens festhalten') : t('Der Code hat eine eigene Ebene. Klick: wieder dem Diagramm folgen')">
     <app-icon name="link" [size]="13" /> {{ t('wie Diagramm') }}
   </button>
+  @if (currentCall(); as c) {
+    <span class="play-note" [title]="t('Solange ein Aufruf der Abfolge gezeigt wird, steht hier nur sein Code: der Aufrufer und der aufgerufene Schritt. «Beenden» in der Leiste der Abfolge zeigt wieder alles')">
+      <app-icon name="sequence" [size]="12" /> {{ t('Aufruf {no}: nur der betroffene Code', { no: c.no }) }}</span>
+  }
   <span class="spacer"></span>
   <div class="seg-switch text" role="group" [attr.aria-label]="t('Ansicht der Änderungen')">
     <button type="button" [class.on]="store.diffMode() === 'unified'" [attr.aria-pressed]="store.diffMode() === 'unified'" (click)="store.setDiffMode('unified')"
@@ -253,7 +353,7 @@
   </div>
 </div>
 
-<div class="cards" #cards>
+<div class="cards" #cards (scroll)="cardsScrolled()">
   <svg class="rails" [attr.height]="railHeight()" [attr.width]="railWidth()" aria-hidden="true">
     <defs>
       @for (m of markers; track m) {
@@ -281,7 +381,7 @@
           <span class="dim">{{ t('weiter oben gezeigt') }}</span>
           <app-icon name="arrowRight" [size]="12" />
         </button>
-      } @else if (visible().has(s.id)) {
+      } @else if (shown().has(s.id)) {
         <app-code-block
           [segment]="n.segment"
           [place]="place()"
@@ -294,7 +394,7 @@
           (refClick)="scrollTo($event)"
         />
       } @else {
-        @if (stepIndex() === null) {
+        @if (!solo()) {
           <button type="button" class="hidden-step" (click)="toggleHidden([s.id], $event)" [title]="t('Einblenden')">
             <span class="no">{{ n.no }}</span> {{ nodeName(n.segment) }}
             <span class="dim">{{ isDone(s.id) && !hidden().has(s.id) ? t('erledigt') : t('ausgeblendet') }}</span>
@@ -339,7 +439,7 @@
           }
         }
       </div>
-    } @else if (stepIndex() === null) {
+    } @else if (!solo()) {
       <button type="button" class="hidden-step" (click)="toggleHidden(w.ids, $event)" [title]="t('Einblenden')">
         <app-symbol-badge kind="class" /> {{ w.name }}
         <span class="dim">{{ t('ausgeblendet') }}</span>
@@ -353,7 +453,7 @@
     </div>
   }
   @for (u of codeCards(); track u.key) {
-    @if (stepIndex() === null || anyVisible(u.ids)) {
+    @if (!solo() || anyVisible(u.ids)) {
       @let cardLevel = u.framed ? accepted(progressOf(u.ids)) : 'open';
       <div class="unit" [class.class-card]="u.framed" [class.done]="cardLevel !== 'open'" [class.acc-all]="cardLevel === 'all'" [class.run]="!u.framed" [class.lit]="!u.framed && hoveredClass() === u.classKey" [class.wide]="u.wide"
            [attr.data-class]="u.classKey" [style.margin-left.px]="gutter() + u.depth * indent()" [style.--area]="areaColor(u.area)">
@@ -401,7 +501,7 @@
         }
         @for (m of u.members; track m.node.step.segmentId) {
           @let n = m.node;
-          @if (visible().has(n.step.segmentId)) {
+          @if (shown().has(n.step.segmentId)) {
             <app-code-block
               [segment]="n.segment"
               [place]="place()"
@@ -416,7 +516,7 @@
               (refClick)="scrollTo($event)"
               (calledByClick)="scrollToParent(n)"
             />
-          } @else if (stepIndex() === null) {
+          } @else if (!solo()) {
             <button type="button" class="hidden-step" [style.margin-left.px]="m.indent * indent()" (click)="toggleHidden([n.step.segmentId], $event)" [title]="t('Einblenden')">
               <span class="no">{{ n.no }}</span> {{ nodeName(n.segment) }}
               <span class="dim">{{ isDone(n.step.segmentId) && !hidden().has(n.step.segmentId) ? t('erledigt') : t('ausgeblendet') }}</span>
@@ -427,4 +527,8 @@
       </div>
     }
   }
+</div>
+<!-- the scrollbar of the code sideways: at the bottom of the editor while the code is in view, not below its last block -->
+<div class="hbar" #hbar [hidden]="!cardsWide()" (scroll)="hbarScrolled()" aria-hidden="true">
+  <div [style.width.px]="cardsWidth()"></div>
 </div>

@@ -130,8 +130,15 @@
   }</p>
 <div class="commits-box"><app-commit-list /></div>
 
-<h2>{{ t('Komponenten') }}</h2>
-<app-component-diagram />
+<h2>{{ t('Übergreifende Ansichten') }}</h2>
+<div class="insights">
+  @for (i of insights; track i.id) {
+    <button type="button" class="insight" (click)="store.select({ kind: 'insight', id: i.id })" [title]="t(i.tip)">
+      <app-icon [name]="i.icon" [size]="16" />
+      <span>{{ t(i.label) }}</span>
+    </button>
+  }
+</div>
 
 <div class="cols">
   <section>

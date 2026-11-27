@@ -57,15 +57,54 @@ along the call instead of finishing a method first:
 
 ![Code line by line](docs/img/flow-line.png)
 
+### Call sequences
+
+A flow diagram shows who calls whom. *Sequence* (switch above the diagram) shows **in which order**: the calls of the
+flow one after the other, read from the code – from the entry point, every caller line by line, each step unfolded at
+its first call. On the left the calls as a list, on the right, row for row, a sequence diagram: a lifeline per class, an
+arrow per call (REST calls dashed, with the request), a bar while a step runs. A step called from two lines is there
+twice (*again*); the line number jumps to the call site in the code, *Calls only* leaves out constants and types.
+
+![The calls of a flow as a list and as a sequence diagram](docs/img/sequence.png)
+
+The *Sequence* bar of every flow plays the calls back (play / pause, one call back or forward, speed): in the call graph
+a dot runs from the caller to the step called and what has not been reached yet stays faded, in the sequence diagram the
+mark moves from arrow to arrow.
+
+![A call played back in the call graph](docs/img/flow-playback.png)
+
+The sequence is static: it knows the order of the call sites, not conditions, loops or asynchronous calls.
+
+### How much of a method: names, signatures, data
+
+*Methods: Names | Signature | Data* above the diagram sets how much of every method the call graph and the sequence
+show. *Signature* adds parameters and return type, in one notation for all languages
+(`update(id: string, change: PlayerUpdate): Observable<PlayerDetail>`). *Data* adds the data structures below: a line
+per type the method takes or returns, with its fields. On the *Classes* level the node of a class then lists its
+methods one per line – a class diagram of the change:
+
+![Classes with the signatures and data structures of their methods](docs/img/method-detail-classes.png)
+
+In the sequence the signature stands at the arrow and the data below it:
+
+![Sequence diagram with signatures and data structures](docs/img/method-detail-sequence.png)
+
+Signatures and fields are read from the declarations. A type declared in a file the pull request does not change
+shows its name only.
+
 ### Overview diagrams
 
 The overview of a pull request shows the categories with their progress, the commits, the test situation and – for
 GitLab – the state of the merge request. The **component diagram** shows every changed component, each layer as a frame
-around its components, laid out like the flow diagrams; ⌖ shows only one component and its dependencies.
+around its components, laid out like the flow diagrams; ⌖ shows only one component and its dependencies. Choose a data flow
+under *Sequence* to play it back there: its components stay, the rest steps back, and a dot runs from component to
+component, call by call.
 
 ![Overview](docs/img/overview.png)
 
 ![Component diagram](docs/img/components.png)
+
+![A data flow played back in the component diagram](docs/img/components-playback.png)
 
 ### Code review: unified and split (side by side)
 
@@ -176,6 +215,17 @@ GitHub and the first GitLab connection: what the UI saves takes precedence field
 configuration» discards it again; further connections can be removed. Token and cookie are stored in that file in plain
 text.
 
+**Company certificates (self-managed GitLab behind a company CA):** when the certificate of a code host is not trusted
+(unknown CA, self-signed, expired, wrong host name), the request reports «Certificate of host:port is not trusted: …» and
+a dialog opens with the chain the host presents and its SHA-256 fingerprints. «Trust this certificate» trusts the chosen
+one (by default the topmost, usually the company CA, so other hosts of that CA work too) at once for all connections,
+saved in `<data>/certificates`. «Certificates» below the connections lists what is trusted, takes a pasted PEM (e.g. the
+root certificate from your IT) and shows the certificate of any host. To hand certificates over at start instead: set
+`SCR_TLS_CA_CERTS` (property `scr.tls.ca-certs`) to PEM files or directories, comma separated, or put PEM files into
+`<data>/certificates` (with Docker: `./data/certificates`). As a last resort, the check can be switched off per host
+(«Connect without check (insecure)» in the dialog, or `SCR_TLS_INSECURE_HOSTS`): still encrypted, but no longer
+protected against someone posing as the host.
+
 When the cookie of an SSO proxy expires, the tool reports «HTML instead of JSON … has the cookie expired?». A click on
 the GitLab account in the status bar (bottom right, with a lock) opens a field for the new cookie; no restart needed.
 
@@ -222,6 +272,9 @@ cd frontend && npm start              # UI on :4200, /api is proxied to :8080
 | Approve / merge (GitLab) | Overview of the merge request: «Approve», «Revoke approval», «Merge …» (squash, delete source branch) |
 | Follow a call | Coloured bubble around the call in the code (`② saveEvent`), a click jumps to the called block; «← called by …» in the block header |
 | Classes or methods | Switches above the diagram (*Classes \| Classes + methods \| Methods*) and the code (*Whole classes \| Classes \| Methods \| Line*) |
+| Call sequence | Switch *Call graph \| Sequence* above the diagram of a flow: list of calls and sequence diagram; a click on a call shows it, the line number jumps to the call site |
+| Detail of the methods | Switch *Methods: Names \| Signature \| Data* above the diagram of a flow (call graph and sequence); stored per browser |
+| Play a flow back | Bar *Sequence* in a flow (play / pause, ⏮ ⏭, speed 0.5× / 1× / 2×); on the overview: *Components* → *Sequence* → choose a data flow |
 | Arrange the diagram | Automatic layout (ELK); drag nodes and whole classes, «Reset layout» undoes it |
 | Split view | Toolbar button (two columns): old code on the left, new on the right; stored per browser |
 | Hide what is done | Toolbar button: collapse fully checked blocks |

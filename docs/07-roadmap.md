@@ -48,6 +48,9 @@ Mögliche zukünftige Funktionen, grob nach Nutzen geordnet. Verbesserungen am B
 | F-15 | **Laufzeit-Coverage** | `lcov.info` / JaCoCo-XML aus der CI einlesen und pro Zeile «von Tests ausgeführt» zeigen. (Umgesetzt: HTTP-Aufrufe in Tests wie `given().put("/api/…")` werden statisch über die REST-Pfade mit den Endpunkten verbunden, HTTP-Tests, FR-ANA-26.) | ★★ | M |
 | F-16 | **REST-Verbindung erweitern** | URLs aus Konstanten und Environment-Dateien auflösen, GraphQL-Operationen, WebSockets. | ★★ | M |
 | F-17 | **Weitere Sprachen** | Python (Funktionen, pytest), Rust, PHP, Ruby: Symbole, Testfälle, Aufrufe. | ★★ | M pro Sprache |
+| F-18 | **Abfolge: Bedingungen und Schleifen** | Die Abfolge (FR-UI-22) kennt nur die Reihenfolge der Aufrufzeilen. Aus der Einrückung bzw. den Klammern um die Aufrufstelle erkennen, ob sie in `if`/`else`, `for`/`while`, `try`/`catch` oder einem Callback (`subscribe`, `then`, Lambda) steht, und im Sequenzdiagramm als Rahmen (`alt`, `loop`, `opt`) bzw. als asynchronen Pfeil zeigen. Braucht die Blockstruktur der Funktion (heute nur Zeilen), am besten mit F-14. | ★★ | M |
+| F-19 | **Abfolge exportieren** | Sequenzdiagramm eines Flows als Mermaid (`sequenceDiagram`) oder PlantUML kopieren – für PR-Beschreibung, Kommentar oder Doku (passt zu F-23 und F-07). Die Daten liefert `flow-sequence.ts` bereits. | ★★ | S |
+| F-24 | **Typen aus unveränderten Dateien** | Die Tooltips der Signaturen (FR-UI-24) kennen nur Typen, die eine geänderte Datei deklariert. Die Dateien der übrigen genannten Typen über die Dateiliste des Repos nach Namen auswählen und nachladen (wie die bestehenden Tests, FR-ANA-20, mit Obergrenze), damit auch ein unverändertes DTO seine Felder zeigt; geänderte Felder eines Typs hervorheben. | ★★ | M |
 
 ## Repository-Modus
 
@@ -68,6 +71,8 @@ Mögliche zukünftige Funktionen, grob nach Nutzen geordnet. Verbesserungen am B
 | F-33 | **Weitere Provider** | Bitbucket, Azure DevOps (mehrere GitHub- und GitLab-Hosts gleichzeitig: umgesetzt, FR-ZUG-12). | ★★ | M pro Provider |
 | F-34 | **Neue Commits melden** | Periodisch prüfen, ob ein offener PR einen neuen Head hat, und im UI anbieten, neu zu laden (zusammen mit F-01). | ★★ | S |
 | F-35 | **Team-Modus** | Review-Status mehrerer Personen zusammenführen (z. B. über einen geteilten Ordner oder als versteckter PR-Kommentar). Bricht mit «ein Benutzer, lokal» (A1) und braucht ein Konzept. | ★ | L |
+| F-36 | **Fitness-Funktionen einstellbar** | Die Grenzwerte (FR-UI-29, `FITNESS_LIMITS`) in `rules.json` überschreibbar machen, einzelne Funktionen ausschalten, eigene Regeln für erlaubte Abhängigkeiten zwischen Ordnern/Schichten (wie ArchUnit, als Muster); das Ergebnis zusätzlich in `analysis.json` für Agenten und als Status-Check für den Code-Host. | ★★ | M |
+| F-37 | **Verlauf der Kennzahlen** | Kennzahlen und Fitness-Funktionen pro Commit des PRs (wann wurde er gross, wann kam der Zyklus) und über die PRs eines Repos hinweg. | ★ | M |
 
 ## Bedienung
 

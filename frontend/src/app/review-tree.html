@@ -30,20 +30,56 @@
 } @else {
 
 <div class="tree" role="tree">
-  @if (tab() !== 'files') {
+  @if (tab() === 'categories') {
+    <!-- always the first section: what there is to say about the pull request as a whole -->
+    <div class="row d0 insights" role="treeitem" [title]="t('Ansichten über den ganzen Pull Request: Übersicht, Komponenten, Kennzahlen, Fitness-Funktionen, Abhängigkeiten, Hotspots')"
+         (click)="insightsOpen.set(!insightsOpen())">
+      <span class="chev"><app-icon [name]="insightsOpen() ? 'chevronDown' : 'chevronRight'" [size]="12" /></span>
+      <app-icon name="layers" [size]="14" class="ico" />
+      <span class="label">{{ t(insightsLabel) }}</span>
+    </div>
+    @if (insightsOpen()) {
+      <div class="row d1" role="treeitem" [style.padding-left.px]="22" [class.selected]="store.selection().kind === 'overview'" (click)="store.select({ kind: 'overview' })"
+           [title]="t('Der Pull Request im Überblick: Fortschritt, Review-Reihenfolge, Commits, Beschreibung und Kommentare')">
+        <span class="chev"></span>
+        <app-icon name="home" [size]="14" class="ico" />
+        <span class="label">{{ t('Übersicht') }}</span>
+      </div>
+      @for (i of insights; track i.id) {
+        <div class="row d1" role="treeitem" [style.padding-left.px]="22" [class.selected]="isInsight(i.id)" (click)="store.select({ kind: 'insight', id: i.id })" [title]="t(i.tip)">
+          <span class="chev"></span>
+          <app-icon [name]="i.icon" [size]="14" class="ico" />
+          <span class="label">{{ t(i.label) }}</span>
+          @if (i.id === 'fitness') {
+            @let f = fitnessSummary();
+            <span class="spacer"></span>
+            @if (f.fail) {
+              <span class="pill fail" [title]="t('{n} verletzt', { n: f.fail })">{{ f.fail }}</span>
+            }
+            @if (f.warn) {
+              <span class="pill warn" [title]="f.warn === 1 ? t('1 Hinweis') : t('{n} Hinweise', { n: f.warn })">{{ f.warn }}</span>
+            }
+            @if (!f.fail && !f.warn) {
+              <app-icon name="check" [size]="13" class="okicon" [title]="t('{n} erfüllt', { n: f.ok })" />
+            }
+          }
+        </div>
+      }
+      @if (store.coverage().size) {
+        <div class="row d1" role="treeitem" [style.padding-left.px]="22" [class.selected]="store.selection().kind === 'coverage'" (click)="store.openCoverage()"
+             [title]="t('Welche geänderten Funktionen ein geänderter Test erreicht (statisch ermittelt)')">
+          <span class="chev"></span>
+          <app-icon name="test" [size]="14" class="ico" />
+          <span class="label">{{ t('Abdeckung') }}</span>
+        </div>
+      }
+    }
+  } @else if (tab() === 'flows') {
     <div class="row overview" [class.selected]="store.selection().kind === 'overview'" (click)="store.select({ kind: 'overview' })">
       <span class="chev"></span>
       <app-icon name="home" [size]="14" />
       <span class="label">{{ t('Übersicht') }}</span>
     </div>
-    @if (store.coverage().size && !store.testsCategory()) {
-      <div class="row overview" [class.selected]="store.selection().kind === 'coverage'" (click)="store.openCoverage()"
-           [title]="t('Welche geänderten Funktionen ein geänderter Test erreicht (statisch ermittelt)')">
-        <span class="chev"></span>
-        <app-icon name="test" [size]="14" />
-        <span class="label">{{ t('Abdeckung') }}</span>
-      </div>
-    }
   }
   @for (n of rows(); track n.id) {
     @let p = progress(n);

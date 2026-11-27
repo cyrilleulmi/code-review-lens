@@ -26,6 +26,7 @@
 | `diff/PatchParser` | Zerlegt GitHubs Unified-Diff pro Datei in Hunks und nummerierte Zeilen. |
 | `analysis/CodeText` | Mini-Lexer: Kopie des Quelltexts, in der Strings und Kommentare ausgeblendet sind, plus Klammerpaare. |
 | `analysis/SymbolExtractor` | Findet Funktionen, Methoden, Klassen, Typen und Top-Level-Konstanten mit Zeilenbereich. |
+| `analysis/Signatures` | Signatur einer Funktion (Parameter, Rückgabetyp) und Felder eines Typs aus der Deklaration, für die Detailstufen der Diagramme. |
 | `analysis/FileView` | Neue Dateiversion mit eingewobenen gelöschten Zeilen, um ganze Funktionen mit Diff-Farben zu zeigen. |
 | `analysis/Structure` | Ports-&-Adapters-Erkennung aus den Ordnern, Schicht einer Datei, Frontend-Erkennung, Komponenten-Schlüssel. |
 | `analysis/Http` | REST quer durch den Stack: HTTP-Aufrufe im Client-Code, Endpunkte im Server-Code, Vergleich der Pfade. |
@@ -48,6 +49,7 @@ Alle PR-Endpunkte unter `/api/prs/{provider}/{owner}/{repo}/{number}`; `provider
 | Methode | Pfad | Zweck |
 |---|---|---|
 | GET / PUT | `/api/settings` | Ausgeschaltete Kategorien `{"disabledCategories":["fe-templates"]}` (global, `<data>/settings.json`) |
+| (alle) | Fehler | `{"message": …}`; scheitert eine Anfrage am Zertifikat des Code-Hosts zusätzlich `"certificate": {"host", "port"}` (Status 502, Meldung «Zertifikat von host:port wird nicht vertraut: …»). |
 | GET | `/api/me` | Konten pro Provider (User oder Grund, warum keiner; `cookie`: ob Session-Cookies eines SSO-Proxys gesetzt sind, `null` = der Host nimmt keine), Datenverzeichnis |
 | PUT | `/api/accounts/{provider}/cookie` | `{"cookie":"name=wert; name2=wert2"}` ersetzt die Session-Cookies eines SSO-Proxys vor dem Host (nur im Arbeitsspeicher, bis zum nächsten Start; war das ersetzte im Bereich «Verbindungen» gespeichert, wird das neue gespeichert; leer = entfernen). Antwort wie `/api/me`. Nur GitLab; sonst 400. |
 | GET | `/api/connections` | Alle Verbindungen (GitHub, GitLab; die der Startkonfiguration zuerst; `kind`, `added`): `url`, ob `token` und `cookie` gesetzt sind, woher jeder Wert kommt (`urlSource`, `tokenSource`, `cookieSource`: `saved` = Seite, `runtime` = nur im Arbeitsspeicher, `startup` = Startkonfiguration, `default`, `null`), `startupUrl`, `saved`, `account` (wie in `/api/me`). Nie Token oder Cookie selbst. |
@@ -56,6 +58,13 @@ Alle PR-Endpunkte unter `/api/prs/{provider}/{owner}/{repo}/{number}`; `provider
 | POST | `/api/connections` | `{"kind":"gitlab", "url":…, "token":…, "cookie":…, "saveCookie":…}` fügt eine Verbindung zu einem weiteren Host hinzu (ID `kind~host`), sofort in Betrieb und gespeichert; 409, wenn es zum Host schon eine gibt. |
 | POST | `/api/connections/test` | Wie `POST /api/connections`, aber nur anmelden und nichts übernehmen. |
 | POST | `/api/connections/{provider}/test` | Wie `PUT`, aber nur anmelden (`GET /user`) und nichts übernehmen: Antwort der User, sonst der Fehler (z. B. 401 «HTML statt JSON …»). |
+| GET | `/api/tls` | TLS: Zertifikate, denen das Tool zusätzlich zu den Standard-Zertifikaten vertraut (`certificates`: `fingerprint` SHA-256, `subject`, `issuer`, `notAfter`, `ca`, `source` `startup`/`saved`, `file`), Hosts ohne Prüfung (`insecureHosts`: `host` = host:port, `source`), `warnings` (nicht lesbare Dateien der Startkonfiguration), `directory` (`<data>/certificates`). |
+| POST | `/api/tls/certificates` | `{"pem":"-----BEGIN CERTIFICATE-----…"}` vertraut den Zertifikaten darin: gespeichert in `<data>/certificates`, sofort für alle Verbindungen. 400 ohne gültiges Zertifikat. Antwort wie `GET /api/tls`. |
+| DELETE | `/api/tls/certificates/{fingerprint}` | Gespeichertes Zertifikat nicht mehr vertrauen (Datei wird gelöscht); eines der Startkonfiguration → 409. |
+| POST | `/api/tls/reload` | Zertifikatdateien neu einlesen (z. B. von Hand nach `<data>/certificates` gelegte). |
+| GET | `/api/tls/probe?host=…&port=…` | Zertifikatskette, die der Host vorweist (Server zuerst, ohne Prüfung gelesen), `trusted`, `problem` (warum nicht), `insecure`. `host` auch als URL oder host:port. |
+| POST | `/api/tls/trust` | `{"host":…, "port":443, "fingerprint":…}` vertraut dem Zertifikat der Kette des Hosts mit diesem Fingerabdruck (wird erneut abgerufen, 409 wenn nicht mehr darin). |
+| PUT | `/api/tls/insecure` | `{"host":…, "port":443, "insecure":true}` schaltet die Prüfung des Zertifikats für den Host aus (unsicher) bzw. wieder ein; gespeichert in `<data>/tls.json`. |
 | GET | `/api/resolve?url=…` | PR-/MR-URL von GitHub oder GitLab → `{provider, owner, repo, number}`; Repository-URL → `number` 0 |
 | GET | `/api/prs?filter=all\|authored\|review-requested` | Offene PRs (mit lokalem Fortschritt, falls vorhanden) |
 | GET | `/api/local` | PRs mit lokalen Daten (offline) |
@@ -84,7 +93,11 @@ Angular 22, standalone Komponenten, Signals, zoneless, `OnPush`.
 |---|---|
 | `review.store.ts` | Zentraler Zustand (Signals), Hash-Routing (`#/github/o/r/12/c/<sha>/flow/flow-1`), optimistische Markierungen pro Ort («Slots» = Segment an einem Ort), Commit-Filter (filtert Slots, Fortschritt und Markierungen auf die Zeilen eines Commits), Blame-Cache, Neuladen des Status beim Fokus des Fensters (damit Änderungen von Agenten sofort erscheinen). |
 | `app.*` | IntelliJ-Shell: Main-Toolbar, Tool-Window-Stripe, verschiebbares Tool-Fenster, Breadcrumbs, Statusleiste, Shortcuts Alt+1/Alt+2. |
-| `pr-list.ts` | Tool-Fenster «Pull Requests» mit Filter und Suche. |
+| `pr-list.ts` | Tool-Fenster «Pull Requests»: Suche, Filter, zuletzt geöffnet, angepinnte Repositories, eigene Pull Requests nach Repository; die Verbindungen eingeklappt am Fuss. |
+| `workspace.ts` | Was zwischen den Pull Requests bleibt (pro Browser): die Tabs der offenen Pull Requests mit ihren Farben, zuletzt geöffnete, angepinnte Repositories samt ihren offenen Pull Requests; Regeln fürs Gruppieren, Filtern und «vor …». |
+| `pr-item.ts` | Ein Pull Request als Listeneintrag (Liste, Startseite, Schnellwechsel). |
+| `start-page.ts` | Startseite ohne offenen Pull Request: weiter reviewen, wartet auf Review, angepinnte Repositories. |
+| `quick-open.ts` | Schnellwechsel (Strg+K) zu einem anderen Pull Request. |
 | `review-actions.ts` | Auf der Übersicht: Stand des PRs auf dem Host, «Genehmigen» / «Genehmigung zurückziehen» und «Mergen …» mit Rückfrage. |
 | `account-cookie.ts` | Dialog aus der Statusleiste: Session-Cookies eines SSO-Proxys vor dem Code-Host zur Laufzeit setzen oder entfernen. |
 | `connection-panel.ts` | Bereich «Verbindungen» oben in der Liste «Pull/Merge Requests» (`ConnectionPanel`): nichts verbunden ein hervorgehobener Kasten zum Verbinden, sonst «Alle» und eine Zeile pro Verbindung als Filter der Liste (`store.chooseHost`), Zahnrad pro Verbindung für ihr Formular, «Verbindung hinzufügen» (`NewConnectionForm`: Art, URL, Token, Cookie; setzt die Verbindung der Startkonfiguration, solange sie nicht eingerichtet ist). |
@@ -93,16 +106,28 @@ Angular 22, standalone Komponenten, Signals, zoneless, `OnPush`.
 | `commit-list.ts` | Commits des PRs mit Fortschritt; Klick filtert alle Ansichten auf einen Commit, ✓ markiert seine Zeilen (Review-Fenster und Übersicht). |
 | `overview.*` | PR-Übersicht: Fortschritt, vorgeschlagene Reihenfolge, Beschreibung, allgemeine Kommentare, letzte Markierungen. |
 | `group-view.ts` | Liste von Code-Blöcken (Kategorie, Gruppe, Datei) mit Fokus-Leiste (einzeln durchgehen, alle ein-/ausklappen). |
-| `flow-view.*` | Aufrufbaum-Diagramm (SVG) + Code-Blöcke in Aufrufreihenfolge, eingerückt nach Tiefe, mit Verbindungslinien von der Aufrufzeile zum aufgerufenen Block. Schritte aus-/einblenden (einzeln oder alle ausserhalb eines Zweigs), Erledigte ausblenden, Schritt für Schritt. Diagramm und Code je auf Methoden- oder Klassenebene, das Diagramm auch mit Methoden im Rahmen ihrer Klasse (Umschalter; der Code folgt dem Diagramm, bis er eine eigene Ebene bekommt). |
+| `flow-view.*` | Die zwei Diagramme eines Flows untereinander – Aufrufgraph (SVG) und Abfolge (`sequence-diagram.ts`), beim Abspielen in beiden derselbe Aufruf – + Code-Blöcke in Aufrufreihenfolge (beim Abspielen nur die des Aufrufs), eingerückt nach Tiefe, mit Verbindungslinien von der Aufrufzeile zum aufgerufenen Block. Schritte aus-/einblenden (einzeln oder alle ausserhalb eines Zweigs), Erledigte ausblenden, Schritt für Schritt. Diagramm und Code je auf Methoden- oder Klassenebene, das Diagramm auch mit Methoden im Rahmen ihrer Klasse (Umschalter; der Code folgt dem Diagramm, bis er eine eigene Ebene bekommt). |
 | `whole-class.ts` | Code-Ansicht «Ganze Klassen» eines Flows: setzt die Schritte einer Klasse in die Zeilen ihrer ganzen Datei ein (ein Block pro Datei); `code-block` zeigt ihn über `parts`/`owners`/`starts`. |
 | `flow-classes.ts` | Klassenebene eines Flows: Schritte nach Klasse (Komponente, sonst Datei) gruppieren, Tiefe der Klassen, Verbindungen zwischen Klassen zusammenfassen, Reihenfolge der Methoden in der Klassenkarte, Läufe aufeinanderfolgender Methoden einer Klasse (Klammern im Methoden-Code), Ebene des Codes zum Diagramm, Baum der Code-Ansicht «Zeile» (aufgerufener Block nach der Aufrufzeile; `code-block` setzt ihn über `inline`/`inlineTpl` nach der Zeile ein). |
+| `flow-sequence.ts` | Abfolge eines Flows: legt seine Aufrufe in die Reihenfolge der Aufrufzeilen (Einstiegspunkt, jeder Schritt beim ersten Aufruf aufgeklappt, erneute Aufrufe und Rückrufe markiert, entfernte Bereiche überbrückt). Reine Funktion, Grundlage von Liste, Sequenzdiagramm und Abspielen. |
+| `sequence-layout.ts` | Geometrie des Sequenzdiagramms: Lebenslinien in der Reihenfolge des ersten Aufrufs, eine Zeile pro Aufruf, Balken für die Laufzeit eines Schritts; Abstände aus den Beschriftungen. |
+| `sequence-diagram.ts` | Abfolge als Liste und Sequenzdiagramm nebeneinander (Zeile für Zeile ausgerichtet), mit Sprung zur Aufrufstelle. |
+| `method-detail.ts` | Was die Diagramme von den Methoden zeigen (Schalter «Signatur» und «Rückgabewerte»): Signatur in einer Schreibweise für alle Sprachen, Kürzen auf den Platz, Rückgabetyp für die Pfeile zurück (im Aufrufgraph pro Verbindung zusammengefasst), Typen mit Feldern für die Tooltips. |
+| `zoom.ts` | Zoom der Diagramme: Stufen, Einpassen, Strg + Mausrad um den Zeiger, Zoom, der beim Abspielen einen Aufruf ganz zeigt; Steuerung `ZoomControls` (mit dem Knopf fürs Vollbild). |
+| `pan.ts` | Navigieren in den Diagrammen: eine leere Stelle ziehen verschiebt den Ausschnitt (Direktive `appPan` am scrollenden Element). |
+| `full-view.ts` | Vollbild eines Diagramms mit seinen Leisten (Fullscreen-API, sonst füllt es das Fenster): Zustand, Esc, Wechsel zwischen den Teilen eines Elements. |
+| `sequence-player.ts`, `sequence-controls.ts` | Abspielen einer Abfolge: aktueller Aufruf, Takt und Tempo (`SequencePlayer`) und die Knöpfe dazu. Flow-Diagramm, Sequenzdiagramm und Komponentendiagramm zeigen den Aufruf, bei dem der Player steht. |
 | `call-sites.ts` | Aufrufstellen im Code: sucht zu den Verweisen einer Zeile (`refs`) die Stelle des Aufrufs im Zeilentext und setzt die Bubble ins hervorgehobene HTML. Nur Darstellung; welche Zeile was aufruft, kommt aus der Analyse. |
 | `flow-layout.ts` | Anordnung des Flow-Diagramms: übergibt Knoten, Rahmen und Verbindungen an ELK (`elkjs`, EPL-2.0, per `import()` als eigener Chunk nachgeladen) und liefert Positionen und Kantenführung; dazu Pfade mit runden Ecken, einfache Kurven für von Hand verschobene Knoten und der Rahmen um seine Knoten. |
 | `split-diff.ts` | Seite-an-Seite-Ansicht der Code-Blöcke: welche entfernte Zeile neben welcher neuen steht und ob ein Block überhaupt zwei Seiten hat. |
 | `acceptance.ts` | Spiegel von `LineAcceptance.java`: Status einer Zeile pro Ort (offen / halb akzeptiert / akzeptiert) und wo sie sonst schon akzeptiert ist. Die beiden müssen gleich bleiben (je ein Test pro Seite). |
 | `accept-boxes.ts` | Wie der Zustand gezeigt und geklickt wird: ein Kästchen pro Ort einer Zeile (das des gezeigten Orts vorne, die anderen akzeptieren überall), «überall akzeptieren» und zurücknehmen, Stufe offen / hier (grün) / überall (blau). Die Regeln selbst bleiben in `acceptance.ts`. |
 | `look.ts` | Farben und Bezeichnungen für Schichten (Frontend, API, Domäne …), Sprachen und Verbindungen; die Farbwerte selbst sind Tokens in `styles.scss`. |
-| `component-diagram.ts` | Komponentendiagramm der Übersicht: ein Rahmen pro Schicht um ihre Komponenten, angeordnet mit `flow-layout.ts` (Schichten ohne Verbindung in Reihen darunter), Aufruf- und REST-Kanten, Fokus pro Komponente, Tests/isolierte ein-/ausblenden. |
+| `component-diagram.ts` | Komponentendiagramm (Ansicht «Komponenten»): ein Rahmen pro Schicht um ihre Komponenten, angeordnet mit `flow-layout.ts` (Schichten ohne Verbindung in Reihen darunter), Aufruf- und REST-Kanten, Fokus pro Komponente, Tests/isolierte ein-/ausblenden. |
+| `insights.ts` | Übergreifende Ansichten & Informationen: Liste der Ansichten (`INSIGHTS`) und ihre Berechnung aus der Analyse – Kennzahlen, Matrix der Schichten mit Aufrufen gegen die Richtung, Zyklen, Hotspots, Flüsse × Komponenten, Fitness-Funktionen mit ihren Grenzwerten (`FITNESS_LIMITS`). Reine Funktionen. |
+| `insight-view.ts` | Darstellung dieser Ansichten (`InsightView`): Kacheln und Balken, Liste der Fitness-Funktionen, Matrizen, Hotspot-Tabelle, Änderungs-Karte. |
+| `treemap.ts` | Squarified Treemap in zwei Ebenen für die Änderungs-Karte. |
+| `start-selection.ts` | Was ein PR zeigt, der ohne Ziel geöffnet wird: der erste Datenfluss, sonst die Übersicht. |
 | `test-overview.ts` | Testübersicht: pro Testfall die Komponenten und die abgedeckten Codestellen (direkt / über …), mit Sprüngen. |
 | `code-block.*` | Ein Segment an einem Ort: Gutter mit Häkchen (ortsbezogen), alte/neue Zeilennummer, Diff-Farben, Highlighting, Inline-Kommentare, Aufruf-Chips, Leiste mit allen Orten und Test-Verknüpfungen, einklappbar. Optional Blame-Spalte (Datum/Zeit, Autor, Nummer des PR-Commits); in der Commit-Ansicht sind Änderungen anderer Commits abgeblendet. |
 | `theme.ts` | Theme des UI (Dark als Standard, Light): setzt `data-theme` auf `<html>`; die Farben selbst sind Tokens in `styles.scss`. `index.html` wendet ein gespeichertes Light Theme vor dem ersten Zeichnen an. |

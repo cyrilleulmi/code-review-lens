@@ -21,6 +21,9 @@ import dev.smartcodereview.model.Model.DisplayLine;
 import dev.smartcodereview.model.Model.ExistingTest;
 import dev.smartcodereview.model.Model.Flow;
 import dev.smartcodereview.model.Model.FlowEdge;
+import dev.smartcodereview.model.Model.Signature;
+import dev.smartcodereview.model.Model.TypeField;
+import dev.smartcodereview.model.Model.TypeInfo;
 import dev.smartcodereview.model.Model.FlowStep;
 import dev.smartcodereview.model.Model.Group;
 import dev.smartcodereview.model.Model.Hunk;
@@ -114,7 +117,7 @@ public final class Analyzer {
     private static final Pattern API_LAYER = Pattern.compile("(?i)(resource|controller|endpoint|handler|route|/api/|/rest/|/web/)");
     private static final Pattern DOMAIN_DIR = Pattern.compile("(?i)/(domain|model|models|entity|entities)/");
     /** Bump when the analysis logic changes, so stored analyses are recomputed. */
-    public static final int VERSION = 28;
+    public static final int VERSION = 33;
 
     /** Asynchronous / framework entry points: shown as the trigger in the title of a flow that starts there. */
     private static final List<Map.Entry<Pattern, String>> TRIGGERS = List.of(
@@ -344,9 +347,12 @@ public final class Analyzer {
                     .forEach(c -> testedBy.computeIfAbsent(c.segmentId(), k -> new ArrayList<>()).add(t.segmentId()));
         }
 
+        Map<String, Signature> signatures = new HashMap<>();
+        List<TypeInfo> types = signatures(works, sources, signatures);
         List<Segment> segments = new ArrayList<>();
         for (Work w : works) {
-            segments.add(toSegment(w, places.getOrDefault(w.id, List.of()), testedBy.getOrDefault(w.id, List.of())));
+            segments.add(toSegment(w, places.getOrDefault(w.id, List.of()), testedBy.getOrDefault(w.id, List.of()),
+                    signatures.get(w.id)));
         }
         ArchitectureInfo architecture = new ArchitectureInfo(Structure.styleOf(evidence), evidence);
         Map<String, String> componentOf = new HashMap<>();
@@ -366,7 +372,89 @@ public final class Analyzer {
                 existingTests, related, List.copyOf(mockWarnings), MockBoundaries.flowCoverage(flows, tests, existingTests, http.expectations(), endpoints),
                 ruleChecks,
                 // the whole repository: every setup piece would be "new" and affect only new tests - nothing to warn about
-                repository ? List.of() : setupImpacts(works, specList, related, relatedSources));
+                repository ? List.of() : setupImpacts(works, specList, related, relatedSources),
+                types);
+    }
+
+    // ------------------------------------------------------------------ signatures and the types they name
+
+    /** A type declared in an analysed file. */
+    private record TypeDecl(String path, String language, CodeText text, Symbol symbol) {
+        String id() {
+            return path + "#" + symbol.name();
+        }
+    }
+
+    private static final Set<String> TYPE_KINDS = Set.of("class", "interface", "type", "enum");
+
+    /**
+     * The signature of every changed function, method and component (into `out`, by segment id) and the types these
+     * signatures name, with their fields. A type is known when a file of the change with a source declares it - also
+     * a file that is segmented by a path rule only (DTO and model files). Types in unchanged files are not loaded.
+     */
+    private static List<TypeInfo> signatures(List<Work> works, Map<String, String> sources, Map<String, Signature> out) {
+        Map<String, FileCtx> parsed = new HashMap<>();
+        works.stream().filter(w -> w.ctx != null).forEach(w -> parsed.putIfAbsent(w.file.path(), w.ctx));
+        Map<String, List<TypeDecl>> declared = new HashMap<>();
+        for (String path : new TreeSet<>(sources.keySet())) {
+            String language = Languages.of(path);
+            String source = sources.get(path);
+            if (source == null || !Languages.hasSymbols(language)) {
+                continue;
+            }
+            FileCtx ctx = parsed.get(path);
+            CodeText text = ctx != null ? ctx.text : CodeText.of(source);
+            List<Symbol> symbols = ctx != null ? ctx.symbols : SymbolExtractor.extract(text, path);
+            for (Symbol s : symbols) {
+                if (TYPE_KINDS.contains(s.kind())) {
+                    declared.computeIfAbsent(s.name(), k -> new ArrayList<>()).add(new TypeDecl(path, language, text, s));
+                }
+            }
+        }
+        Map<String, TypeInfo> used = new HashMap<>();
+        for (Work w : works) {
+            if (w.ctx == null || w.symbol == null) {
+                continue;
+            }
+            Signature s = Signatures.of(w.ctx.text, w.symbol, w.file.language());
+            if (s == null) {
+                continue;
+            }
+            List<String> ids = new ArrayList<>();
+            for (String name : Signatures.typeNames(s)) {
+                TypeDecl d = typeFor(name, w, declared.getOrDefault(name, List.of()));
+                if (d != null && !ids.contains(d.id())) {
+                    used.computeIfAbsent(d.id(), id -> typeInfo(d));
+                    ids.add(d.id());
+                }
+            }
+            out.put(w.id, new Signature(s.declaration(), s.params(), s.returns(), List.copyOf(ids)));
+        }
+        return used.values().stream()
+                .sorted(Comparator.comparing(TypeInfo::path).thenComparing(TypeInfo::line).thenComparing(TypeInfo::name)).toList();
+    }
+
+    /**
+     * The declaration a type name in a signature means, of those with that name (by path): the one in the same file,
+     * else in the same directory, else one whose file the caller's imports name, else the first.
+     */
+    private static TypeDecl typeFor(String name, Work user, List<TypeDecl> candidates) {
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        String path = user.file.path();
+        String imports = user.ctx.importsText == null ? "" : user.ctx.importsText;
+        return candidates.stream().filter(d -> d.path().equals(path)).findFirst()
+                .or(() -> candidates.stream().filter(d -> dirOf(d.path()).equals(dirOf(path))).findFirst())
+                .or(() -> candidates.stream().filter(d -> imports.contains(stemOf(d.path()))).findFirst())
+                .orElse(candidates.get(0));
+    }
+
+    private static TypeInfo typeInfo(TypeDecl d) {
+        List<TypeField> fields = Signatures.fieldsOf(d.text(), d.symbol(), d.language());
+        int shown = Math.min(fields.size(), Signatures.MAX_FIELDS);
+        return new TypeInfo(d.id(), d.symbol().name(), d.path(), d.symbol().kind(), d.symbol().startLine(),
+                List.copyOf(fields.subList(0, shown)), fields.size() - shown);
     }
 
     /**
@@ -734,9 +822,12 @@ public final class Analyzer {
                 if (b.ctx != a.ctx && !importsFrom(a.ctx, b)) {
                     continue;
                 }
-                Integer line = firstReference(a, b, lines);
+                List<Integer> all = references(a, b, lines);
+                // where b is called, the edge shows a call: a line that only names it (a parameter of that name) comes second
+                List<Integer> calls = callLines(a, b, all);
+                Integer line = preferred(a, calls.isEmpty() ? all : calls);
                 if (line != null) {
-                    edges.add(new FlowEdge(a.id, b.id, line, b.symbol.name(), "call"));
+                    edges.add(new FlowEdge(a.id, b.id, line, b.symbol.name(), "call", calls.isEmpty() ? List.of(line) : calls));
                     a.refs.computeIfAbsent(line, k -> new ArrayList<>()).add(new LineRef(b.id, b.label()));
                 }
             }
@@ -1065,13 +1156,28 @@ public final class Analyzer {
 
     /** 1-based line of the first reference to b in a's search lines; references on changed lines win. */
     private static Integer firstReference(Work a, Work b, List<Integer> lines) {
+        return preferred(a, references(a, b, lines));
+    }
+
+    /** The reference an edge shows: the first one on a changed line of a, else the first one; null without any. */
+    private static Integer preferred(Work a, List<Integer> references) {
+        Set<Integer> changedNew = a.changed.stream().map(DiffLine::newLine).filter(n -> n != null).collect(Collectors.toSet());
+        return references.stream().filter(changedNew::contains).findFirst()
+                .orElse(references.isEmpty() ? null : references.get(0));
+    }
+
+    /**
+     * 1-based lines of all references to b in a's search lines, ascending (a line counts once). A caller with the
+     * name of the callee (update() delegating to service.update(), an overload) names it in its own declaration:
+     * the name at that place is not a reference ({@link #ownDeclaration}).
+     */
+    private static List<Integer> references(Work a, Work b, List<Integer> lines) {
         String name = b.symbol.name();
         boolean generic = GENERIC.contains(name) || name.length() < 5;
-        Pattern p = generic
-                ? Pattern.compile("(?<![\\w$])" + Pattern.quote(name) + "\\s*(?:<[^>]*>)?\\(")
+        Pattern p = generic ? callPattern(name)
                 : Pattern.compile("(?<![\\w$])<?" + Pattern.quote(name) + "(?![\\w$])(?!\\s*:(?!:))");
-        Set<Integer> changedNew = a.changed.stream().map(DiffLine::newLine).filter(n -> n != null).collect(Collectors.toSet());
-        Integer first = null;
+        int[] declaration = ownDeclaration(a, name);
+        Set<Integer> found = new TreeSet<>();
         for (int idx : lines) {
             if (idx < 0 || idx >= a.ctx.text.code.size()) {
                 continue;
@@ -1080,17 +1186,87 @@ public final class Analyzer {
             if (b.ctx == a.ctx && ln == b.symbol.startLine()) {
                 continue;
             }
-            Matcher m = p.matcher(a.ctx.text.code.get(idx));
-            if (m.find()) {
-                if (changedNew.contains(ln)) {
-                    return ln;
-                }
-                if (first == null) {
-                    first = ln;
-                }
+            if (refers(p, a, idx, declaration)) {
+                found.add(ln);
             }
         }
-        return first;
+        return List.copyOf(found);
+    }
+
+    /** The line (0-based) matches the pattern somewhere else than at the caller's own declaration of the name. */
+    private static boolean refers(Pattern p, Work a, int idx, int[] declaration) {
+        Matcher m = p.matcher(a.ctx.text.code.get(idx));
+        while (m.find()) {
+            if (declaration == null || declaration[0] != idx || declaration[1] < m.start() || declaration[1] >= m.end()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static final Pattern LEADING_ANNOTATIONS = Pattern.compile("^\\s*(?:@[\\w.]+(?:\\([^()]*\\))?\\s*)+");
+    /** How many lines of a symbol are searched for its own name: annotations, modifiers and a return type on a line of its own. */
+    private static final int MAX_DECLARATION_LINES = 12;
+
+    /**
+     * Where a function named like the callee writes that name in its own declaration: {line (0-based), column}, or
+     * null when the caller has another name or does not write its name as code (a test case: its name is a title).
+     * It is the first place the name stands on its own (not as a member, `x.name`) in the head of the symbol - the
+     * lines after its annotations up to the one that opens the body. Found by position, whatever follows the name:
+     * `update(…) {`, `save = (…) => {`, `archive: async (…) => {`, `fun update(…) =`.
+     */
+    private static int[] ownDeclaration(Work a, String name) {
+        Symbol own = a.symbol;
+        if (own == null || !own.isCallable() || own.isTestBlock() || !own.name().equals(name)) {
+            return null;
+        }
+        Pattern bare = Pattern.compile("(?<![\\w$.])" + Pattern.quote(name) + "(?![\\w$])");
+        List<String> code = a.ctx.text.code;
+        int open = 0; // parentheses of an annotation that continues on the next line
+        for (int idx = own.startLine() - 1; idx < own.endLine() && idx < code.size() && idx < own.startLine() - 1 + MAX_DECLARATION_LINES; idx++) {
+            String line = code.get(idx);
+            int from = 0;
+            if (open == 0) {
+                Matcher annotations = LEADING_ANNOTATIONS.matcher(line);
+                from = annotations.find() ? annotations.end() : 0;
+            }
+            boolean annotation = open > 0 || line.strip().startsWith("@") && from == 0;
+            if (annotation) {
+                for (int i = 0; i < line.length(); i++) {
+                    open += line.charAt(i) == '(' ? 1 : line.charAt(i) == ')' ? -1 : 0;
+                }
+                continue;
+            }
+            Matcher m = bare.matcher(line);
+            if (m.find(from)) {
+                return new int[]{idx, m.start()};
+            }
+            String rest = line.substring(from);
+            if (rest.contains("{") || rest.contains("=>") || rest.contains(";")) {
+                return null; // the head is over and did not name it
+            }
+        }
+        return null;
+    }
+
+    /** The name followed by an argument list: `name(`, `name<T>(`. */
+    private static Pattern callPattern(String name) {
+        return Pattern.compile("(?<![\\w$])" + Pattern.quote(name) + "\\s*(?:<[^>]*>)?\\(");
+    }
+
+    /**
+     * The lines of a that call b, for the order of the calls (FlowEdge.lines): of the references those with call
+     * syntax - a line that only names b (a parameter or variable of the same name, a type) is not a call. Empty for
+     * something that is not called (a constant, a type, a component in a template): it is used, not called again and
+     * again, and the edge keeps the one line it shows.
+     */
+    private static List<Integer> callLines(Work a, Work b, List<Integer> references) {
+        if (!b.symbol.isCallable() || "component".equals(b.symbol.kind())) {
+            return List.of();
+        }
+        Pattern call = callPattern(b.symbol.name());
+        int[] declaration = ownDeclaration(a, b.symbol.name());
+        return references.stream().filter(ln -> refers(call, a, ln - 1, declaration)).toList();
     }
 
     // ------------------------------------------------------------------ flows
@@ -1888,7 +2064,7 @@ public final class Analyzer {
 
     // ------------------------------------------------------------------ output
 
-    private Segment toSegment(Work w, List<String> places, List<String> testedBy) {
+    private Segment toSegment(Work w, List<String> places, List<String> testedBy, Signature signature) {
         Set<String> own = w.changed.stream().map(DiffLine::key).collect(Collectors.toCollection(LinkedHashSet::new));
         List<DisplayLine> lines;
         if (w.ctx == null) {
@@ -1915,7 +2091,7 @@ public final class Analyzer {
                 s == null ? null : s.displayName(), s == null ? null : s.kind(),
                 s == null ? null : s.startLine(), s == null ? null : s.endLine(),
                 w.category, w.group, w.rule == null ? null : w.rule.id(), w.reason, List.copyOf(own), lines,
-                List.copyOf(places), List.copyOf(testedBy), w.layer, w.frontend);
+                List.copyOf(places), List.copyOf(testedBy), w.layer, w.frontend, signature);
     }
 
     /** Lines of the new file in [start, end] with deletions woven in; long unchanged stretches collapse to gaps. */

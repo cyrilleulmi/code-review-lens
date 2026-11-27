@@ -1,7 +1,10 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
+  Injector,
+  afterNextRender,
   afterRenderEffect,
   computed,
   effect,
@@ -16,14 +19,22 @@ import { EdgeRunStatus, Flow, FlowEdge, FlowStep, Segment, StepRunStatus } from 
 import { NgTemplateOutlet } from '@angular/common';
 import { CodeBlock, flashLine } from './code-block';
 import { WholeBlock, startOf, wholeBlock, wholeId } from './whole-class';
-import { FlowCodeLevel, FlowDiagramLevel, InlineStep, classLinks, codeLevelFor, inlineTree, classOf, classRuns, groupByClass, inFileOrder, intersect, weakest } from './flow-classes';
+import { FlowCodeLevel, FlowDiagramLevel, InlineStep, classLinks, codeLevelFor, inlineTree, classOf, classRuns, groupByClass, inFileOrder, intersect, shortName, stepName, weakest } from './flow-classes';
 import { outsideBranch, sameSet, withoutAreas } from './flow-focus';
-import { FRAME_PADDING, Layout, Point, curvePath, frameAround, layoutFlow, routeMiddle, routePath } from './flow-layout';
+import { FRAME_PADDING, Layout, Point, columnStarts, curvePath, frameAround, layoutFlow, routeMiddle, routePath } from './flow-layout';
 import { Icon, SymbolBadge } from './icon';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorIndex } from './look';
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
 import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
 import { Progress, ReviewStore } from './review.store';
+import { FullView } from './full-view';
+import { Pan } from './pan';
+import { RETURNS_MAX, methodLabel, methodTooltip, returnType, returnsLabel } from './method-detail';
+import { comesLater, flowSequence, isUsedNotCalled, playbackOf, sequenceKey } from './flow-sequence';
+import { SequenceControls } from './sequence-controls';
+import { SequenceDiagram, SequenceTarget } from './sequence-diagram';
+import { SequencePlayer, scrollToShow } from './sequence-player';
+import { ZoomControls, fitZoom, wheelZoom, zoomAround, zoomToShow } from './zoom';
 import { acceptLevel } from './accept-boxes';
 import { serverText, t } from './i18n';
 import { diffSides } from './split-diff';
@@ -70,6 +81,10 @@ interface Box {
   mini: boolean;
   /** key of that frame; null for boxes without one */
   frame: string | null;
+  /** Lines below the name: at the signature level, in the box of a class, its methods with their signatures. */
+  lines: string[];
+  /** for the tooltip: the declarations as written and the types in full */
+  tip: string;
 }
 
 /** A connection of the diagram between two boxes (keys), with the steps at its ends for the highlighting. */
@@ -85,6 +100,10 @@ interface Link {
   /** around removed areas */
   bridged: boolean;
   title: string;
+  /** what its calls give back, as short as the diagram has room for (null: nothing, or «Rückgabewerte» is off) */
+  ret: string | null;
+  /** the same in full, for the tooltip */
+  retTitle: string;
 }
 
 /** What "Einzeln durchgehen" shows at a time: a step, or a class with all its steps. */
@@ -142,14 +161,30 @@ interface Connector {
   http: boolean;
 }
 
+/** Smallest width of a box of the diagram; a longer name makes it wider, never cut off. */
 const NODE_W = 236;
 const NODE_H = 46;
+/** Room in a box beside its name: padding, number, badge, test icon, progress, hide and focus button. */
+const NODE_CHROME = 170;
+const MINI_CHROME = 158;
+/** Width of a character of the second line of a box (11px UI font, estimated) and of the layer tag in it. */
+const HINT_CHAR_W = 6.3;
+const TAG_CHAR_W = 6.5;
 /** Combined level of the diagram: the smaller boxes of the steps inside the frame of their class. */
 const MINI_H = 32;
 const MINI_GAP = 14;
 /** Width of a character of the code font in the diagram (12px), to size boxes and frames by their names. */
 const CHAR_W = 7.3;
+/** A line below the name of a box (the signatures of a class), the widest a box gets for them, a character of such a line. */
+const LINE_H = 14;
+const MAX_BOX_W = 560;
+const LINE_CHAR_W = 6.4;
+/** What a call gives back, at its connection: height of the text and width of a character of it (10.5px code font). */
+const RET_H = 14;
+const RET_CHAR_W = 6.5;
 const COL_GAP = 56;
+/** Padding of the drawing inside the diagram: the boxes start that much further in. */
+const DIAGRAM_PAD = 16;
 const ROW_GAP = 12;
 /** Indentation of the code blocks per call level (the cards scroll horizontally when it gets deep). */
 const INDENT = 56;
@@ -163,7 +198,9 @@ const STEP_RUNS: StepRunStatus[] = ['none', 'mocked', 'tested'];
 const EDGE_RUNS: EdgeRunStatus[] = ['none', 'partial', 'separate', 'tested'];
 
 /**
- * A data flow: a call-tree diagram on top, below the code of each step in call order. Call sites inside
+ * A data flow: on top its two diagrams, one below the other - the call graph (who calls whom) and the sequence (which
+ * call comes after which, as a list and a sequence diagram) -, below them the code of each step in call order.
+ * Playing the sequence shows each call in both diagrams, and of the code only the two steps the call runs between. Call sites inside
  * the code are connected to the step they call with lines in the left margin. Steps can be hidden (one by one,
  * or all outside one branch), finished steps hidden, or the steps walked through one by one.
  *
@@ -173,18 +210,57 @@ const EDGE_RUNS: EdgeRunStatus[] = ['none', 'partial', 'separate', 'tested'];
 @Component({
   selector: 'app-flow-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CodeBlock, Icon, NgTemplateOutlet, SymbolBadge],
+  imports: [CodeBlock, Icon, NgTemplateOutlet, Pan, SequenceControls, SequenceDiagram, SymbolBadge, ZoomControls],
   templateUrl: './flow-view.html',
   styleUrl: './flow-view.scss',
+  host: {
+    '[class.full]': '!!full.what()',
+    '[class.full-graph]': 'full.what() === "graph"',
+    '[class.full-sequence]': 'full.what() === "sequence"',
+    '(document:fullscreenchange)': 'full.sync()',
+    '(document:keydown.escape)': 'full.close()',
+    '(window:resize)': 'measureGraph()',
+  },
 })
 export class FlowView {
   protected readonly store = inject(ReviewStore);
   readonly flow = input.required<Flow>();
 
   private readonly cards = viewChild.required<ElementRef<HTMLElement>>('cards');
+  private readonly graph = viewChild.required<ElementRef<HTMLElement>>('graph');
+  /** The bars that stay at the top of the editor: their height is what a jump into the flow must stop below. */
+  private readonly sticky = viewChild.required<ElementRef<HTMLElement>>('sticky');
+  protected readonly seqDiagram = viewChild(SequenceDiagram);
+  private readonly injector = inject(Injector);
+  /** Full screen shows the view itself, reduced to the bar of the playback and one of the two diagrams. */
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  protected readonly full = new FullView<'graph' | 'sequence'>(() => this.host.nativeElement);
+  /**
+   * Zoom of the call graph as chosen (buttons, Ctrl + wheel); null = not chosen: the whole flow fits into the view
+   * (graphFit). Every flow starts that way.
+   */
+  protected readonly graphZoom = linkedSignal<string, number | null>({ source: () => this.flow().id, computation: () => null });
+  /** Zoom of the sequence diagram, as chosen; the same for every flow. */
+  protected readonly seqZoom = signal(1);
+  /** The room the call graph has: the width of its view and the height it may take at most. */
+  private readonly graphRoom = signal({ w: 0, h: 0 });
+  /** The zoom that shows the whole call graph (at most 100 %). */
+  private readonly graphFit = computed(() => {
+    const d = this.diagram();
+    const room = this.graphRoom();
+    return fitZoom(d.width + 2 * DIAGRAM_PAD, d.height + 2 * DIAGRAM_PAD, room.w, room.h, 1);
+  });
+  private readonly graphChosen = computed(() => this.graphZoom() ?? this.graphFit());
+  /** Playing in the call graph: the zoom that shows the current call whole (null = the zoom chosen). */
+  private readonly graphPlayZoom = signal<number | null>(null);
+  protected readonly graphShownZoom = computed(() => (this.player.index() > 0 ? this.graphPlayZoom() ?? this.graphChosen() : this.graphChosen()));
   protected readonly connectors = signal<Connector[]>([]);
   protected readonly railHeight = signal(0);
   protected readonly railWidth = signal(0);
+  private readonly hbar = viewChild.required<ElementRef<HTMLElement>>('hbar');
+  /** The code is wider than the view: the scrollbar sideways stays at the bottom of the editor (hbar). */
+  protected readonly cardsWide = signal(false);
+  protected readonly cardsWidth = signal(0);
   /** Left margin of the code blocks: room for one lane per (overlapping) connection. */
   protected readonly gutter = signal(MIN_GUTTER);
   protected readonly markers = Array.from({ length: EDGE_COLORS }, (_, i) => i + 1);
@@ -280,6 +356,28 @@ export class FlowView {
     }));
   });
 
+  /**
+   * Abfolge: the calls of the flow one after the other, line by line from the entry point (flow-sequence.ts). Steps of
+   * removed areas are left out; what they call counts for the step shown above them. "Only calls" also leaves out
+   * the constants and types of the flow: they are used, not called.
+   */
+  protected readonly sequence = computed(() => {
+    const removed = this.hiddenAreas();
+    const callsOnly = this.callsOnly();
+    const hidden = new Set(this.allSteps()
+      .filter((s) => removed.has(s.area) || (callsOnly && isUsedNotCalled(s.segment.symbolKind)))
+      .map((s) => s.step.segmentId));
+    return flowSequence(this.flow().steps, this.flow().edges, hidden);
+  });
+  /** The sequence shows only calls of functions and methods (no constants and types). */
+  protected readonly callsOnly = computed(() => this.page().callsOnly);
+  /** Constants and types among the steps shown: what "only calls" would leave out. */
+  protected readonly usedSteps = computed(() => this.nodes().filter((n) => isUsedNotCalled(n.segment.symbolKind)).length);
+  /** Plays the sequence back, call by call: the sequence diagram and the call graph both show the call it is at. */
+  protected readonly player = new SequencePlayer(() => this.sequence().calls.length);
+  /** The call the playback is at; null = none (all calls are shown alike). */
+  protected readonly currentCall = computed(() => this.sequence().calls[this.player.index() - 1] ?? null);
+
   /** The steps combined by class, in the order the classes are first reached. */
   private readonly classes = computed(() => {
     const segs = this.store.segments();
@@ -293,45 +391,83 @@ export class FlowView {
    * here are a simple staircase by call depth: shown until the layout arrives, and kept if it cannot be loaded.
    */
   private readonly sketch = computed<{ frames: Box[]; boxes: Box[] }>(() => {
-    const at = (depth: number, row: number) => ({
-      depth, x: depth * (NODE_W + COL_GAP), y: row * (NODE_H + ROW_GAP), w: NODE_W, h: NODE_H, mini: false, frame: null,
-    });
+    // how much of a method the boxes show: its name, or its signature
+    const detail = this.store.methodDetail();
+    const types = this.store.typesById();
+    const text = (n: Node) => methodLabel(this.nodeName(n.segment), false, n.segment.signature, detail);
     const step = (n: Node) => ({
-      key: n.step.segmentId, ids: [n.step.segmentId], no: n.no, name: this.nodeName(n.segment), kind: n.segment.symbolKind,
+      key: n.step.segmentId, ids: [n.step.segmentId], no: n.no, name: text(n), kind: n.segment.symbolKind,
       hint: this.nodeHint(n.segment), area: this.areaOf(n.segment), quick: n.segment.category === 'quick-wins',
+      lines: [] as string[], tip: methodTooltip(n.segment.signature, types),
     });
-    const cls = (g: { key: string; name: string; members: Node[] }) => ({
-      key: g.key, ids: g.members.map((m) => m.step.segmentId), no: g.members[0].no, name: g.name, kind: 'class',
-      hint: g.members.map((m) => this.nodeName(m.segment)).join(', '), area: this.areaOf(g.members[0].segment),
-      quick: g.members.every((m) => m.segment.category === 'quick-wins'),
-    });
-    const level = this.level();
+    const cls = (g: { key: string; name: string; members: Node[] }) => {
+      // the box of a class: at the name level its methods in one line, else a line per method with its signature
+      const lines = detail === 'name' ? [] : g.members.map((m) => text(m));
+      return {
+        key: g.key, ids: g.members.map((m) => m.step.segmentId), no: g.members[0].no, name: g.name, kind: 'class',
+        hint: detail === 'name' ? g.members.map((m) => this.nodeName(m.segment)).join(', ') : '', area: this.areaOf(g.members[0].segment),
+        quick: g.members.every((m) => m.segment.category === 'quick-wins'), lines,
+        tip: g.members.map((m) => methodTooltip(m.segment.signature, types)).filter((x) => x).join('\n\n'),
+      };
+    };
     const runs = this.hasRuns();
+    type Sized = { name: string; hint: string; area: string | null; lines: string[] };
+    // a box grows with its lines: higher by a line each
+    const linesHeight = (b: { lines: unknown[] }) => (b.lines.length ? b.lines.length * LINE_H + 4 : 0);
+    // a box is as wide as its name (and, with `withHint`, the class and file in its second line) needs: never cut off;
+    // the lines below it (signatures) widen it up to MAX_BOX_W, beyond that they are cut
+    const widthFor = (b: Sized, chrome: number, least: number, withHint: boolean) => {
+      const second = !withHint || !b.hint ? 0 : (areaLabel(b.area).length ? areaLabel(b.area).length * TAG_CHAR_W + 14 : 0) + b.hint.length * HINT_CHAR_W;
+      const lines = Math.max(0, ...b.lines.map((l) => l.length * LINE_CHAR_W));
+      return Math.max(least, Math.round(chrome + Math.max(b.name.length * CHAR_W, second)), Math.min(MAX_BOX_W, Math.round(chrome + lines)));
+    };
+    // the staircase by call depth: each column as wide as its widest box, the rows one below the other
+    const staircase = <T extends Sized>(items: { box: T; depth: number }[], withHint: boolean) => {
+      const sized = items.map(({ box, depth }) => ({
+        box, depth, w: widthFor(box, NODE_CHROME + (runs ? 20 : 0), NODE_W, withHint), h: NODE_H + linesHeight(box),
+      }));
+      const columns = columnStarts(sized.map((b) => ({ depth: b.depth, w: b.w })), COL_GAP);
+      let y = 0;
+      return sized.map(({ box, depth, w, h }) => {
+        const placed = { ...box, depth, x: columns[depth], y, w, h, mini: false, frame: null };
+        y += h + ROW_GAP;
+        return placed;
+      });
+    };
+    const level = this.level();
     if (level === 'method') {
-      return { frames: [], boxes: this.nodes().map((n, row) => ({ ...step(n), ...at(n.depth, row) })) };
+      return { frames: [], boxes: staircase(this.nodes().map((n) => ({ box: step(n), depth: n.depth })), true) };
     }
     if (level === 'class') {
-      return { frames: [], boxes: this.classes().map((g, row) => ({ ...cls(g), ...at(g.depth, row) })) };
+      // the second line of a class lists its methods: it may be cut, the name of the class not
+      return { frames: [], boxes: staircase(this.classes().map((g) => ({ box: cls(g), depth: g.depth })), false) };
     }
-    const frames: Box[] = [];
-    const boxes: Box[] = [];
-    const column = 280 + FRAME_PADDING.left + FRAME_PADDING.right + COL_GAP;
-    let y = 0;
-    for (const g of this.classes()) {
-      const x = g.depth * column;
-      const h = FRAME_PADDING.top + g.members.length * (MINI_H + MINI_GAP) - MINI_GAP + FRAME_PADDING.bottom;
-      const minis = g.members.map((n, i) => {
+    const sized = this.classes().map((g) => {
+      const minis = g.members.map((n) => {
         const box = step(n);
         // one line: number, badge, name, test icon (with the test infos), progress, hide and focus button
-        const w = Math.min(340, Math.max(180, Math.round(158 + (runs ? 20 : 0) + box.name.length * CHAR_W)));
-        return { ...box, depth: g.depth, x: x + FRAME_PADDING.left, y: y + FRAME_PADDING.top + i * (MINI_H + MINI_GAP), w, h: MINI_H, mini: true, frame: g.key };
+        return { box, w: widthFor(box, MINI_CHROME + (runs ? 20 : 0), 180, false), h: MINI_H + linesHeight(box) };
       });
-      const frame = cls(g);
+      // the frame of a class shows its name only: its methods stand inside it
+      const frame = { ...cls(g), lines: [] };
       // the head: badge, name of the class, layer, progress, hide and focus button
-      const head = Math.min(380, Math.round(134 + frame.name.length * CHAR_W + areaLabel(frame.area).length * 6.5));
+      const head = Math.round(134 + frame.name.length * CHAR_W + areaLabel(frame.area).length * TAG_CHAR_W);
       const w = Math.max(head, Math.max(...minis.map((m) => m.w)) + FRAME_PADDING.left + FRAME_PADDING.right);
+      return { g, frame, minis, w };
+    });
+    const columns = columnStarts(sized.map((c) => ({ depth: c.g.depth, w: c.w })), COL_GAP);
+    const frames: Box[] = [];
+    const boxes: Box[] = [];
+    let y = 0;
+    for (const { g, frame, minis, w } of sized) {
+      const x = columns[g.depth];
+      let top = y + FRAME_PADDING.top;
+      for (const { box, w: mw, h: mh } of minis) {
+        boxes.push({ ...box, depth: g.depth, x: x + FRAME_PADDING.left, y: top, w: mw, h: mh, mini: true, frame: g.key });
+        top += mh + MINI_GAP;
+      }
+      const h = top - MINI_GAP - y + FRAME_PADDING.bottom;
       frames.push({ ...frame, depth: g.depth, x, y, w, h, mini: false, frame: null });
-      boxes.push(...minis);
       y += h + ROW_GAP + 8;
     }
     return { frames, boxes };
@@ -344,7 +480,8 @@ export class FlowView {
       this.flow().id, this.level(),
       frames.map((f) => `${f.key}:${f.w}`).join(','),
       boxes.map((b) => `${b.key}:${b.w}:${b.h}:${b.frame ?? ''}`).join(','),
-      this.links().map((l) => l.from + '>' + l.to).join(','),
+      // what a call gives back needs room at its connection
+      this.links().map((l) => l.from + '>' + l.to + (l.ret ? ':' + l.ret.length : '')).join(','),
     ].join('|');
   });
   /** The layout of the engine (ELK) with the key it was computed for; null until the first one arrives. */
@@ -396,6 +533,9 @@ export class FlowView {
   private readonly stepLinks = computed<Link[]>(() => {
     const nodes = this.nodes();
     const shown = new Set(nodes.map((n) => n.step.segmentId));
+    const segs = this.store.segments();
+    const returns = this.store.showReturns();
+    const name = (id: string) => stepName(segs.get(id), id);
     const links: Link[] = this.flow().edges
       .map((e, i) => ({ e, c: edgeColorIndex(i) }))
       .filter(({ e }) => shown.has(e.from) && shown.has(e.to))
@@ -404,7 +544,13 @@ export class FlowView {
         const run = this.runs().edges.get(e.from + '>' + e.to);
         const contract = http ? contractLines(run, e.via, this.store.testName()) : [];
         const title = [http ? 'HTTP ' + e.via : e.via, ...(run ? [edgeTitle(run, this.store.testName())] : []), ...contract].join('\n');
-        return { from: e.from, to: e.to, ends: [e.from, e.to], c, http, run: run?.status ?? null, both: http && bothSides(run), bridged: false, title };
+        const signature = segs.get(e.to)?.signature;
+        const ret = returns ? returnType(signature, RETURNS_MAX) : null;
+        const retTitle = ret ? t('{to} gibt {type} an {from} zurück', { to: name(e.to), type: returnType(signature, 400)!, from: name(e.from) }) : '';
+        return {
+          from: e.from, to: e.to, ends: [e.from, e.to], c, http, run: run?.status ?? null, both: http && bothSides(run), bridged: false, title,
+          ret, retTitle,
+        };
       });
     // around removed areas: from the caller shown to the step, dashed, in the colour of the call into the step
     const direct = new Set(links.map((l) => l.from + '>' + l.to));
@@ -416,6 +562,7 @@ export class FlowView {
       links.push({
         from: n.caller, to: n.step.segmentId, ends: [n.caller, n.step.segmentId], c: edgeColorIndex(Math.max(0, into)), http: false, run: null,
         both: false, bridged: true, title: t('Über entfernte Bereiche: {areas}', { areas: n.bridged.join(', ') }),
+        ret: null, retTitle: '',
       });
     }
     return links;
@@ -436,6 +583,8 @@ export class FlowView {
         run: weakest(l.edges.map((e) => e.run), EDGE_RUNS), both: http.length > 0 && http.every((e) => e.both),
         bridged: l.edges.every((e) => e.bridged),
         title: l.edges.map((e) => `${name(e.from)} → ${name(e.to)}\n${e.title}`).join('\n\n'),
+        // several calls between two classes: what each of them gives back
+        ret: returnsLabel(l.edges.map((e) => e.ret)), retTitle: l.edges.map((e) => e.retTitle).filter((x) => x).join('\n'),
       };
     });
   });
@@ -454,20 +603,64 @@ export class FlowView {
       }
       // the route of the layout engine, at right angles around the boxes - unless an end was moved by hand
       const route = moved.has(l.from) || moved.has(l.to) ? undefined : auto?.routes.get(edgeId(i));
+      // the texts at a connection, one above the other around its middle: «HTTP» above the line, how the tests run
+      // it below; what the call gives back above the line too - below the other texts when the line has «HTTP»
+      const runText = l.both || l.run === 'separate';
+      const texts = (middle: Point) => {
+        const ly = middle.y - 5;
+        const runY = ly + (l.http ? 22 : 12);
+        return { lx: middle.x, httpY: ly, runY, retY: l.http ? (runText ? runY : ly) + 12 : ly };
+      };
       if (route) {
         right = Math.max(right, ...route.map((p) => p.x));
         bottom = Math.max(bottom, ...route.map((p) => p.y));
-        const middle = routeMiddle(route);
         // a call back to an earlier step runs to the left: dashed
-        return [{ ...l, d: routePath(route), back: route[route.length - 1].x < route[0].x - 1, lx: middle.x, ly: middle.y - 5 }];
+        const back = route[route.length - 1].x < route[0].x - 1;
+        const room = l.ret ? auto?.labels.get(edgeId(i)) : undefined;
+        if (room) {
+          // the engine kept room for what the call gives back, just below the line: «HTTP» stays above the line,
+          // how the tests run it goes below the type
+          right = Math.max(right, room.x + room.w);
+          bottom = Math.max(bottom, room.y + room.h);
+          return [{ ...l, d: routePath(route), back, lx: room.x + room.w / 2, httpY: room.y - 7, runY: room.y + room.h + 9, retY: room.y + room.h - 3 }];
+        }
+        return [{ ...l, d: routePath(route), back, ...texts(routeMiddle(route)) }];
       }
       const curve = curvePath(a, b);
-      return [{ ...l, d: curve.d, back: b.x + b.w <= a.x, lx: curve.middle.x, ly: curve.middle.y - 5 }];
+      return [{ ...l, d: curve.d, back: b.x + b.w <= a.x, ...texts(curve.middle) }];
     });
     const all = [...boxes, ...frames];
     const width = Math.max(right, ...all.map((b) => b.x + b.w), 0) + 48;
     const height = Math.max(bottom, ...all.map((b) => b.y + b.h), 0) + 12;
     return { edges, width, height };
+  });
+
+  /** The sequence as the call graph plays it back: which box a step is in, and when the sequence reaches it. */
+  private readonly graphPlayback = computed(() => {
+    const boxOf = new Map(this.boxes().flatMap((b) => b.ids.map((id) => [id, b.key] as const)));
+    return playbackOf(this.sequence(), (id) => boxOf.get(id) ?? null);
+  });
+  /**
+   * The current call in the call graph: the boxes it runs between and the connection it runs along (path null: a
+   * call within one box, or a connection that is not drawn).
+   */
+  protected readonly playback = computed(() => {
+    const call = this.currentCall();
+    const ends = call ? this.graphPlayback().ends[call.no - 1] : undefined;
+    if (!call || !ends) {
+      return null;
+    }
+    const { from, to } = ends;
+    const edge = from && to && from !== to ? this.diagram().edges.find((e) => e.from === from && e.to === to) : undefined;
+    const frameOf = (key: string | null) => (key ? this.boxes().find((b) => b.key === key)?.frame ?? null : null);
+    return {
+      no: call.no, from, to, fromFrame: frameOf(from), toFrame: frameOf(to), path: edge?.d ?? null, c: edge?.c ?? edgeColorIndex(call.edge),
+    };
+  });
+  /** The connection the current call runs along, as a list of none or one: a new call draws a new line (and dot). */
+  protected readonly playbackRuns = computed(() => {
+    const p = this.playback();
+    return p?.path ? [{ no: p.no, d: p.path, c: p.c, motion: `path('${p.path}')` }] : [];
   });
 
   /**
@@ -570,8 +763,83 @@ export class FlowView {
   });
 
   protected readonly hiddenCount = computed(() => this.nodes().length - this.visible().size);
+  /**
+   * Segment ids whose code stands below the diagrams. While a call of the sequence is shown, only the two steps it
+   * runs between - also when they are hidden otherwise; else what is visible.
+   */
+  protected readonly shown = computed<ReadonlySet<string>>(() => {
+    const call = this.currentCall();
+    return call ? new Set([call.from, call.to]) : this.visible();
+  });
+  /** Only what is shown stands there, without a line for every step left out: step by step, and while playing. */
+  protected readonly solo = computed(() => this.stepIndex() != null || this.currentCall() != null);
 
   constructor() {
+    const destroyRef = inject(DestroyRef);
+    destroyRef.onDestroy(() => {
+      this.player.destroy();
+      this.full.close();
+    });
+    // Another flow, or other calls (an area removed): the playback starts over. The same calls computed again (the
+    // review was loaded anew) leave it where it is.
+    const playing = computed(() => this.flow().id + '|' + sequenceKey(this.sequence()));
+    effect(() => {
+      playing();
+      untracked(() => this.player.reset());
+    });
+    // The room of the call graph, for the zoom that shows the whole flow: measured whenever its view changes size.
+    afterNextRender(() => {
+      const observer = new ResizeObserver(() => this.measureGraph());
+      observer.observe(this.graph().nativeElement);
+      const bars = this.sticky().nativeElement;
+      const barsObserver = new ResizeObserver(() => this.host.nativeElement.style.setProperty('--sticky-h', bars.offsetHeight + 'px'));
+      barsObserver.observe(bars);
+      destroyRef.onDestroy(() => {
+        observer.disconnect();
+        barsObserver.disconnect();
+      });
+      this.measureGraph();
+    });
+    // The playback starts: the call graph is what it is followed in - into view, should the page stand elsewhere.
+    const started = computed(() => this.player.index() > 0);
+    effect(() => {
+      if (started()) {
+        untracked(() => this.graph().nativeElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+      }
+    });
+    // Playing in the call graph: a new call brings the boxes it runs between into view - zoomed out as far as needed
+    // to see both, never further in than the zoom chosen - by scrolling the diagram, not the page.
+    effect(() => {
+      const call = this.currentCall();
+      const chosen = this.graphChosen();
+      const pb = this.playback();
+      // fitted into the view (the default), the whole flow is in view anyway: nothing to bring into view
+      if (!call || !pb || this.graphZoom() == null) {
+        untracked(() => this.graphPlayZoom.set(null));
+        return;
+      }
+      untracked(() => {
+        const ends = this.boxes().filter((b) => b.key === pb.from || b.key === pb.to);
+        if (!ends.length) {
+          return;
+        }
+        const span = {
+          x1: Math.min(...ends.map((b) => b.x)), y1: Math.min(...ends.map((b) => b.y)),
+          x2: Math.max(...ends.map((b) => b.x + b.w)), y2: Math.max(...ends.map((b) => b.y + b.h)),
+        };
+        const el = this.graph().nativeElement;
+        afterNextRender({ write: () => {
+          // the view grows with the drawing up to its largest height
+          const zoom = zoomToShow(span, el.clientWidth, Math.max(el.clientHeight, this.graphRoom().h), chosen);
+          this.graphPlayZoom.set(zoom);
+          const at = (v: number) => (v + DIAGRAM_PAD) * zoom;
+          afterNextRender({ write: () => {
+            el.scrollLeft = scrollToShow(el.scrollLeft, el.clientWidth, at(span.x1), at(span.x2));
+            el.scrollTop = scrollToShow(el.scrollTop, el.clientHeight, at(span.y1), at(span.y2));
+          } }, { injector: this.injector });
+        } }, { injector: this.injector });
+      });
+    });
     // Let the layout engine place the diagram whenever its boxes or connections change.
     effect(() => {
       const key = this.layoutKey();
@@ -581,7 +849,10 @@ export class FlowView {
         layoutFlow({
           boxes: boxes.map((b) => ({ key: boxId(b.key), w: b.w, h: b.h, frame: b.frame ? frameId(b.frame) : null })),
           frames: frames.map((f) => ({ key: frameId(f.key), minW: f.w })),
-          edges: links.map((l, i) => ({ id: edgeId(i), from: boxId(l.from), to: boxId(l.to) })),
+          edges: links.map((l, i) => ({
+            id: edgeId(i), from: boxId(l.from), to: boxId(l.to),
+            label: l.ret ? { w: Math.round((l.ret.length + 2) * RET_CHAR_W), h: RET_H } : null,
+          })),
         }).then((layout) => {
           if (this.layoutKey() === key) {
             this.placed.set({ key, layout });
@@ -605,6 +876,7 @@ export class FlowView {
       this.inlineRoots();
       this.wholeCards();
       this.visible();
+      this.shown();
       this.gutter();
       this.indent();
       this.store.ok();
@@ -613,9 +885,13 @@ export class FlowView {
       this.store.collapseDone();
       this.store.diffMode();
       const host = this.cards().nativeElement;
-      const observer = new ResizeObserver(() => this.layoutConnectors());
+      const observer = new ResizeObserver(() => {
+        this.layoutConnectors();
+        this.measureCards();
+      });
       observer.observe(host);
       this.layoutConnectors();
+      this.measureCards();
       onCleanup(() => observer.disconnect());
     });
     // Another flow in the same view: the cards start at the left/top (only the editor scrolls vertically).
@@ -628,6 +904,7 @@ export class FlowView {
     afterRenderEffect(() => {
       const target = this.store.focusSegment();
       this.visible();
+      this.shown();
       this.codeCards();
       this.inlineRoots();
       this.wholeCards();
@@ -642,6 +919,111 @@ export class FlowView {
   /** Level of the diagram; the code follows unless it has its own level. */
   protected setLevel(level: FlowDiagramLevel): void {
     this.store.setFlowPage(this.flow().id, { level });
+  }
+
+  /** The methods with their signature, or with their name only (for all flows, kept per browser). */
+  protected toggleSignatures(): void {
+    this.store.setShowSignatures(!this.store.showSignatures());
+  }
+
+  /** What the calls give back, as arrows back with the type - or not (for all flows, kept per browser). */
+  protected toggleReturns(): void {
+    this.store.setShowReturns(!this.store.showReturns());
+  }
+
+  /** Tooltip of a box: what the tests run in it, and the declarations of its methods with their types. */
+  protected boxTitle(box: Box): string {
+    return [this.runTitle(box.ids), this.store.methodDetail() === 'name' ? '' : box.tip].filter((x) => x).join('\n\n');
+  }
+
+  // ------------------------------------------------------------------ zoom of the call graph
+
+  protected setGraphZoom(zoom: number): void {
+    this.graphZoom.set(zoom);
+  }
+
+  /** The whole call graph into the view (at most 100 %), as every flow starts: it then follows the size of the view. */
+  protected fitGraph(): void {
+    this.graphZoom.set(null);
+  }
+
+  /**
+   * How much room the call graph has: as wide as its view, as high as it may get at most (its max-height; full
+   * screen, where it has none, the height it has).
+   */
+  protected measureGraph(): void {
+    const el = this.graph().nativeElement;
+    const limit = parseFloat(getComputedStyle(el).maxHeight);
+    const w = el.clientWidth;
+    const h = Number.isFinite(limit) ? limit - 2 : el.clientHeight;
+    const room = this.graphRoom();
+    if (room.w !== w || room.h !== h) {
+      this.graphRoom.set({ w, h });
+    }
+  }
+
+  /** Ctrl + wheel zooms the call graph around the pointer; the wheel alone scrolls. */
+  protected graphWheel(event: WheelEvent): void {
+    if (!event.ctrlKey && !event.metaKey) {
+      return;
+    }
+    event.preventDefault();
+    const el = this.graph().nativeElement;
+    const from = this.graphShownZoom();
+    const to = wheelZoom(from, event.deltaY);
+    const box = el.getBoundingClientRect();
+    const left = zoomAround(el.scrollLeft, event.clientX - box.left, from, to);
+    const top = zoomAround(el.scrollTop, event.clientY - box.top, from, to);
+    this.graphZoom.set(to);
+    this.graphPlayZoom.set(null);
+    afterNextRender({ write: () => {
+      el.scrollLeft = left;
+      el.scrollTop = top;
+    } }, { injector: this.injector });
+  }
+
+  /** What a call gives back (its return type), for the line that says which call is played; null = nothing, or not shown. */
+  protected returnOf(call: { to: string }): string | null {
+    return this.store.showReturns() ? returnType(this.store.segments().get(call.to)?.signature) : null;
+  }
+
+  protected toggleCallsOnly(): void {
+    this.store.setFlowPage(this.flow().id, { callsOnly: !this.callsOnly() });
+  }
+
+  /** A call of the sequence was clicked: the playback goes there (and stops). */
+  protected pickCall(no: number): void {
+    this.player.go(no);
+  }
+
+  /** From the sequence to the code: a step of this flow, at a line when one is given (the calling line). */
+  protected openTarget(target: SequenceTarget): void {
+    if (target.line != null) {
+      this.store.focusLine.set({ segmentId: target.segmentId, line: target.line });
+    }
+    this.scrollTo(target.segmentId);
+  }
+
+  /** "PlayerResource.update": a step with its class, for the line that says which call is played. */
+  protected stepName(segmentId: string): string {
+    return stepName(this.store.segments().get(segmentId), segmentId);
+  }
+
+  /** Playing: the sequence comes to this box only later (it is faded). A box that is not part of the sequence stays as it is. */
+  protected boxLater(key: string): boolean {
+    return comesLater(this.graphPlayback().reachedAt, key, this.player.index());
+  }
+
+  /** Playing: no call has run along this connection yet. */
+  protected edgeLater(from: string, to: string): boolean {
+    return comesLater(this.graphPlayback().playedAt, from + '>' + to, this.player.index());
+  }
+
+  /** Playing: the frame of a class is faded while none of its steps is reached and at least one will be. */
+  protected frameLater(ids: readonly string[]): boolean {
+    const at = this.graphPlayback().reachedAt;
+    const no = this.player.index();
+    return ids.some((id) => comesLater(at, id, no)) && !ids.some((id) => at.has(id) && !comesLater(at, id, no));
   }
 
   /** An own level for the code, whatever the diagram shows. */
@@ -684,9 +1066,9 @@ export class FlowView {
     }
   }
 
-  /** A step of the card is shown (in step-by-step mode only the current card has one). */
+  /** A step of the card is shown (step by step only the current card has one, while playing the cards of the call). */
   protected anyVisible(ids: readonly string[]): boolean {
-    return ids.some((id) => this.visible().has(id));
+    return ids.some((id) => this.shown().has(id));
   }
 
   protected isDone(id: string): boolean {
@@ -783,9 +1165,11 @@ export class FlowView {
     if (!drag) {
       return;
     }
-    let dx = event.clientX - drag.start.x;
-    let dy = event.clientY - drag.start.y;
-    if (!drag.moved && Math.hypot(dx, dy) < 4) {
+    // the pointer moves in screen px, the boxes in px of the drawing
+    const zoom = this.graphShownZoom();
+    let dx = (event.clientX - drag.start.x) / zoom;
+    let dy = (event.clientY - drag.start.y) / zoom;
+    if (!drag.moved && Math.hypot(dx, dy) * zoom < 4) {
       return;
     }
     drag.moved = true;
@@ -993,6 +1377,12 @@ export class FlowView {
       next.delete(removedStep.area);
       this.store.setFlowPage(this.flow().id, { hiddenAreas: next });
     }
+    // to the code: out of full screen, and out of the playback when it shows the code of another call
+    this.full.close();
+    const call = this.currentCall();
+    if (call && call.from !== segmentId && call.to !== segmentId) {
+      this.player.reset();
+    }
     if (!this.nodes().some((n) => n.step.segmentId === segmentId)) {
       this.store.reveal(segmentId);
       return;
@@ -1043,6 +1433,31 @@ export class FlowView {
       flashLine(el, line);
     }
     return true;
+  }
+
+  /** How wide the code is, for the scrollbar at the bottom of the editor. */
+  private measureCards(): void {
+    const host = this.cards().nativeElement;
+    this.cardsWidth.set(host.scrollWidth);
+    this.cardsWide.set(host.scrollWidth > host.clientWidth + 1);
+    this.hbar().nativeElement.scrollLeft = host.scrollLeft;
+  }
+
+  /** The code and its scrollbar at the bottom of the editor move together. */
+  protected cardsScrolled(): void {
+    const left = this.cards().nativeElement.scrollLeft;
+    const bar = this.hbar().nativeElement;
+    if (bar.scrollLeft !== left) {
+      bar.scrollLeft = left;
+    }
+  }
+
+  protected hbarScrolled(): void {
+    const left = this.hbar().nativeElement.scrollLeft;
+    const host = this.cards().nativeElement;
+    if (host.scrollLeft !== left) {
+      host.scrollLeft = left;
+    }
   }
 
   protected scrollToParent(node: Node): void {
@@ -1152,9 +1567,4 @@ function edgeId(index: number): string {
 /** The block of a segment is shown side by side when that view is on (it has removed and added lines). */
 function splits(seg: Segment): boolean {
   return diffSides(seg.lines) === 'both';
-}
-
-function shortName(name: string): string {
-  const parts = name.split('.');
-  return parts.length > 1 && parts[parts.length - 1] ? parts.slice(-2).join('.') : name;
 }

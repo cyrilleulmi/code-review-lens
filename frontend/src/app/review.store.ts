@@ -1,5 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import {
+  CertificateTarget,
+  TlsSettings,
   Api,
   Blame,
   CodeCoverage,
@@ -33,6 +35,10 @@ import { LineBoxes, everywhereTargets, lineBoxes } from './accept-boxes';
 import { AcceptStatus, Acceptance, accept, statusOf } from './acceptance';
 import { laterExpectationsByTest } from './commit-findings';
 import { FlowCodeLevel, FlowDiagramLevel } from './flow-classes';
+import { INSIGHTS } from './insights';
+import { startSelection } from './start-selection';
+import { METHOD_DETAILS, MethodDetail } from './method-detail';
+import { OpenTab, Workspace } from './workspace';
 import { groupWarnings, testNamer } from './mock-boundaries';
 import { reloadMessage } from './reload-message';
 import { serverText, t } from './i18n';
@@ -44,7 +50,9 @@ export type Selection =
   | { kind: 'flow'; id: string }
   | { kind: 'file'; path: string }
   /** coverage of the changed code on its own page (when there is no switched-on test category to show it in) */
-  | { kind: 'coverage' };
+  | { kind: 'coverage' }
+  /** a view across the whole pull request (insights.ts): components, metrics, fitness functions, ... */
+  | { kind: 'insight'; id: string };
 
 export type PrFilter = 'all' | 'authored' | 'review-requested' | 'involved';
 
@@ -82,6 +90,8 @@ export type DiffMode = 'unified' | 'split';
 
 /** The settings of the page of one flow (see ReviewStore.flowPage). */
 export interface FlowPage {
+  /** the sequence leaves out what is used rather than called (constants, types): only calls of functions and methods */
+  callsOnly: boolean;
   /** level of the diagram; the default shows classes as frames with their methods inside */
   level: FlowDiagramLevel;
   /** own level of the code; null = the code follows the diagram (codeLevelFor) */
@@ -90,7 +100,7 @@ export interface FlowPage {
   hiddenAreas: ReadonlySet<string>;
 }
 
-const FLOW_PAGE_DEFAULT: FlowPage = { level: 'combined', code: null, hiddenAreas: new Set() };
+const FLOW_PAGE_DEFAULT: FlowPage = { callsOnly: false, level: 'combined', code: null, hiddenAreas: new Set() };
 
 /** Commit filter value for "new or changed since my last review" (also in the URL: …/c/since-review). */
 export const SINCE_REVIEW = 'since-review';
@@ -99,6 +109,20 @@ export const SINCE_REVIEW = 'since-review';
 @Injectable({ providedIn: 'root' })
 export class ReviewStore {
   private readonly api = inject(Api);
+  private readonly workspace = inject(Workspace);
+  /** The quick switch to another pull request is open (toolbar, Ctrl+K). */
+  readonly quickOpen = signal(false);
+  /** A search handed to the list of pull requests (from the quick switch): it shows the list and searches there. */
+  readonly searchRequest = signal<{ query: string; seq: number } | null>(null);
+  /**
+   * How the next change of the address is written: as a new entry of the browser history (back returns to the view
+   * before), in place, or not at all - the address is already there (back / forward, see followAddress).
+   */
+  private historyMode: HistoryMode = 'push';
+  private pendingHistory: HistoryMode = 'push';
+  /** Where each open pull request was left (its address), by prLabel: its tab comes back to that view. */
+  private readonly leftAt = new Map<string, string>();
+  private prsLoadedAt = 0;
 
   readonly me = signal<Me | null>(null);
   /** Connections the config page can change (GitLab), null until loaded. */
@@ -116,6 +140,10 @@ export class ReviewStore {
   readonly loading = signal<string | null>(null);
   readonly error = signal<string | null>(null);
   readonly toast = signal<string | null>(null);
+  /** The host whose certificate dialog is open: a request failed on its certificate, or the user asked. */
+  readonly certificateFor = signal<CertificateTarget | null>(null);
+  /** Certificates trusted besides the default ones and hosts without check; null until «Zertifikate» was opened. */
+  readonly tls = signal<TlsSettings | null>(null);
   /** lines ok at all their places ("path\0key") */
   readonly ok = signal<ReadonlySet<string>>(new Set());
   /** place -> lines ok at that place only */
@@ -157,6 +185,12 @@ export class ReviewStore {
    * code left and new code right. Stored per browser.
    */
   readonly diffMode = signal<DiffMode>(readChoice('scr.diffMode', ['unified', 'split'] as const) ?? 'unified');
+  /** How much of a method the diagrams of the flows show: name or signature. Kept per browser. */
+  /** Diagrams of a data flow: the methods with their signature (else their name only). Kept per browser. */
+  readonly showSignatures = signal(readChoice('scr.methodDetail', METHOD_DETAILS) === 'signature');
+  /** Diagrams of a data flow: what a call gives back, as an arrow back with the type. On unless switched off. */
+  readonly showReturns = signal(readText('scr.returns') !== 'false');
+  readonly methodDetail = computed<MethodDetail>(() => (this.showSignatures() ? 'signature' : 'name'));
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
   readonly blames = signal<ReadonlyMap<string, Blame | 'loading' | null>>(new Map());
   /** Whole files by path (code view "Ganze Klassen" of a flow): loaded on demand; null = could not be loaded. */
@@ -334,6 +368,9 @@ export class ReviewStore {
     return map;
   });
 
+  /** The types the signatures of the segments name, by id (Analysis.types; empty for older analyses). */
+  readonly typesById = computed(() => new Map((this.bundle()?.analysis.types ?? []).map((t) => [t.id, t])));
+
   /** Component (class, module) of each segment. */
   readonly componentBySegment = computed(() => {
     const map = new Map<string, Component>();
@@ -441,13 +478,60 @@ export class ReviewStore {
     this.loadPrs();
     const fromHash = parseHash(location.hash);
     if (fromHash) {
-      this.open(fromHash.pr, fromHash.selection, fromHash.commit);
+      this.open(fromHash.pr, fromHash.selection, fromHash.commit, 'replace');
     }
-    window.addEventListener('focus', () => this.refreshState());
+    window.addEventListener('focus', () => {
+      this.refreshState();
+      this.refreshLists(LISTS_MAX_AGE_MS);
+    });
+    // back and forward of the browser, and an address typed in: show what it names
+    window.addEventListener('popstate', () => this.followAddress());
+  }
+
+  /** Shows what the address names, without writing the address: the pull request and view, or the start page. */
+  private followAddress(): void {
+    const target = parseHash(location.hash);
+    if (!target) {
+      if (this.bundle()) {
+        this.close('none');
+      }
+      return;
+    }
+    const b = this.bundle();
+    const key = this.prKey();
+    if (b && key && prLabel(key) === prLabel(target.pr)) {
+      this.historyMode = 'none';
+      this.select(target.selection && this.isValidSelection(target.selection, b) ? target.selection : startSelection(b, this.disabledCategories()));
+      this.historyMode = 'push';
+    } else {
+      this.open(target.pr, target.selection, target.commit, 'none');
+    }
+  }
+
+  /** The lists of pull requests (mine and the pinned repositories) again; maxAgeMs: only when older than that. */
+  refreshLists(maxAgeMs = 0): void {
+    if (Date.now() - this.prsLoadedAt >= maxAgeMs) {
+      this.loadPrs();
+    }
+  }
+
+  /** Hands a search to the list of pull requests (it searches the code hosts). */
+  searchFor(query: string): void {
+    this.searchRequest.set({ query, seq: (this.searchRequest()?.seq ?? 0) + 1 });
   }
 
   loadConnections(): void {
     this.api.connections().subscribe({ next: (c) => this.connections.set(c), error: () => this.connections.set([]) });
+  }
+
+  loadTls(): void {
+    this.api.tls().subscribe({ next: (s) => this.tls.set(s), error: (e) => this.error.set(errorMessage(e)) });
+  }
+
+  /** After the trusted certificates changed: connections that failed on a certificate may work now. */
+  tlsChanged(settings: TlsSettings): void {
+    this.tls.set(settings);
+    this.connectionChanged();
   }
 
   /** After a connection changed: accounts, connections and the list of pull requests are fetched again. */
@@ -459,6 +543,8 @@ export class ReviewStore {
   }
 
   loadPrs(): void {
+    this.prsLoadedAt = Date.now();
+    this.workspace.refreshPinned();
     this.prsLoading.set(true);
     this.api.prs().subscribe({
       next: (prs) => {
@@ -472,8 +558,11 @@ export class ReviewStore {
     });
   }
 
-  open(pr: PrKey, selection: Selection = { kind: 'overview' }, commit: string | null = null): void {
+  /** selection null: nothing was asked for (opened from the list or by a plain link) - the first data flow, see startSelection. */
+  open(pr: PrKey, selection: Selection | null = null, commit: string | null = null, history: HistoryMode = 'push'): void {
     this.connectionsOpen.set(false);
+    this.quickOpen.set(false);
+    this.pendingHistory = history;
     this.pendingCommit = commit;
     this.loading.set(t('Lade {pr} …', { pr: prLabel(pr) }));
     this.error.set(null);
@@ -540,7 +629,35 @@ export class ReviewStore {
     });
   }
 
-  close(): void {
+  /** Shows the pull request of a tab, at the view it was left at. */
+  activate(tab: PrKey): void {
+    const left = parseHash(this.leftAt.get(prLabel(tab)) ?? '');
+    this.open({ provider: tab.provider, owner: tab.owner, repo: tab.repo, number: tab.number }, left?.selection ?? null, left?.commit ?? null);
+  }
+
+  /** Closes the tab of a pull request. Was it the one shown, the tab beside it is shown, without one the start page. */
+  closeTab(pr: PrKey): void {
+    const shown = this.prKey();
+    const next: OpenTab | null = this.workspace.closeTab(pr);
+    this.leftAt.delete(prLabel(pr));
+    if (shown && prLabel(shown) === prLabel(pr)) {
+      if (next) {
+        this.activate(next);
+      } else {
+        this.close();
+      }
+    }
+  }
+
+  /**
+   * To the start page; the tabs stay, none of them is shown. A new entry of the browser history: back returns to
+   * the pull request.
+   */
+  close(history: HistoryMode = 'push'): void {
+    if (history !== 'none' && location.hash) {
+      window.history.pushState(null, '', location.pathname);
+    }
+    this.quickOpen.set(false);
     this.resetCommits();
     this.flowPages.set(new Map());
     this.bundle.set(null);
@@ -548,10 +665,11 @@ export class ReviewStore {
     this.status.set(null);
     this.ok.set(new Set());
     this.okAt.set(new Map());
-    history.replaceState(null, '', location.pathname);
+    // the lists show the progress of what was just reviewed
+    this.refreshLists();
   }
 
-  private applyBundle(b: ReviewBundle, selection: Selection): void {
+  private applyBundle(b: ReviewBundle, selection: Selection | null): void {
     const previous = this.bundle()?.pr;
     if (!previous || prLabel(previous) !== prLabel(b.pr) || previous.headSha !== b.pr.headSha) {
       this.resetCommits(); // another PR, or new commits: blame and attribution are outdated
@@ -559,11 +677,15 @@ export class ReviewStore {
     if (!previous || prLabel(previous) !== prLabel(b.pr)) {
       this.flowPages.set(new Map()); // the flows of another PR
       this.status.set(null);
+      this.workspace.noteOpened(b.pr);
+      this.workspace.openTab(b.pr);
     }
     this.bundle.set(b);
     this.applyState(b.state);
     this.loading.set(null);
-    this.select(this.isValidSelection(selection, b) ? selection : { kind: 'overview' });
+    this.historyMode = this.pendingHistory;
+    this.select(selection && this.isValidSelection(selection, b) ? selection : startSelection(b, this.disabledCategories()));
+    this.historyMode = this.pendingHistory = 'push';
     this.loadComments();
     this.loadStatus();
     this.loadCommits();
@@ -583,6 +705,8 @@ export class ReviewStore {
         return b.files.some((f) => f.path === sel.path);
       case 'coverage':
         return (b.analysis.coverage?.length ?? 0) > 0;
+      case 'insight':
+        return INSIGHTS.some((i) => i.id === sel.id);
     }
   }
 
@@ -611,10 +735,21 @@ export class ReviewStore {
     this.updateHash();
   }
 
-  private updateHash(): void {
+  /** Writes the view into the address. Another view is a new entry of the browser history, unless told otherwise. */
+  private updateHash(mode: HistoryMode = this.historyMode): void {
     const key = this.prKey();
-    if (key) {
-      history.replaceState(null, '', '#' + formatHash(key, this.selection(), this.commitFilter()));
+    if (!key || mode === 'none') {
+      return;
+    }
+    const hash = '#' + formatHash(key, this.selection(), this.commitFilter());
+    this.leftAt.set(prLabel(key), hash);
+    if (location.hash === hash) {
+      return;
+    }
+    if (mode === 'replace') {
+      history.replaceState(null, '', hash);
+    } else {
+      history.pushState(null, '', hash);
     }
   }
 
@@ -659,7 +794,8 @@ export class ReviewStore {
   setCommitFilter(sha: string | null): void {
     this.commitFilter.set(sha);
     this.collapseCommand.set(null);
-    this.updateHash();
+    // the same view, narrowed: no new entry of the browser history
+    this.updateHash(this.historyMode === 'none' ? 'none' : 'replace');
   }
 
   /** Previous/next commit while filtering (commits without lines in the PR diff are skipped). */
@@ -740,6 +876,16 @@ export class ReviewStore {
     const on = !this.testInfo();
     this.testInfo.set(on);
     writeFlag('scr.testInfo', on);
+  }
+
+  setShowSignatures(on: boolean): void {
+    this.showSignatures.set(on);
+    writeChoice('scr.methodDetail', on ? 'signature' : 'name');
+  }
+
+  setShowReturns(on: boolean): void {
+    this.showReturns.set(on);
+    writeFlag('scr.returns', on);
   }
 
   setDiffMode(mode: DiffMode): void {
@@ -872,6 +1018,7 @@ export class ReviewStore {
           .sort((x, y) => (x.startLine ?? lineOf(x.lineKeys[0])) - (y.startLine ?? lineOf(y.lineKeys[0])))
           .map((s) => ({ segmentId: s.id, place: null }));
       case 'coverage':
+      case 'insight':
         return [];
     }
   }
@@ -1173,6 +1320,11 @@ function lineOf(key: string | undefined): number {
 }
 
 const PR_HOST_KEY = 'scr.prHost';
+/** Coming back to the window, the lists of pull requests are fetched again when they are older than this. */
+const LISTS_MAX_AGE_MS = 2 * 60 * 1000;
+
+/** How a change of the address is written to the browser history. */
+type HistoryMode = 'push' | 'replace' | 'none';
 
 function readText(name: string): string | null {
   try {
@@ -1218,21 +1370,24 @@ function writeChoice(name: string, value: string | null): void {
 
 // ------------------------------------------------------------- hash routing: #/github/owner/repo/12[/c/<sha>]/flow/flow-1
 
-function formatHash(pr: PrKey, sel: Selection, commit: string | null): string {
+export function formatHash(pr: PrKey, sel: Selection, commit: string | null): string {
   const base = `/${pr.provider}/${pr.owner}/${pr.repo}/${pr.number}` + (commit ? `/c/${commit.substring(0, 12)}` : '');
   switch (sel.kind) {
-    case 'overview':
-      return base;
     case 'file':
       return `${base}/file/${encodeURIComponent(sel.path)}`;
+    case 'overview':
+      return `${base}/overview`;
     case 'coverage':
       return `${base}/coverage`;
+    case 'insight':
+      return `${base}/view/${encodeURIComponent(sel.id)}`;
     default:
       return `${base}/${sel.kind}/${encodeURIComponent(sel.id)}`;
   }
 }
 
-function parseHash(hash: string): { pr: PrKey; selection: Selection; commit: string | null } | null {
+/** selection null: the link names only the pull request (see startSelection). */
+export function parseHash(hash: string): { pr: PrKey; selection: Selection | null; commit: string | null } | null {
   const parts = hash.replace(/^#\/?/, '').split('/');
   if (parts.length < 4 || !/^\d+$/.test(parts[3])) {
     return null;
@@ -1245,11 +1400,15 @@ function parseHash(hash: string): { pr: PrKey; selection: Selection; commit: str
   }
   const kind = parts[4];
   const value = parts[5] ? decodeURIComponent(parts[5]) : '';
-  let selection: Selection = { kind: 'overview' };
+  let selection: Selection | null = null;
   if (kind === 'file' && value) {
     selection = { kind: 'file', path: value };
+  } else if (kind === 'overview') {
+    selection = { kind: 'overview' };
   } else if (kind === 'coverage') {
     selection = { kind: 'coverage' };
+  } else if (kind === 'view' && value) {
+    selection = { kind: 'insight', id: value };
   } else if ((kind === 'category' || kind === 'group' || kind === 'flow') && value) {
     selection = { kind, id: value };
   }

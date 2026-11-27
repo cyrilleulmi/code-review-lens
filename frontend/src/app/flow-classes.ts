@@ -35,6 +35,17 @@ export function classOf(seg: { path: string }, component: { id: string; name: st
   return { key: dot > 0 ? seg.path.substring(0, seg.path.length - (file.length - dot)) : seg.path, name: dot > 0 ? file.substring(0, dot) : file };
 }
 
+/** "PlayerResource.update" for "api.PlayerResource.update": the last two parts of a symbol name; a plain name as it is. */
+export function shortName(name: string): string {
+  const parts = name.split('.');
+  return parts.length > 1 && parts[parts.length - 1] ? parts.slice(-2).join('.') : name;
+}
+
+/** A step by name with its class, "PlayerResource.update"; without a symbol the name of its file; the id when it is unknown. */
+export function stepName(seg: { symbol: string | null; path: string } | undefined, id: string): string {
+  return seg ? shortName(seg.symbol ?? seg.path.substring(seg.path.lastIndexOf('/') + 1)) : id;
+}
+
 /** A step as the flow view shows it: its depth and the caller shown (null = a root). */
 export interface ClassMember {
   step: { segmentId: string };

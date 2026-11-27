@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
-import { Api, Connection, NewConnection, User, errorMessage, hostLabel } from './api';
+import { Api, CertificateTarget, Connection, NewConnection, User, certificateTargetIn, errorMessage, hostLabel } from './api';
+import { TlsSettingsPanel } from './certificates';
 import { ConnectionForm, defaultUrl, tokenHelp, tokenPlaceholder } from './connections';
 import { Icon } from './icon';
 import { t } from './i18n';
@@ -351,7 +352,7 @@ function effectivePort(u: URL): string {
 @Component({
   selector: 'app-connection-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, ConnectionForm, NewConnectionForm],
+  imports: [Icon, ConnectionForm, NewConnectionForm, TlsSettingsPanel],
   template: `
     @if (store.connections(); as list) {
       @if (!connected()) {
@@ -388,6 +389,12 @@ function effectivePort(u: URL): string {
                 }
                 <span class="badge">{{ count(c.provider) }}</span>
               </button>
+              @if (certificate(c); as target) {
+                <button type="button" class="gear cert" (click)="store.certificateFor.set(target)"
+                        [title]="t('Zertifikat prüfen')" [attr.aria-label]="t('Zertifikat prüfen')">
+                  <app-icon name="lock" [size]="13" />
+                </button>
+              }
               <button type="button" class="gear" (click)="toggleEdit(c.provider)" [attr.aria-expanded]="editing() === c.provider"
                       [title]="t('Verbindung einstellen')" [attr.aria-label]="t('Verbindung einstellen')">
                 <app-icon name="cog" [size]="13" />
@@ -412,6 +419,18 @@ function effectivePort(u: URL): string {
               </button>
             }
           }
+        </div>
+      }
+
+      <button type="button" class="host tls-btn" [class.open]="tlsOpen()" (click)="tlsOpen.set(!tlsOpen())" [attr.aria-expanded]="tlsOpen()"
+              [title]="t('Zertifikate, denen das Tool zusätzlich vertraut (z. B. einer Firmen-CA)')">
+        <app-icon name="shield" [size]="13" />
+        <span class="name">{{ t('Zertifikate') }}</span>
+        <app-icon [name]="tlsOpen() ? 'chevronDown' : 'chevronRight'" [size]="11" />
+      </button>
+      @if (tlsOpen()) {
+        <div class="body">
+          <app-tls-settings />
         </div>
       }
     }
@@ -562,6 +581,20 @@ function effectivePort(u: URL): string {
       background: var(--bg-panel);
     }
 
+    .gear.cert {
+      color: var(--warn);
+    }
+
+    .tls-btn {
+      width: 100%;
+      margin-top: 2px;
+      color: var(--fg-dim);
+
+      &.open {
+        color: var(--fg);
+      }
+    }
+
     .add-btn {
       flex: none;
       width: 100%;
@@ -579,6 +612,7 @@ export class ConnectionPanel {
   protected readonly store = inject(ReviewStore);
   protected readonly t = t;
   protected readonly adding = signal(false);
+  protected readonly tlsOpen = signal(false);
   protected readonly host = hostLabel;
 
   /** Some connection has a signed-in user: then the panel stays quiet. */
@@ -613,6 +647,11 @@ export class ConnectionPanel {
         untracked(() => this.store.loadConnections());
       }
     });
+  }
+
+  /** The host of a connection that failed on its certificate: the lock next to it opens the certificate dialog. */
+  protected certificate(c: Connection): CertificateTarget | null {
+    return c.account.user ? null : certificateTargetIn(c.account.error);
   }
 
   protected count(provider: string): number {

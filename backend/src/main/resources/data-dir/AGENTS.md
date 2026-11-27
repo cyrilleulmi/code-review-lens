@@ -12,6 +12,8 @@ rules.json             OPTIONAL custom rules; takes precedence; edits trigger re
 settings.json          switched-off categories {"disabledCategories": [...]}: hidden, their places need no ok
 connections.json       OPTIONAL connection settings from the "Verbindungen" section of the UI (URL, token, cookie per connection).
                        Contains SECRETS in plain text: never read, copy, log or print it
+certificates/          OPTIONAL certificates (PEM) trusted in addition to the default ones, e.g. a company CA
+tls.json               OPTIONAL hosts whose certificate is not checked {"insecureHosts": ["host:port"]}
 reviews/<provider>/<owner>/<repo>/<number>/      provider: github | gitlab, or github~host | gitlab~host
                                                    for further connections (port as host_port); nested GitLab groups: group~sub;
                                                    number 0 = the whole repository (every file counts as new)
@@ -39,7 +41,7 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
 
 ## Reading a review
 
-1. `analysis.json` → `categories[]` (Quick wins, Datenflüsse, Einzelne Änderungen, Tests, Styles & Assets)
+1. `analysis.json` → `categories[]` (Datenflüsse, Quick wins, Einzelne Änderungen, Tests, Styles & Assets)
    → `groups[].segmentIds`.
 2. `segments[]` → `path`, `symbol`, `category`, `group`, `reason`, `lineKeys`, `lines` (display lines incl.
    context; `refs` on call sites point to called segments).
@@ -157,7 +159,13 @@ Only changed lines can be marked. Valid keys per segment: `analysis.json` → `s
    adapter packages without ports; then `segments[].layer` is domain | application | usecase | adapter.
    `segments[].frontend` marks web frontend code. `flows[].edges[].kind` = "http" for REST calls from the
    frontend into a backend endpoint (literal URLs, or generated OpenAPI clients matched by operationId; `via`
-   then ends with `(operationId)`). Flow titles start with the trigger when known (`JMS-Listener: …`, `PUT /x: …`).
+   then ends with `(operationId)`). `flows[].edges[].line` is the call site shown, `lines` every line of the caller that
+   calls the callee (ascending): sort a caller's edges by these lines to read its calls in the order of the code.
+   Flow titles start with the trigger when known (`JMS-Listener: …`, `PUT /x: …`).
+   `segments[].signature` (functions, methods, components) holds `declaration` (the head as written), `params[]`
+   (`name`, `type`), `returns` and `types`: ids into `types[]`, the types named in it that a changed file declares,
+   each with `kind`, `path`, `line`, up to 12 `fields[]` (`name`, `type`) and `more`. Read from the declarations by
+   pattern: no type resolution, types of unchanged files are missing.
    Cross-cutting categories: `api-contract`, `security`, `messaging`, `transactions`, `persistence`, `runtime`.
    `reviews/…/structure.json` holds the repository directories, file paths and the API contract `operations`.
 7. `components[]` / `componentEdges[]`: changed files grouped into components and the calls between them.

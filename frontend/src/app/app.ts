@@ -2,7 +2,8 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, HostListener, Injector, afterNextRender, computed, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
 import { AccountCookie } from './account-cookie';
-import { isTestsView, prLabel } from './api';
+import { CertificateDialog } from './certificates';
+import { PrKey, isTestsView, prLabel, providerInfo } from './api';
 import { applyLang, lang, serverText, setLang, t } from './i18n';
 import { applyTheme, theme, toggleTheme } from './theme';
 import { CoverageOverview } from './coverage-overview';
@@ -11,15 +12,22 @@ import { ScrollMemory, viewKey } from './scroll-memory';
 import { FlowView } from './flow-view';
 import { GroupView } from './group-view';
 import { Icon } from './icon';
+import { INSIGHTS, INSIGHTS_LABEL } from './insights';
+import { InsightView } from './insight-view';
 import { Overview } from './overview';
 import { PrList } from './pr-list';
+import { QuickOpen } from './quick-open';
+import { StartPage } from './start-page';
 import { ReviewStore, Slot } from './review.store';
 import { ReviewTree } from './review-tree';
+import { Workspace, prKeyOf, repoInitials, repoLabel, tabColor } from './workspace';
 
 type ToolWindow = 'prs' | 'review' | null;
 
 interface EditorContent {
-  kind: 'overview' | 'group' | 'flow' | 'coverage';
+  kind: 'overview' | 'group' | 'flow' | 'coverage' | 'insight';
+  /** id of the view across the pull request (kind insight) */
+  insight?: string;
   title?: string;
   description?: string | null;
   details?: { builds?: string | null; divides?: string | null } | null;
@@ -34,13 +42,37 @@ interface EditorContent {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, PrList, ReviewTree, Overview, GroupView, FlowView, CoverageOverview, RuleCheckOverview, AccountCookie],
+  imports: [
+    Icon, PrList, ReviewTree, Overview, GroupView, FlowView, InsightView, CoverageOverview, RuleCheckOverview, AccountCookie, CertificateDialog, QuickOpen, StartPage,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
 export class App {
   protected readonly store = inject(ReviewStore);
+  private readonly workspace = inject(Workspace);
   protected readonly tool = signal<ToolWindow>('prs');
+  /** The stripe at the left edge is unfolded: the tabs show the titles of their pull requests. Kept per browser. */
+  protected readonly stripeWide = signal(readFlag('scr.stripeWide'));
+  /** The tabs of the open pull requests as the stripe shows them. */
+  protected readonly tabs = computed<StripeTab[]>(() => {
+    const open = this.store.prKey();
+    return this.workspace.tabs().map((tab) => {
+      const no = tab.number === 0 ? 'repo' : providerInfo(tab.provider).sigil + tab.number;
+      return {
+        provider: tab.provider, owner: tab.owner, repo: tab.repo, number: tab.number, title: tab.title,
+        key: prKeyOf(tab), current: !!open && prKeyOf(open) === prKeyOf(tab), css: tabColor(tab.color),
+        initials: repoInitials(tab.repo), no,
+        tip: `${tab.title}\n${repoLabel(tab)} ${tab.number === 0 ? t('ganzes Repository') : no}\n${t('Mittlere Maustaste: Tab schliessen')}`,
+      };
+    });
+  });
+  /** The colour of the pull request that is shown (its tab, its entry in the lists, the toolbar). */
+  protected readonly currentColor = computed(() => {
+    const open = this.store.prKey();
+    const tab = open ? this.workspace.tabOf(open) : null;
+    return tab ? tabColor(tab.color) : null;
+  });
   protected readonly toolWidth = signal(readWidth());
   /** Provider whose cookie dialog is open (accounts behind an SSO proxy, status bar). */
   protected readonly cookieFor = signal<string | null>(null);
@@ -61,11 +93,8 @@ export class App {
 
   /** Providers whose connection the config page can change (status bar: a click opens it). */
   protected readonly configurable = computed(() => new Set((this.store.connections() ?? []).map((c) => c.provider)));
-  /** No code host is connected: the welcome screen offers the config page. */
-  protected readonly noAccount = computed(() => {
-    const me = this.store.me();
-    return !!me && !me.accounts.some((a) => a.user);
-  });
+  /** Pull requests that wait for my review: the number at the button of the list. */
+  protected readonly waiting = computed(() => this.store.prs().filter((p) => p.roles.includes('review-requested')).length);
 
   protected readonly flow = computed(() => {
     const sel = this.store.selection();
@@ -80,7 +109,7 @@ export class App {
     const cats = b.analysis.categories;
     switch (sel.kind) {
       case 'overview':
-        return { kind: 'overview', crumbs: [t('Übersicht')] };
+        return { kind: 'overview', crumbs: [t(INSIGHTS_LABEL), t('Übersicht')] };
       case 'category': {
         const c = cats.find((x) => x.id === sel.id)!;
         const label = serverText(c.label);
@@ -111,7 +140,9 @@ export class App {
         };
       }
       case 'coverage':
-        return { kind: 'coverage', crumbs: [t('Abdeckung')] };
+        return { kind: 'coverage', crumbs: [t(INSIGHTS_LABEL), t('Abdeckung')] };
+      case 'insight':
+        return { kind: 'insight', insight: sel.id, crumbs: [t(INSIGHTS_LABEL), t(INSIGHTS.find((i) => i.id === sel.id)?.label ?? sel.id)] };
     }
   });
 
@@ -164,15 +195,30 @@ export class App {
         }
       });
     });
-    // Switch to the review tool window whenever another PR has been opened.
+    // Switch to the review tool window whenever another PR has been opened, and back to the list when it is closed.
     let lastPr: string | null = null;
     effect(() => {
       const key = this.store.prKey();
       const id = key ? prLabel(key) : null;
       if (id && id !== lastPr) {
         untracked(() => this.tool.set('review'));
+      } else if (!id && lastPr) {
+        untracked(() => this.tool.set('prs'));
       }
       lastPr = id;
+    });
+    // A search handed to the list of pull requests (quick switch) shows the list.
+    effect(() => {
+      if (this.store.searchRequest()) {
+        untracked(() => this.tool.set('prs'));
+      }
+    });
+    // The tab of the browser (and its history) says what is open.
+    effect(() => {
+      const pr = this.store.bundle()?.pr;
+      document.title = pr
+        ? (pr.number === 0 ? t('Ganzes Repository') : this.store.provider().sigil + pr.number + ' ' + pr.title) + ' · ' + pr.repo + ' – SmartCodeReview'
+        : 'SmartCodeReview';
     });
     // The connections live at the top of the pull request tool window: opening them (toolbar, status bar) shows it.
     effect(() => {
@@ -180,6 +226,44 @@ export class App {
         untracked(() => this.tool.set('prs'));
       }
     });
+  }
+
+  /** The start page: closes the pull request (back of the browser returns to it) and shows the list. */
+  protected home(): void {
+    if (this.store.bundle()) {
+      this.store.close();
+    }
+    this.tool.set('prs');
+  }
+
+  /** The tab of the pull request shown folds its review window in and out; another tab shows its pull request. */
+  protected tabClick(tab: PrKey): void {
+    const open = this.store.prKey();
+    if (open && prKeyOf(open) === prKeyOf(tab)) {
+      this.toggleTool('review');
+    } else {
+      this.store.activate(tab);
+    }
+  }
+
+  /** The middle mouse button closes a tab, as in a browser: pressed it does nothing (no scrolling), released it closes. */
+  protected tabMiddle(event: MouseEvent, tab?: PrKey): void {
+    if (event.button === 1) {
+      event.preventDefault();
+      if (tab) {
+        this.store.closeTab(tab);
+      }
+    }
+  }
+
+  protected toggleStripe(): void {
+    const wide = !this.stripeWide();
+    this.stripeWide.set(wide);
+    try {
+      localStorage.setItem('scr.stripeWide', String(wide));
+    } catch {
+      // storage unavailable - the stripe is just folded again next time
+    }
   }
 
   protected toggleTool(t: ToolWindow): void {
@@ -212,13 +296,37 @@ export class App {
 
   @HostListener('window:keydown', ['$event'])
   protected shortcuts(event: KeyboardEvent): void {
-    if (event.altKey && event.key === '1') {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      this.store.quickOpen.set(!this.store.quickOpen());
+    } else if (event.altKey && event.key === '1') {
       event.preventDefault();
       this.toggleTool('prs');
     } else if (event.altKey && event.key === '2' && this.store.bundle()) {
       event.preventDefault();
       this.toggleTool('review');
     }
+  }
+}
+
+/** A tab of the stripe: the pull request with its colour as a CSS value and its short texts. */
+interface StripeTab extends PrKey {
+  title: string;
+  key: string;
+  current: boolean;
+  /** its colour as a CSS value */
+  css: string;
+  initials: string;
+  /** "#17", "!4347", "repo" for a whole repository */
+  no: string;
+  tip: string;
+}
+
+function readFlag(name: string): boolean {
+  try {
+    return localStorage.getItem(name) === 'true';
+  } catch {
+    return false;
   }
 }
 

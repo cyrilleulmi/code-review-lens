@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { CommitList } from './commit-list';
 import { Icon, SymbolBadge } from './icon';
 import { serverText, t } from './i18n';
+import { INSIGHTS, INSIGHTS_LABEL, fitness, fitnessSummary } from './insights';
 import { ReviewStore, Selection, Slot } from './review.store';
 import { acceptLevel } from './accept-boxes';
 
@@ -39,6 +40,20 @@ export class ReviewTree {
   protected readonly t = t;
   protected readonly tab = signal<Tab>('categories');
   private readonly collapsed = signal<ReadonlySet<string>>(new Set());
+  /** The section "Übergreifende Ansichten & Informationen": always the first of the categories. */
+  protected readonly insights = INSIGHTS;
+  protected readonly insightsLabel = INSIGHTS_LABEL;
+  protected readonly insightsOpen = signal(true);
+  /** How the fitness functions stand, as a count beside their entry. */
+  protected readonly fitnessSummary = computed(() => {
+    const b = this.store.bundle();
+    return b ? fitnessSummary(fitness(b)) : { ok: 0, warn: 0, fail: 0 };
+  });
+
+  protected isInsight(id: string): boolean {
+    const sel = this.store.selection();
+    return sel.kind === 'insight' && sel.id === id;
+  }
 
   private readonly categoryTree = computed<TreeNode[]>(() => {
     const b = this.store.bundle();

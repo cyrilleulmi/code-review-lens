@@ -106,12 +106,15 @@
   --tint-hover: rgba(255, 255, 255, 0.03);
   --tint-stripe: rgba(255, 255, 255, 0.02);
   --tint-dots: rgba(255, 255, 255, 0.05);
-  --scrollbar: rgba(255, 255, 255, 0.12);
-  --scrollbar-hover: rgba(255, 255, 255, 0.2);
+  --scrollbar: rgba(255, 255, 255, 0.26);
+  --scrollbar-hover: rgba(255, 255, 255, 0.42);
+  --scrollbar-track: rgba(255, 255, 255, 0.04);
   --check-border: #5a5d63;
   --diagram-line: #5b6170;
   --node-border: #43454a;
   --shadow-color: rgba(0, 0, 0, 0.4);
+  --backdrop: rgba(0, 0, 0, 0.45);
+  --brand-gradient: linear-gradient(135deg, #3574f0, #9b5de5);
   --error-bg: #402527;
   --error-border: #6e3a3d;
 
@@ -235,12 +238,15 @@
   --tint-hover: rgba(0, 0, 0, 0.03);
   --tint-stripe: rgba(0, 0, 0, 0.03);
   --tint-dots: rgba(0, 0, 0, 0.07);
-  --scrollbar: rgba(0, 0, 0, 0.18);
-  --scrollbar-hover: rgba(0, 0, 0, 0.3);
+  --scrollbar: rgba(0, 0, 0, 0.3);
+  --scrollbar-hover: rgba(0, 0, 0, 0.45);
+  --scrollbar-track: rgba(0, 0, 0, 0.04);
   --check-border: #a8adbb;
   --diagram-line: #a3a8b6;
   --node-border: #d3d6dd;
   --shadow-color: rgba(0, 0, 0, 0.14);
+  --backdrop: rgba(30, 31, 34, 0.3);
+  --brand-gradient: linear-gradient(135deg, #3574f0, #9b5de5);
   --error-bg: #fdeeee;
   --error-border: #f0b4b4;
 
@@ -310,9 +316,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* scrollbars are always there and visible on both themes: a scrollable diagram or block must show that it scrolls */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -328,6 +339,13 @@ body {
 
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* browsers without these (Firefox): the standard properties */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-color: var(--scrollbar) var(--scrollbar-track);
+  }
 }
 
 button:focus-visible,
@@ -637,6 +655,68 @@ kbd {
   }
 }
 
+/* a diagram larger than its view: an empty spot of it can be dragged to move around (pan.ts) */
+.can-pan {
+  cursor: grab;
+}
+
+.panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* settings that are each on or off on their own: a pill, filled with a tick while it is on. The tick keeps its
+   room when it is off, so switching never moves the pills */
+.chips {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+}
+
+.chip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 11px 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: 500 11.5px/1 var(--font-ui);
+  cursor: pointer;
+  white-space: nowrap;
+
+  .tick {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--fg-dim);
+    border-radius: 50%;
+    color: transparent;
+  }
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--fg);
+  }
+
+  &.on {
+    border-color: var(--accent);
+    background: var(--bg-selected);
+    color: var(--fg);
+
+    .tick {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--on-ok-all);
+    }
+  }
+}
+
 .focus-bar {
   display: flex;
   flex-wrap: wrap;
@@ -712,5 +792,137 @@ kbd {
       filter: brightness(1.1);
       color: var(--on-ok);
     }
+  }
+}
+
+/* ------------------------------------------------------------- playback of a call sequence (Abfolge) in a diagram */
+
+/* what is played now, in the bar of the playback: caller -> step called, the request of a REST call */
+app-sequence-controls {
+  .who {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font: 500 11.5px var(--font-code);
+    white-space: nowrap;
+  }
+
+  /* what is called stays readable, the caller gives way */
+  b.who {
+    flex: none;
+    color: var(--fg);
+    font-weight: 700;
+  }
+
+  .no {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 16px;
+    border-radius: 8px;
+    color: var(--on-fill);
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .via {
+    flex: none;
+    color: var(--cat-violet);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  /* what the current call gives back */
+  .via.ret {
+    color: var(--fg);
+    font-family: var(--font-code);
+  }
+
+  .ftool {
+    flex: none;
+  }
+}
+
+/* the connection of the current call, drawn again from the caller to what is called (an SVG path with pathLength 1) */
+.seq-run {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  pointer-events: none;
+  animation: seq-draw calc(var(--seq-dur, 1300ms) * 0.6) ease-in-out;
+}
+
+/* the dot that runs along it: placed at the origin of the drawing, moved by its offset-path; its colour is `color` */
+.seq-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px var(--bg-panel-2), 0 0 10px 2px currentColor;
+  pointer-events: none;
+  offset-rotate: 0deg;
+  offset-distance: 100%;
+  opacity: 0;
+  animation: seq-travel calc(var(--seq-dur, 1300ms) * 0.6) ease-in-out;
+}
+
+@keyframes seq-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes seq-travel {
+  from {
+    offset-distance: 0%;
+    opacity: 1;
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  to {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+/* the box a call arrives at lights up; two names for the same animation, so it starts again for the next call there */
+@keyframes seq-arrive-a {
+  from {
+    box-shadow: 0 0 0 0 transparent;
+  }
+
+  60% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+}
+
+@keyframes seq-arrive-b {
+  from {
+    box-shadow: 0 0 0 0 transparent;
+  }
+
+  60% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seq-run,
+  .seq-dot,
+  .seq-to {
+    animation: none !important;
   }
 }
