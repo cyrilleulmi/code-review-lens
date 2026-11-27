@@ -56,6 +56,22 @@ docker run --rm -p 127.0.0.1:8080:8080 -v code-review-lens-data:/data -e GITHUB_
 
 Further hosts (a second GitLab, GitHub Enterprise Server) are added in the browser under «Connections».
 
+## Run in the background
+
+Detached (`-d`) with a name, started again with Docker after a restart of the machine:
+
+```
+docker run -d --name code-review-lens --restart unless-stopped -p 127.0.0.1:8080:8080 -v code-review-lens-data:/data -e GITHUB_TOKEN=$(gh auth token) culmi/code-review-lens:latest
+```
+
+Leave out `-e GITHUB_TOKEN=…` to connect in the browser, or add the GitLab variables from above. Then:
+
+| | |
+|---|---|
+| Logs | `docker logs -f code-review-lens` |
+| Stop / start | `docker stop code-review-lens` / `docker start code-review-lens` |
+| Update to the latest image | `docker rm -f code-review-lens`, `docker pull culmi/code-review-lens:latest`, then the `docker run` above again |
+
 ## Keep the data in a folder
 
 The review state is plain JSON that agents can read and write. To have it in a folder of your own instead of a volume:
