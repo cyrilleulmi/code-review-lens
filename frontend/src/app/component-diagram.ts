@@ -14,6 +14,7 @@ import { SequencePlayer, scrollToShow } from './sequence-player';
 import { returnType } from './method-detail';
 import { ZoomControls, fitZoom, wheelZoom, zoomAround, zoomToShow } from './zoom';
 import { FullView } from './full-view';
+import { Pan } from './pan';
 
 const NO_SEQUENCE: FlowSequence = { entries: [], calls: [] };
 
@@ -88,7 +89,7 @@ const LOOSE_GAP = 22;
     '(document:fullscreenchange)': 'full.sync()',
     '(document:keydown.escape)': 'full.close()',
   },
-  imports: [Icon, SequenceControls, ZoomControls],
+  imports: [Icon, Pan, SequenceControls, ZoomControls],
   template: `
     @let pb = playback();
     <div class="bar">
@@ -146,7 +147,7 @@ const LOOSE_GAP = 22;
     @if (boxes().length === 0) {
       <p class="empty">{{ t('Keine Komponenten mit Code-Änderungen.') }}</p>
     } @else {
-      <div class="scroll" [class.sequence]="!!flowId()" [class.playing]="!!pb" [style.--seq-dur]="player.duration() + 'ms'" (wheel)="wheel($event)">
+      <div class="scroll" appPan [class.sequence]="!!flowId()" [class.playing]="!!pb" [style.--seq-dur]="player.duration() + 'ms'" (wheel)="wheel($event)">
         <div class="canvas" [style.width.px]="size().w" [style.height.px]="size().h" [style.zoom]="shownZoom()">
           @for (f of frames(); track f.id) {
             <div class="frame" [style.left.px]="f.x" [style.top.px]="f.y" [style.width.px]="f.w" [style.height.px]="f.h" [style.--area]="areaColor(f.id)">

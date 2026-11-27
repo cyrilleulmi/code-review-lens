@@ -17,8 +17,30 @@
   border-radius: 10px;
 }
 
-/* full screen (full-view.ts): one of the two diagrams with its bar and the bar of the playback covers the page */
-.diagrams.full {
+/* the bars one works with all the way down the flow (steps, playback) stay at the top of the editor while it scrolls */
+.sticky-bars {
+  position: sticky;
+  /* at the very top of the editor, above its padding: nothing scrolls by above the bars */
+  top: calc(-1 * var(--editor-pad-y, 0px));
+  z-index: 20;
+  margin: -8px 0 0;
+  padding: 8px 0 1px;
+  background: var(--bg-editor);
+
+  .focus-bar {
+    margin: 0 0 8px;
+  }
+}
+
+/* what is scrolled into view (the call graph when the playback starts, a block of code) stops below the bars */
+.diagram,
+.unit,
+.cards app-code-block {
+  scroll-margin-top: calc(var(--sticky-h, 120px) + 8px);
+}
+
+/* full screen (full-view.ts): the view covers the page, reduced to the bar of the playback and one of its diagrams */
+:host(.full) {
   position: fixed;
   inset: 0;
   z-index: 1000;
@@ -29,12 +51,20 @@
   background: var(--bg-editor);
   overflow: hidden;
 
-  .part {
+  > *,
+  .part,
+  .focus-bar {
     display: none;
   }
 
-  &.full-graph .graph-part,
-  &.full-sequence .seq-part {
+  > .sticky-bars {
+    display: block;
+    position: static;
+    margin: 0;
+    padding: 0;
+  }
+
+  > .diagrams {
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -52,6 +82,14 @@
   .zoomed {
     margin: auto;
   }
+}
+
+:host(.full-graph) .graph-part,
+:host(.full-sequence) .seq-part {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 /* the drawing at its zoom (CSS zoom: the scroll container keeps its size, its scrollbars follow the drawing) */

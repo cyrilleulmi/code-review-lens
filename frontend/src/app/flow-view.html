@@ -26,6 +26,8 @@
   }
 </div>
 
+<!-- the two bars one works with all the way down the flow: they stay at the top of the editor while it scrolls -->
+<div class="sticky-bars" #sticky>
 <div class="focus-bar">
   @if (stepIndex() === null) {
     <button type="button" class="ftool" (click)="startSteps()" [title]="t('Immer nur einen Schritt zeigen, mit «Ok & weiter»')">
@@ -51,6 +53,39 @@
     <span class="spacer"></span>
     <button type="button" class="ftool" (click)="stepIndex.set(null)"><app-icon name="close" [size]="13" /> {{ t('Beenden') }}</button>
   }
+</div>
+<div class="seq-bar">
+  <span class="lbl"><app-icon name="sequence" [size]="14" /> {{ t('Abfolge') }}</span>
+  <app-sequence-controls [player]="player" [length]="sequence().calls.length">
+    @if (currentCall(); as c) {
+      <span class="who">{{ stepName(c.from) }}</span>
+      <app-icon name="arrowRight" [size]="12" />
+      <span class="no" [style.background]="c.bridged ? 'var(--fg-muted)' : 'var(--edge-' + playback()?.c + ')'">{{ stepOf()[c.to] }}</span>
+      <b class="who">{{ stepName(c.to) }}</b>
+      @if (c.http) {
+        <span class="via">HTTP {{ c.via }}</span>
+      }
+      @if (returnOf(c); as r) {
+        <span class="via ret" [title]="t('Was der Aufruf zurückgibt: am Ende des Aufrufs, nach allen Aufrufen, die er selbst macht')">↩ {{ r }}</span>
+      }
+      <button type="button" class="ftool" (click)="openTarget({ segmentId: c.from, line: c.line })"
+              [title]="c.line != null ? t('Zur Aufrufstelle im Code springen') : t('Zum Code des Aufrufers springen')">
+        <app-icon name="code" [size]="12" />
+        @if (c.line != null) {
+          {{ t('Zeile {line}', { line: c.line }) }}
+        }
+      </button>
+    }
+  </app-sequence-controls>
+  @if (usedSteps() > 0) {
+    <button type="button" class="ftool" [class.on]="callsOnly()" [attr.aria-pressed]="callsOnly()" (click)="toggleCallsOnly()"
+            [title]="t('Konstanten und Typen aus der Abfolge nehmen: sie werden verwendet, nicht aufgerufen ({n} im Flow)', { n: usedSteps() })">
+      <app-icon name="eyeOff" [size]="13" /> {{ t('Nur Aufrufe') }}
+    </button>
+  }
+  <span class="hint" [title]="t('Die Abfolge ist statisch aus dem Code gelesen: jeder Aufrufer Zeile für Zeile, jeder Schritt wird beim ersten Aufruf aufgeklappt. Bedingungen, Schleifen und asynchrone Aufrufe sind nicht bekannt – ob und wie oft ein Aufruf wirklich läuft, sagt sie nicht')">
+    <app-icon name="info" [size]="12" /> {{ t('statisch: Reihenfolge der Aufrufstellen') }}</span>
+</div>
 </div>
 
 @if (areas().length > 1) {
@@ -90,54 +125,8 @@
   </div>
 }
 
-<!-- what the diagram shows of a method, each on or off on its own: for the call graph and the sequence alike -->
-<ng-template #methodDetail>
-  <span class="lbl sub">{{ t('Methoden') }}</span>
-  <div class="chips" role="group" [attr.aria-label]="t('Was die Diagramme von den Methoden zeigen')">
-    <button type="button" class="chip-toggle" [class.on]="store.showSignatures()" [attr.aria-pressed]="store.showSignatures()" (click)="toggleSignatures()"
-            [title]="t('Jede Methode mit Parametern und Rückgabetyp, in einer Schreibweise für alle Sprachen. Aus: nur ihr Name')">
-      <span class="tick"><app-icon name="check" [size]="10" /></span>{{ t('Signatur') }}</button>
-    <button type="button" class="chip-toggle" [class.on]="store.showReturns()" [attr.aria-pressed]="store.showReturns()" (click)="toggleReturns()"
-            [title]="t('Was ein Aufruf zurückgibt: ein Pfeil zurück zum Aufrufer mit dem Datentyp des Rückgabewerts. Ohne Rückgabe (void) kein Pfeil')">
-      <span class="tick"><app-icon name="check" [size]="10" /></span>{{ t('Rückgabewerte') }}</button>
-  </div>
-</ng-template>
-
-<!-- both diagrams of the flow, one below the other; either can be shown full screen with the bar of the playback -->
-<div class="diagrams" #diagrams [class.full]="!!full.what()" [class.full-graph]="full.what() === 'graph'" [class.full-sequence]="full.what() === 'sequence'">
-<div class="seq-bar">
-  <span class="lbl"><app-icon name="sequence" [size]="14" /> {{ t('Abfolge') }}</span>
-  <app-sequence-controls [player]="player" [length]="sequence().calls.length">
-    @if (currentCall(); as c) {
-      <span class="who">{{ stepName(c.from) }}</span>
-      <app-icon name="arrowRight" [size]="12" />
-      <span class="no" [style.background]="c.bridged ? 'var(--fg-muted)' : 'var(--edge-' + playback()?.c + ')'">{{ stepOf()[c.to] }}</span>
-      <b class="who">{{ stepName(c.to) }}</b>
-      @if (c.http) {
-        <span class="via">HTTP {{ c.via }}</span>
-      }
-      @if (returnOf(c); as r) {
-        <span class="via ret" [title]="t('Was der Aufruf zurückgibt: am Ende des Aufrufs, nach allen Aufrufen, die er selbst macht')">↩ {{ r }}</span>
-      }
-      <button type="button" class="ftool" (click)="openTarget({ segmentId: c.from, line: c.line })"
-              [title]="c.line != null ? t('Zur Aufrufstelle im Code springen') : t('Zum Code des Aufrufers springen')">
-        <app-icon name="code" [size]="12" />
-        @if (c.line != null) {
-          {{ t('Zeile {line}', { line: c.line }) }}
-        }
-      </button>
-    }
-  </app-sequence-controls>
-  @if (usedSteps() > 0) {
-    <button type="button" class="ftool" [class.on]="callsOnly()" [attr.aria-pressed]="callsOnly()" (click)="toggleCallsOnly()"
-            [title]="t('Konstanten und Typen aus der Abfolge nehmen: sie werden verwendet, nicht aufgerufen ({n} im Flow)', { n: usedSteps() })">
-      <app-icon name="eyeOff" [size]="13" /> {{ t('Nur Aufrufe') }}
-    </button>
-  }
-  <span class="hint" [title]="t('Die Abfolge ist statisch aus dem Code gelesen: jeder Aufrufer Zeile für Zeile, jeder Schritt wird beim ersten Aufruf aufgeklappt. Bedingungen, Schleifen und asynchrone Aufrufe sind nicht bekannt – ob und wie oft ein Aufruf wirklich läuft, sagt sie nicht')">
-    <app-icon name="info" [size]="12" /> {{ t('statisch: Reihenfolge der Aufrufstellen') }}</span>
-</div>
-
+<!-- both diagrams of the flow, one below the other; either can be shown full screen, with the bar of the playback -->
+<div class="diagrams">
 @let pb = playback();
 <section class="part graph-part" [attr.aria-label]="t('Aufrufgraph')">
 <div class="level-bar">
@@ -152,7 +141,16 @@
     <button type="button" [class.on]="level() === 'method'" [attr.aria-pressed]="level() === 'method'" (click)="setLevel('method')"
             [title]="t('Ein Knoten pro Methode bzw. Funktion')">{{ t('Methoden') }}</button>
   </div>
-  <ng-container [ngTemplateOutlet]="methodDetail" />
+  <!-- what both diagrams show of a method, each on or off on its own -->
+  <span class="lbl sub">{{ t('Methoden') }}</span>
+  <div class="chips" role="group" [attr.aria-label]="t('Was die Diagramme von den Methoden zeigen')">
+    <button type="button" class="chip-toggle" [class.on]="store.showSignatures()" [attr.aria-pressed]="store.showSignatures()" (click)="toggleSignatures()"
+            [title]="t('Jede Methode mit Parametern und Rückgabetyp, in einer Schreibweise für alle Sprachen. Aus: nur ihr Name')">
+      <span class="tick"><app-icon name="check" [size]="10" /></span>{{ t('Signatur') }}</button>
+    <button type="button" class="chip-toggle" [class.on]="store.showReturns()" [attr.aria-pressed]="store.showReturns()" (click)="toggleReturns()"
+            [title]="t('Was ein Aufruf zurückgibt: ein Pfeil zurück zum Aufrufer mit dem Datentyp des Rückgabewerts. Ohne Rückgabe (void) kein Pfeil')">
+      <span class="tick"><app-icon name="check" [size]="10" /></span>{{ t('Rückgabewerte') }}</button>
+  </div>
   @let classCount = level() === 'class' ? boxes().length : frames().length;
   @let methodCount = level() === 'class' ? 0 : boxes().length;
   <span class="hint">
@@ -175,7 +173,7 @@
   <app-zoom-controls [zoom]="graphShownZoom()" (zoomChange)="setGraphZoom($event)" (fit)="fitGraph()"
                      [full]="full.what() === 'graph'" (fullChange)="full.toggle('graph')" />
 </div>
-<div class="diagram" #graph [class.dragging]="dragging()"
+<div class="diagram" #graph appPan [class.dragging]="dragging()"
      [class.playing]="!!pb" [style.--seq-dur]="player.duration() + 'ms'" (wheel)="graphWheel($event)">
  <div class="zoomed" role="list" [style.zoom]="graphShownZoom()">
   @for (f of frames(); track f.key) {
@@ -315,7 +313,6 @@
 <div class="level-bar">
   <span class="lbl" [title]="t('Abfolge: die Aufrufe der Reihe nach als Liste und als Sequenzdiagramm – eine Lebenslinie pro Klasse, ein Pfeil pro Aufruf')">
     <app-icon name="sequence" [size]="14" /> {{ t('Abfolge') }}</span>
-  <ng-container [ngTemplateOutlet]="methodDetail" />
   <span class="spacer"></span>
   <span class="hint">{{ t('Klick auf einen Aufruf zeigt ihn; die Zeilennummer springt zur Aufrufstelle') }}</span>
   <app-zoom-controls [zoom]="seqDiagram()?.shownZoom() ?? seqZoom()" (zoomChange)="seqZoom.set($event)" (fit)="seqDiagram()?.fit()"

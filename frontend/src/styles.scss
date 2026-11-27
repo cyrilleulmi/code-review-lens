@@ -651,6 +651,16 @@ kbd {
   }
 }
 
+/* a diagram larger than its view: an empty spot of it can be dragged to move around (pan.ts) */
+.can-pan {
+  cursor: grab;
+}
+
+.panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
 /* settings that are each on or off on their own: a pill, filled with a tick while it is on. The tick keeps its
    room when it is off, so switching never moves the pills */
 .chips {

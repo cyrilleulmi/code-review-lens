@@ -110,6 +110,7 @@ Angular 22, standalone Komponenten, Signals, zoneless, `OnPush`.
 | `sequence-diagram.ts` | Abfolge als Liste und Sequenzdiagramm nebeneinander (Zeile für Zeile ausgerichtet), mit Sprung zur Aufrufstelle. |
 | `method-detail.ts` | Was die Diagramme von den Methoden zeigen (Schalter «Signatur» und «Rückgabewerte»): Signatur in einer Schreibweise für alle Sprachen, Kürzen auf den Platz, Rückgabetyp für die Pfeile zurück (im Aufrufgraph pro Verbindung zusammengefasst), Typen mit Feldern für die Tooltips. |
 | `zoom.ts` | Zoom der Diagramme: Stufen, Einpassen, Strg + Mausrad um den Zeiger, Zoom, der beim Abspielen einen Aufruf ganz zeigt; Steuerung `ZoomControls` (mit dem Knopf fürs Vollbild). |
+| `pan.ts` | Navigieren in den Diagrammen: eine leere Stelle ziehen verschiebt den Ausschnitt (Direktive `appPan` am scrollenden Element). |
 | `full-view.ts` | Vollbild eines Diagramms mit seinen Leisten (Fullscreen-API, sonst füllt es das Fenster): Zustand, Esc, Wechsel zwischen den Teilen eines Elements. |
 | `sequence-player.ts`, `sequence-controls.ts` | Abspielen einer Abfolge: aktueller Aufruf, Takt und Tempo (`SequencePlayer`) und die Knöpfe dazu. Flow-Diagramm, Sequenzdiagramm und Komponentendiagramm zeigen den Aufruf, bei dem der Player steht. |
 | `call-sites.ts` | Aufrufstellen im Code: sucht zu den Verweisen einer Zeile (`refs`) die Stelle des Aufrufs im Zeilentext und setzt die Bubble ins hervorgehobene HTML. Nur Darstellung; welche Zeile was aufruft, kommt aus der Analyse. |

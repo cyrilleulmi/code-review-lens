@@ -28,6 +28,7 @@ import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock
 import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
 import { Progress, ReviewStore } from './review.store';
 import { FullView } from './full-view';
+import { Pan } from './pan';
 import { RETURNS_MAX, methodLabel, methodTooltip, returnType, returnsLabel } from './method-detail';
 import { comesLater, flowSequence, isUsedNotCalled, playbackOf, sequenceKey } from './flow-sequence';
 import { SequenceControls } from './sequence-controls';
@@ -209,10 +210,13 @@ const EDGE_RUNS: EdgeRunStatus[] = ['none', 'partial', 'separate', 'tested'];
 @Component({
   selector: 'app-flow-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CodeBlock, Icon, NgTemplateOutlet, SequenceControls, SequenceDiagram, SymbolBadge, ZoomControls],
+  imports: [CodeBlock, Icon, NgTemplateOutlet, Pan, SequenceControls, SequenceDiagram, SymbolBadge, ZoomControls],
   templateUrl: './flow-view.html',
   styleUrl: './flow-view.scss',
   host: {
+    '[class.full]': '!!full.what()',
+    '[class.full-graph]': 'full.what() === "graph"',
+    '[class.full-sequence]': 'full.what() === "sequence"',
     '(document:fullscreenchange)': 'full.sync()',
     '(document:keydown.escape)': 'full.close()',
     '(window:resize)': 'measureGraph()',
@@ -224,11 +228,13 @@ export class FlowView {
 
   private readonly cards = viewChild.required<ElementRef<HTMLElement>>('cards');
   private readonly graph = viewChild.required<ElementRef<HTMLElement>>('graph');
+  /** The bars that stay at the top of the editor: their height is what a jump into the flow must stop below. */
+  private readonly sticky = viewChild.required<ElementRef<HTMLElement>>('sticky');
   protected readonly seqDiagram = viewChild(SequenceDiagram);
   private readonly injector = inject(Injector);
-  /** The two diagrams with the bar of the playback: what full screen shows, with one of the diagrams. */
-  private readonly diagrams = viewChild.required<ElementRef<HTMLElement>>('diagrams');
-  protected readonly full = new FullView<'graph' | 'sequence'>(() => this.diagrams().nativeElement);
+  /** Full screen shows the view itself, reduced to the bar of the playback and one of the two diagrams. */
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  protected readonly full = new FullView<'graph' | 'sequence'>(() => this.host.nativeElement);
   /**
    * Zoom of the call graph as chosen (buttons, Ctrl + wheel); null = not chosen: the whole flow fits into the view
    * (graphFit). Every flow starts that way.
@@ -785,7 +791,13 @@ export class FlowView {
     afterNextRender(() => {
       const observer = new ResizeObserver(() => this.measureGraph());
       observer.observe(this.graph().nativeElement);
-      destroyRef.onDestroy(() => observer.disconnect());
+      const bars = this.sticky().nativeElement;
+      const barsObserver = new ResizeObserver(() => this.host.nativeElement.style.setProperty('--sticky-h', bars.offsetHeight + 'px'));
+      barsObserver.observe(bars);
+      destroyRef.onDestroy(() => {
+        observer.disconnect();
+        barsObserver.disconnect();
+      });
       this.measureGraph();
     });
     // The playback starts: the call graph is what it is followed in - into view, should the page stand elsewhere.

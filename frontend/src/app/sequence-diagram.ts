@@ -8,6 +8,7 @@ import { Icon } from './icon';
 import { t } from './i18n';
 import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColorIndex } from './look';
 import { MethodDetail, methodLabel, methodTooltip, returnType } from './method-detail';
+import { Pan } from './pan';
 import { ReviewStore } from './review.store';
 import { Message, SEQUENCE_BUBBLE, SEQUENCE_HEAD, SEQUENCE_HEAD_BOX, SEQUENCE_ROW, labelWidth, sequenceLayout } from './sequence-layout';
 import { scrollToShow } from './sequence-player';
@@ -35,12 +36,12 @@ export interface SequenceTarget {
   selector: 'app-sequence-diagram',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '[class.full]': 'full()' },
-  imports: [Icon],
+  imports: [Icon, Pan],
   template: `
     @let l = layout();
     @let now = current();
     @let z = shownZoom();
-    <div class="seq" #scroll [style.--seq-dur]="duration() + 'ms'" [class.playing]="now > 0" (wheel)="wheel($event)">
+    <div class="seq" #scroll appPan [style.--seq-dur]="duration() + 'ms'" [class.playing]="now > 0" (wheel)="wheel($event)">
       <div class="list" [style.min-height.px]="l.height" [style.zoom]="z">
         <div class="list-head" [style.height.px]="head">
           <app-icon name="sequence" [size]="14" />

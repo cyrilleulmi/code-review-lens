@@ -274,9 +274,11 @@
 }
 
 .editor-scroll {
+  /* its padding above: what sticks to the top of the editor (the bars of a flow) sticks above it, at the very edge */
+  --editor-pad-y: 20px;
   flex: 1;
   overflow: auto;
-  padding: 20px 24px;
+  padding: var(--editor-pad-y) 24px;
 }
 
 .welcome {

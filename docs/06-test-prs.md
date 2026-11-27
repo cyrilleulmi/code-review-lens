@@ -139,10 +139,12 @@ Für den PoC wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **
 * «Einen Aufruf weiter» bis Aufruf 3: In beiden Diagrammen sind `PlayerResource.update` und `validateJerseyNumber` hervorgehoben; unter den Diagrammen stehen nur diese zwei Blöcke, die Leiste «Code» zeigt «Aufruf 3: nur der betroffene Code». «Beenden» zeigt wieder alle sechs Blöcke.
 * «Vollbild» am Aufrufgraph: Er füllt mit seiner Leiste und der Leiste «Abfolge» den Bildschirm (50 %), «Einen Aufruf weiter» spielt dort weiter; Esc beendet. «Vollbild» an der Abfolge zeigt Liste und Sequenzdiagramm, der Knopf beendet es wieder.
 * Komponenten → «Vollbild»: Das Komponentendiagramm füllt den Bildschirm, Esc beendet.
+* Nach unten in den Code scrollen: Die Leiste mit «Einzeln durchgehen» und die Leiste «Abfolge» bleiben am oberen Rand des Editors stehen, darüber scrollt nichts durch. «Einen Aufruf weiter» von dort: Der Aufrufgraph kommt unter den Leisten ins Bild.
+* Navigieren: In der Abfolge (breiter als ihr Bereich) eine leere Stelle nach links ziehen – der Ausschnitt folgt. Aufrufgraph auf 100 % stellen und ziehen: ebenso; eingepasst gibt es nichts zu verschieben. Ein Knoten lässt sich weiterhin ziehen, ohne dass sich der Ausschnitt bewegt.
 
 **Schalter «Signatur» und «Rückgabewerte» (FR-UI-24)** – an spongecoach#13, Flow `saveJerseyNumber → setJerseyNumber → update → validateJerseyNumber (+2)`:
 
-* Beide Schalter sind Pillen; an = gefüllt mit Haken. Standard: «Signatur» aus, «Rückgabewerte» an. Nach dem Neuladen steht die Wahl wieder so da.
+* Beide Schalter sind Pillen und stehen einmal, in der Leiste des Aufrufgraphs; an = gefüllt mit Haken. Standard: «Signatur» aus, «Rückgabewerte» an. Nach dem Neuladen steht die Wahl wieder so da.
 * «Rückgabewerte» an, Abfolge: vier Pfeile zurück («↩ boolean» zweimal, «↩ PlayerDetailDto», «↩ Observable<PlayerDetail>»), in der Liste je eine Zeile. Aus: keine Zeile und kein Pfeil zurück, die Aufrufe rücken zusammen.
 * «Rückgabewerte» an, Aufrufgraph: an vier Verbindungen steht «↩ Typ» unter der Linie, am Ende des Aufrufers eine offene Pfeilspitze; kein Text liegt auf einem Knoten. Aus: die Texte verschwinden, das Diagramm rückt zusammen.
 * Beide an: Die Signatur steht am Aufruf (`setJerseyNumber(…): Observable<PlayerDetail>`), die Rückgabe zusätzlich als Pfeil zurück.
