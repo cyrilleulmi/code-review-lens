@@ -41,6 +41,7 @@ cd backend && ./mvnw quarkus:dev      # http://localhost:8080
 cd backend && ./mvnw test             # unit tests (parser, symbols, analysis)
 docker compose up --build             # native image (culmi/code-review-lens)
 ./release.sh X.Y.Z                    # release: version, image, tag, push (Git Bash; see docs/08-versionierung.md)
+DOCKERHUB_TOKEN=... ./dockerhub-overview.sh   # Docker Hub page from DOCKERHUB.md (release.sh does it when the token is set)
 ```
 
 Add user-visible changes to `CHANGELOG.md` under `## [Unreleased]` (German, like the docs).

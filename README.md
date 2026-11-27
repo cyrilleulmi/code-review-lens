@@ -240,7 +240,7 @@ docker run --rm -p 127.0.0.1:8080:8080 -v ${PWD}/data:/data `
   -e GITHUB_TOKEN=$(gh auth token) -e GITLAB_TOKEN=glpat-... culmi/code-review-lens:latest
 ```
 
-Native executable (Mandrel, linux/amd64), image about 120 MB, starts in about 50 ms. All tokens are optional.
+Native executable (Mandrel, linux/amd64), image about 130 MB, starts in about 50 ms. All tokens are optional.
 Until 0.11.0 the tool was called SmartCodeReview; those images remain at `culmi/smart-code-review`.
 
 ### Build the native binary yourself (Docker)
