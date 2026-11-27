@@ -106,8 +106,9 @@
   --tint-hover: rgba(255, 255, 255, 0.03);
   --tint-stripe: rgba(255, 255, 255, 0.02);
   --tint-dots: rgba(255, 255, 255, 0.05);
-  --scrollbar: rgba(255, 255, 255, 0.12);
-  --scrollbar-hover: rgba(255, 255, 255, 0.2);
+  --scrollbar: rgba(255, 255, 255, 0.26);
+  --scrollbar-hover: rgba(255, 255, 255, 0.42);
+  --scrollbar-track: rgba(255, 255, 255, 0.04);
   --check-border: #5a5d63;
   --diagram-line: #5b6170;
   --node-border: #43454a;
@@ -235,8 +236,9 @@
   --tint-hover: rgba(0, 0, 0, 0.03);
   --tint-stripe: rgba(0, 0, 0, 0.03);
   --tint-dots: rgba(0, 0, 0, 0.07);
-  --scrollbar: rgba(0, 0, 0, 0.18);
-  --scrollbar-hover: rgba(0, 0, 0, 0.3);
+  --scrollbar: rgba(0, 0, 0, 0.3);
+  --scrollbar-hover: rgba(0, 0, 0, 0.45);
+  --scrollbar-track: rgba(0, 0, 0, 0.04);
   --check-border: #a8adbb;
   --diagram-line: #a3a8b6;
   --node-border: #d3d6dd;
@@ -310,9 +312,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* scrollbars are always there and visible on both themes: a scrollable diagram or block must show that it scrolls */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -328,6 +335,13 @@ body {
 
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* browsers without these (Firefox): the standard properties */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-color: var(--scrollbar) var(--scrollbar-track);
+  }
 }
 
 button:focus-visible,
@@ -753,6 +767,12 @@ app-sequence-controls {
     white-space: nowrap;
   }
 
+  /* what the current call gives back */
+  .via.ret {
+    color: var(--fg);
+    font-family: var(--font-code);
+  }
+
   .ftool {
     flex: none;
   }
@@ -761,7 +781,7 @@ app-sequence-controls {
 /* the connection of the current call, drawn again from the caller to what is called (an SVG path with pathLength 1) */
 .seq-run {
   fill: none;
-  stroke-width: 4;
+  stroke-width: 6;
   stroke-linecap: round;
   stroke-dasharray: 1;
   stroke-dashoffset: 0;

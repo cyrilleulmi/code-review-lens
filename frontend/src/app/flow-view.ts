@@ -3,6 +3,8 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  Injector,
+  afterNextRender,
   afterRenderEffect,
   computed,
   effect,
@@ -25,11 +27,12 @@ import { EDGE_COLORS, areaColor, areaLabel, areaOfSegment, edgeColor, edgeColorI
 import { EDGE_LABELS, STEP_LABELS, edgeTitle, flowRuns, stepTitle } from './mock-boundaries';
 import { BOTH_SIDES_LABEL, bothSides, contractLines } from './http-tests';
 import { FlowDiagramKind, Progress, ReviewStore } from './review.store';
-import { MethodDetail, methodText, methodTooltip } from './method-detail';
+import { MethodDetail, methodLabel, methodTooltip, returnType } from './method-detail';
 import { comesLater, flowSequence, isUsedNotCalled, playbackOf, sequenceKey } from './flow-sequence';
 import { SequenceControls } from './sequence-controls';
 import { SequenceDiagram, SequenceTarget } from './sequence-diagram';
 import { SequencePlayer, scrollToShow } from './sequence-player';
+import { ZoomControls, fitZoom, wheelZoom, zoomAround, zoomToShow } from './zoom';
 import { acceptLevel } from './accept-boxes';
 import { serverText, t } from './i18n';
 import { diffSides } from './split-diff';
@@ -76,11 +79,8 @@ interface Box {
   mini: boolean;
   /** key of that frame; null for boxes without one */
   frame: string | null;
-  /**
-   * Lines below the name, from the signature level on: the data structures of a step (sub), or - in the box of a
-   * class - its methods with their signatures, each followed by its data structures (sub).
-   */
-  lines: { text: string; sub: boolean }[];
+  /** Lines below the name: at the signature level, in the box of a class, its methods with their signatures. */
+  lines: string[];
   /** for the tooltip: the declarations as written and the types in full */
   tip: string;
 }
@@ -169,11 +169,13 @@ const MINI_H = 32;
 const MINI_GAP = 14;
 /** Width of a character of the code font in the diagram (12px), to size boxes and frames by their names. */
 const CHAR_W = 7.3;
-/** A line below the name of a box (signatures, data structures), the widest a box gets for them, a character of such a line. */
+/** A line below the name of a box (the signatures of a class), the widest a box gets for them, a character of such a line. */
 const LINE_H = 14;
 const MAX_BOX_W = 560;
 const LINE_CHAR_W = 6.4;
 const COL_GAP = 56;
+/** Padding of the drawing inside the diagram: the boxes start that much further in. */
+const DIAGRAM_PAD = 16;
 const ROW_GAP = 12;
 /** Indentation of the code blocks per call level (the cards scroll horizontally when it gets deep). */
 const INDENT = 56;
@@ -197,7 +199,7 @@ const EDGE_RUNS: EdgeRunStatus[] = ['none', 'partial', 'separate', 'tested'];
 @Component({
   selector: 'app-flow-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CodeBlock, Icon, NgTemplateOutlet, SequenceControls, SequenceDiagram, SymbolBadge],
+  imports: [CodeBlock, Icon, NgTemplateOutlet, SequenceControls, SequenceDiagram, SymbolBadge, ZoomControls],
   templateUrl: './flow-view.html',
   styleUrl: './flow-view.scss',
 })
@@ -207,9 +209,21 @@ export class FlowView {
 
   private readonly cards = viewChild.required<ElementRef<HTMLElement>>('cards');
   private readonly graph = viewChild.required<ElementRef<HTMLElement>>('graph');
+  protected readonly seqDiagram = viewChild(SequenceDiagram);
+  private readonly injector = inject(Injector);
+  /** Zoom of the call graph and of the sequence diagram, as chosen (buttons, Ctrl + wheel); the same for every flow. */
+  protected readonly graphZoom = signal(1);
+  protected readonly seqZoom = signal(1);
+  /** Playing in the call graph: the zoom that shows the current call whole (null = the zoom chosen). */
+  private readonly graphPlayZoom = signal<number | null>(null);
+  protected readonly graphShownZoom = computed(() => (this.player.index() > 0 ? this.graphPlayZoom() ?? this.graphZoom() : this.graphZoom()));
   protected readonly connectors = signal<Connector[]>([]);
   protected readonly railHeight = signal(0);
   protected readonly railWidth = signal(0);
+  private readonly hbar = viewChild.required<ElementRef<HTMLElement>>('hbar');
+  /** The code is wider than the view: the scrollbar sideways stays at the bottom of the editor (hbar). */
+  protected readonly cardsWide = signal(false);
+  protected readonly cardsWidth = signal(0);
   /** Left margin of the code blocks: room for one lane per (overlapping) connection. */
   protected readonly gutter = signal(MIN_GUTTER);
   protected readonly markers = Array.from({ length: EDGE_COLORS }, (_, i) => i + 1);
@@ -261,7 +275,6 @@ export class FlowView {
   protected readonly details: { id: MethodDetail; label: string; tip: string }[] = [
     { id: 'name', label: 'Namen', tip: 'Nur der Name jeder Methode' },
     { id: 'signature', label: 'Signatur', tip: 'Name mit Parametern und Rückgabetyp, in einer Schreibweise für alle Sprachen' },
-    { id: 'data', label: 'Daten', tip: 'Signatur und darunter die Datenstrukturen: die Felder der Typen, die die Methode nimmt und zurückgibt (soweit eine geänderte Datei sie deklariert)' },
   ];
 
   /** The flow's place: each step needs an ok here (a step can be part of several flows). */
@@ -348,24 +361,18 @@ export class FlowView {
    * here are a simple staircase by call depth: shown until the layout arrives, and kept if it cannot be loaded.
    */
   private readonly sketch = computed<{ frames: Box[]; boxes: Box[] }>(() => {
-    // how much of a method the boxes show: its name; from the signature level on its signature, and the data structures below
+    // how much of a method the boxes show: its name, or its signature
     const detail = this.store.methodDetail();
     const types = this.store.typesById();
-    const text = (n: Node) => methodText(this.nodeName(n.segment), false, n.segment.signature, detail, types);
-    const step = (n: Node) => {
-      const { label, data } = text(n);
-      return {
-        key: n.step.segmentId, ids: [n.step.segmentId], no: n.no, name: label, kind: n.segment.symbolKind,
-        hint: this.nodeHint(n.segment), area: this.areaOf(n.segment), quick: n.segment.category === 'quick-wins',
-        lines: data.map((line) => ({ text: line, sub: true })), tip: methodTooltip(n.segment.signature, types),
-      };
-    };
+    const text = (n: Node) => methodLabel(this.nodeName(n.segment), false, n.segment.signature, detail);
+    const step = (n: Node) => ({
+      key: n.step.segmentId, ids: [n.step.segmentId], no: n.no, name: text(n), kind: n.segment.symbolKind,
+      hint: this.nodeHint(n.segment), area: this.areaOf(n.segment), quick: n.segment.category === 'quick-wins',
+      lines: [] as string[], tip: methodTooltip(n.segment.signature, types),
+    });
     const cls = (g: { key: string; name: string; members: Node[] }) => {
       // the box of a class: at the name level its methods in one line, else a line per method with its signature
-      const lines = detail === 'name' ? [] : g.members.flatMap((m) => {
-        const { label, data } = text(m);
-        return [{ text: label, sub: false }, ...data.map((line) => ({ text: line, sub: true }))];
-      });
+      const lines = detail === 'name' ? [] : g.members.map((m) => text(m));
       return {
         key: g.key, ids: g.members.map((m) => m.step.segmentId), no: g.members[0].no, name: g.name, kind: 'class',
         hint: detail === 'name' ? g.members.map((m) => this.nodeName(m.segment)).join(', ') : '', area: this.areaOf(g.members[0].segment),
@@ -374,14 +381,14 @@ export class FlowView {
       };
     };
     const runs = this.hasRuns();
-    type Sized = { name: string; hint: string; area: string | null; lines: { text: string; sub: boolean }[] };
+    type Sized = { name: string; hint: string; area: string | null; lines: string[] };
     // a box grows with its lines: higher by a line each
     const linesHeight = (b: { lines: unknown[] }) => (b.lines.length ? b.lines.length * LINE_H + 4 : 0);
     // a box is as wide as its name (and, with `withHint`, the class and file in its second line) needs: never cut off;
-    // the lines below it (signatures, data) widen it up to MAX_BOX_W, beyond that they are cut
+    // the lines below it (signatures) widen it up to MAX_BOX_W, beyond that they are cut
     const widthFor = (b: Sized, chrome: number, least: number, withHint: boolean) => {
       const second = !withHint || !b.hint ? 0 : (areaLabel(b.area).length ? areaLabel(b.area).length * TAG_CHAR_W + 14 : 0) + b.hint.length * HINT_CHAR_W;
-      const lines = Math.max(0, ...b.lines.map((l) => (l.sub ? 12 : 0) + l.text.length * LINE_CHAR_W));
+      const lines = Math.max(0, ...b.lines.map((l) => l.length * LINE_CHAR_W));
       return Math.max(least, Math.round(chrome + Math.max(b.name.length * CHAR_W, second)), Math.min(MAX_BOX_W, Math.round(chrome + lines)));
     };
     // the staircase by call depth: each column as wide as its widest box, the rows one below the other
@@ -586,7 +593,10 @@ export class FlowView {
     }
     const { from, to } = ends;
     const edge = from && to && from !== to ? this.diagram().edges.find((e) => e.from === from && e.to === to) : undefined;
-    return { no: call.no, from, to, path: edge?.d ?? null, c: edge?.c ?? edgeColorIndex(call.edge) };
+    const frameOf = (key: string | null) => (key ? this.boxes().find((b) => b.key === key)?.frame ?? null : null);
+    return {
+      no: call.no, from, to, fromFrame: frameOf(from), toFrame: frameOf(to), path: edge?.d ?? null, c: edge?.c ?? edgeColorIndex(call.edge),
+    };
   });
   /** The connection the current call runs along, as a list of none or one: a new call draws a new line (and dot). */
   protected readonly playbackRuns = computed(() => {
@@ -704,16 +714,38 @@ export class FlowView {
       playing();
       untracked(() => this.player.reset());
     });
-    // Playing in the call graph: a new call brings the box it goes to into view (scrolls the diagram, not the page).
+    // Playing in the call graph: a new call brings the boxes it runs between into view - zoomed out as far as needed
+    // to see both, never further in than the zoom chosen - by scrolling the diagram, not the page.
     effect(() => {
       const call = this.currentCall();
-      const box = call ? untracked(() => this.boxes().find((b) => b.ids.includes(call.to))) : undefined;
-      if (box && untracked(() => this.diagramKind()) === 'graph') {
-        const el = this.graph().nativeElement;
-        const pad = 16; // padding of the diagram: the boxes start that much further in
-        el.scrollLeft = scrollToShow(el.scrollLeft, el.clientWidth, box.x + pad, box.x + pad + box.w);
-        el.scrollTop = scrollToShow(el.scrollTop, el.clientHeight, box.y + pad, box.y + pad + box.h);
+      const chosen = this.graphZoom();
+      const pb = this.playback();
+      // also when the call graph is switched to while a call is shown: it was hidden (and had no size) before
+      if (!call || !pb || this.diagramKind() !== 'graph') {
+        untracked(() => this.graphPlayZoom.set(null));
+        return;
       }
+      untracked(() => {
+        const ends = this.boxes().filter((b) => b.key === pb.from || b.key === pb.to);
+        if (!ends.length) {
+          return;
+        }
+        const span = {
+          x1: Math.min(...ends.map((b) => b.x)), y1: Math.min(...ends.map((b) => b.y)),
+          x2: Math.max(...ends.map((b) => b.x + b.w)), y2: Math.max(...ends.map((b) => b.y + b.h)),
+        };
+        const el = this.graph().nativeElement;
+        afterNextRender({ write: () => {
+          // measured once the diagram is shown: the view may have been hidden until now
+          const zoom = zoomToShow(span, el.clientWidth, el.clientHeight, chosen);
+          this.graphPlayZoom.set(zoom);
+          const at = (v: number) => (v + DIAGRAM_PAD) * zoom;
+          afterNextRender({ write: () => {
+            el.scrollLeft = scrollToShow(el.scrollLeft, el.clientWidth, at(span.x1), at(span.x2));
+            el.scrollTop = scrollToShow(el.scrollTop, el.clientHeight, at(span.y1), at(span.y2));
+          } }, { injector: this.injector });
+        } }, { injector: this.injector });
+      });
     });
     // Let the layout engine place the diagram whenever its boxes or connections change.
     effect(() => {
@@ -756,9 +788,13 @@ export class FlowView {
       this.store.collapseDone();
       this.store.diffMode();
       const host = this.cards().nativeElement;
-      const observer = new ResizeObserver(() => this.layoutConnectors());
+      const observer = new ResizeObserver(() => {
+        this.layoutConnectors();
+        this.measureCards();
+      });
       observer.observe(host);
       this.layoutConnectors();
+      this.measureCards();
       onCleanup(() => observer.disconnect());
     });
     // Another flow in the same view: the cards start at the left/top (only the editor scrolls vertically).
@@ -795,6 +831,44 @@ export class FlowView {
   /** Tooltip of a box: what the tests run in it, and the declarations of its methods with their types. */
   protected boxTitle(box: Box): string {
     return [this.runTitle(box.ids), this.store.methodDetail() === 'name' ? '' : box.tip].filter((x) => x).join('\n\n');
+  }
+
+  // ------------------------------------------------------------------ zoom of the call graph
+
+  protected setGraphZoom(zoom: number): void {
+    this.graphZoom.set(zoom);
+  }
+
+  /** The whole call graph into the view (at most 100 %). */
+  protected fitGraph(): void {
+    const el = this.graph().nativeElement;
+    const d = this.diagram();
+    this.graphZoom.set(fitZoom(d.width + 2 * DIAGRAM_PAD, d.height + 2 * DIAGRAM_PAD, el.clientWidth, el.clientHeight, 1));
+  }
+
+  /** Ctrl + wheel zooms the call graph around the pointer; the wheel alone scrolls. */
+  protected graphWheel(event: WheelEvent): void {
+    if (!event.ctrlKey && !event.metaKey) {
+      return;
+    }
+    event.preventDefault();
+    const el = this.graph().nativeElement;
+    const from = this.graphShownZoom();
+    const to = wheelZoom(from, event.deltaY);
+    const box = el.getBoundingClientRect();
+    const left = zoomAround(el.scrollLeft, event.clientX - box.left, from, to);
+    const top = zoomAround(el.scrollTop, event.clientY - box.top, from, to);
+    this.graphZoom.set(to);
+    this.graphPlayZoom.set(null);
+    afterNextRender({ write: () => {
+      el.scrollLeft = left;
+      el.scrollTop = top;
+    } }, { injector: this.injector });
+  }
+
+  /** What a call gives back (its return type), for the line that says which call is played; null = nothing. */
+  protected returnOf(call: { to: string }): string | null {
+    return returnType(this.store.segments().get(call.to)?.signature);
   }
 
   /** Call graph or sequence. */
@@ -980,9 +1054,11 @@ export class FlowView {
     if (!drag) {
       return;
     }
-    let dx = event.clientX - drag.start.x;
-    let dy = event.clientY - drag.start.y;
-    if (!drag.moved && Math.hypot(dx, dy) < 4) {
+    // the pointer moves in screen px, the boxes in px of the drawing
+    const zoom = this.graphShownZoom();
+    let dx = (event.clientX - drag.start.x) / zoom;
+    let dy = (event.clientY - drag.start.y) / zoom;
+    if (!drag.moved && Math.hypot(dx, dy) * zoom < 4) {
       return;
     }
     drag.moved = true;
@@ -1240,6 +1316,31 @@ export class FlowView {
       flashLine(el, line);
     }
     return true;
+  }
+
+  /** How wide the code is, for the scrollbar at the bottom of the editor. */
+  private measureCards(): void {
+    const host = this.cards().nativeElement;
+    this.cardsWidth.set(host.scrollWidth);
+    this.cardsWide.set(host.scrollWidth > host.clientWidth + 1);
+    this.hbar().nativeElement.scrollLeft = host.scrollLeft;
+  }
+
+  /** The code and its scrollbar at the bottom of the editor move together. */
+  protected cardsScrolled(): void {
+    const left = this.cards().nativeElement.scrollLeft;
+    const bar = this.hbar().nativeElement;
+    if (bar.scrollLeft !== left) {
+      bar.scrollLeft = left;
+    }
+  }
+
+  protected hbarScrolled(): void {
+    const left = this.hbar().nativeElement.scrollLeft;
+    const host = this.cards().nativeElement;
+    if (host.scrollLeft !== left) {
+      host.scrollLeft = left;
+    }
   }
 
   protected scrollToParent(node: Node): void {

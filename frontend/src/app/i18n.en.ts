@@ -819,8 +819,20 @@ export const EN: Record<string, string> = {
   'Signatur': 'Signature',
   'Nur der Name jeder Methode': 'Only the name of every method',
   'Name mit Parametern und Rückgabetyp, in einer Schreibweise für alle Sprachen': 'Name with parameters and return type, in one notation for all languages',
-  'Signatur und darunter die Datenstrukturen: die Felder der Typen, die die Methode nimmt und zurückgibt (soweit eine geänderte Datei sie deklariert)':
-    'Signature and below it the data structures: the fields of the types the method takes and returns (as far as a changed file declares them)',
+
+  // ------------------------------------------------------------------ what a call gives back
+  'Was der Aufruf zurückgibt: am Ende des Aufrufs, nach allen Aufrufen, die er selbst macht': 'What the call returns: at the end of the call, after all the calls it makes itself',
+  'an {name}': 'to {name}',
+  'Rückgabe von Aufruf {no}: {to} gibt {type} an {from} zurück': 'Return of call {no}: {to} returns {type} to {from}',
+  'Nach dem letzten Aufruf, den {to} macht': 'After the last call {to} makes',
+
+  // ------------------------------------------------------------------ zoom of the diagrams
+  'Verkleinern (Strg + Mausrad)': 'Zoom out (Ctrl + mouse wheel)',
+  'Verkleinern': 'Zoom out',
+  'Auf 100 % zurücksetzen': 'Reset to 100%',
+  'Vergrössern (Strg + Mausrad)': 'Zoom in (Ctrl + mouse wheel)',
+  'Vergrössern': 'Zoom in',
+  'Ganzes Diagramm einpassen': 'Fit the whole diagram',
 
   // ------------------------------------------------------------------ code block
   "Ausklappen": "Expand",

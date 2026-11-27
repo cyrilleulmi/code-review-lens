@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SequenceEdge, flowSequence } from './flow-sequence';
-import { SEQUENCE_DETAIL, SEQUENCE_HEAD, SEQUENCE_ROW, labelWidth, sequenceLayout, textWidth } from './sequence-layout';
+import { SEQUENCE_HEAD, SEQUENCE_RETURN_ROW, SEQUENCE_ROW, labelWidth, returnWidth, sequenceLayout } from './sequence-layout';
 
 const steps = (...list: [string, string | null][]) => list.map(([segmentId, parentSegmentId]) => ({ segmentId, parentSegmentId }));
 const call = (from: string, to: string, lines: number | number[]): SequenceEdge => {
@@ -105,37 +105,50 @@ describe('sequenceLayout', () => {
     expect(entries[0].y2).toBeLessThan(entries[1].y1);
   });
 
-  it('makes a row with lines of detail higher and moves the rows below it down', () => {
-    const data = ['PlayerUpdate { jerseyNumber: number | null }', 'PlayerDetail { id: string, name: string }'];
-    const detailed = sequenceLayout(sequence, byPrefix, method, (id) => (id === 'Api.set' ? data : []));
-    const [entry, set, update] = detailed.messages;
+  describe('what a call gives back', () => {
+    // set and update give something back, the others nothing
+    const back = sequenceLayout(sequence, byPrefix, method, (c) => (c.no === 1 ? 'Result' : c.no === 2 ? 'PlayerDetail' : null));
+    const row = (no: number, ret: boolean) => back.messages.find((m) => m.call?.no === no && m.ret === ret)!;
 
-    expect(entry.h).toBe(SEQUENCE_ROW);
-    expect(set.details).toEqual(data);
-    expect(set.h).toBeGreaterThanOrEqual(SEQUENCE_ROW + 2 * SEQUENCE_DETAIL);
-    expect(set.top).toBe(layout.messages[1].top);
-    expect(set.y).toBe(layout.messages[1].y);
-    // the details stand below the arrow, inside the row
-    expect(set.dy).toBeGreaterThan(set.y);
-    expect(set.dy + SEQUENCE_DETAIL).toBeLessThan(set.top + set.h);
-    expect(update.top).toBe(set.top + set.h);
-    expect(update.y - layout.messages[2].y).toBe(set.h - SEQUENCE_ROW);
-    expect(detailed.height - layout.height).toBe(set.h - SEQUENCE_ROW);
-  });
+    it('has an arrow back after the last call made while the step runs, innermost first', () => {
+      expect(back.messages.map((m) => [m.call?.no ?? 0, m.ret, m.label])).toEqual([
+        [0, false, 'save'], [1, false, 'set'], [2, false, 'update'], [3, false, 'validate'], [4, false, 'isTaken'],
+        [2, true, 'PlayerDetail'], [1, true, 'Result'], [5, false, 'done'],
+      ]);
+      // the arrow back points at the caller
+      expect(row(2, true).to).toBe('Api.set');
+    });
 
-  it('leaves room between the lifelines for the widest line of detail, and runs the bars to the end of the rows', () => {
-    const wide = 'PlayerDetail { id: string, name: string, jerseyNumber: number | null, team: Team }';
-    const detailed = sequenceLayout(sequence, byPrefix, method, (id) => (id === 'Api.set' ? [wide] : id === 'Player.isTaken' ? ['x'] : []));
-    const set = detailed.messages[1];
+    it('gives an arrow back a lower row and moves the rows below it down', () => {
+      const ret = row(2, true);
+      expect(ret.h).toBe(SEQUENCE_RETURN_ROW);
+      expect(ret.top).toBe(row(4, false).top + SEQUENCE_ROW);
+      expect(row(5, false).top).toBe(row(1, true).top + SEQUENCE_RETURN_ROW);
+      expect(back.height - layout.height).toBe(2 * SEQUENCE_RETURN_ROW);
+    });
 
-    expect(textWidth('set', [wide])).toBeGreaterThan(labelWidth('set'));
-    expect(Math.abs(set.x2 - set.x1)).toBeGreaterThanOrEqual(textWidth('set', [wide]));
-    expect(set.dx).toBeGreaterThan(Math.min(set.x1, set.x2));
-    // update runs until isTaken is over: its bar reaches below the details of that row
-    const isTaken = detailed.messages[4];
-    const bar = detailed.activations.find((a) => a.no === 2)!;
-    expect(bar.y2).toBeGreaterThan(isTaken.dy);
-    expect(bar.y2).toBeLessThanOrEqual(isTaken.top + isTaken.h);
+    it('runs back the way the call went, from the step called to its caller, with room for its label', () => {
+      const call = row(2, false);
+      const ret = row(2, true);
+      expect(ret.self).toBe(false);
+      expect(ret.x1).toBe(call.x2);
+      expect(ret.x2).toBe(call.x1);
+      expect(Math.abs(ret.x2 - ret.x1)).toBeGreaterThanOrEqual(returnWidth('PlayerDetail'));
+      expect(ret.lx).toBeGreaterThanOrEqual(Math.min(ret.x1, ret.x2));
+      expect(ret.lx + returnWidth('PlayerDetail')).toBeLessThanOrEqual(Math.max(ret.x1, ret.x2));
+    });
+
+    it('ends the bar of a step with its arrow back, nested bars inside the ones around them', () => {
+      const bar = (no: number) => back.activations.find((a) => a.no === no)!;
+      expect(bar(2).y2).toBeGreaterThan(row(4, false).top + SEQUENCE_ROW);
+      expect(bar(2).y2).toBeLessThan(row(2, true).top + SEQUENCE_RETURN_ROW);
+      expect(bar(1).y2).toBeGreaterThan(bar(2).y2);
+      expect(bar(1).y2).toBeLessThan(row(5, false).top);
+      // validate gives nothing back: its bar still ends before the arrow back of update, the step around it
+      expect(bar(3).y2).toBeLessThan(row(2, true).y);
+      // the entry point runs on below all of it
+      expect(bar(0).y2).toBeGreaterThan(row(5, false).y);
+    });
   });
 
   it('is empty for an empty sequence', () => {

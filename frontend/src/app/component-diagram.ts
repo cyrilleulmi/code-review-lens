@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component as NgComponent, DestroyRef, ElementRef, computed, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component as NgComponent, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, linkedSignal, signal, untracked,
+} from '@angular/core';
 import { Component } from './api';
 import { FRAME_PADDING, Layout, Rect, curvePath, frameAround, layoutFlow, packRows, routePath } from './flow-layout';
 import { stepName } from './flow-classes';
@@ -9,6 +11,8 @@ import { areaColor } from './look';
 import { ReviewStore } from './review.store';
 import { SequenceControls } from './sequence-controls';
 import { SequencePlayer, scrollToShow } from './sequence-player';
+import { returnType } from './method-detail';
+import { ZoomControls, fitZoom, wheelZoom, zoomAround, zoomToShow } from './zoom';
 
 const NO_SEQUENCE: FlowSequence = { entries: [], calls: [] };
 
@@ -26,6 +30,9 @@ interface Frame extends Rect {
   id: string;
   label: string;
 }
+
+/** Margin of the drawing in its scroll container. */
+const CANVAS_MARGIN = 14;
 
 /** Width of a component: room for its whole name. */
 function boxWidth(name: string): number {
@@ -75,7 +82,7 @@ const LOOSE_GAP = 22;
 @NgComponent({
   selector: 'app-component-diagram',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, SequenceControls],
+  imports: [Icon, SequenceControls, ZoomControls],
   template: `
     @let pb = playback();
     <div class="bar">
@@ -102,6 +109,7 @@ const LOOSE_GAP = 22;
       <button type="button" class="ftool" [class.on]="hideIsolated()" (click)="hideIsolated.set(!hideIsolated())"
               [title]="t('Komponenten ohne Aufrufbeziehung ausblenden')"><app-icon name="eyeOff" [size]="12" /> {{ t('Ohne Verbindung ausblenden') }}</button>
       <span class="legend"><i class="l-call"></i> {{ t('Aufruf') }} <i class="l-http"></i> REST/HTTP</span>
+      <app-zoom-controls [zoom]="shownZoom()" (zoomChange)="setZoom($event)" (fit)="fit()" />
     </div>
     @if (flowId()) {
       <div class="seq-bar">
@@ -112,6 +120,9 @@ const LOOSE_GAP = 22;
             <b class="who">{{ stepName(c.to) }}</b>
             @if (c.http) {
               <span class="via">HTTP {{ c.via }}</span>
+            }
+            @if (returnOf(c.to); as r) {
+              <span class="via ret" [title]="t('Was der Aufruf zurückgibt: am Ende des Aufrufs, nach allen Aufrufen, die er selbst macht')">↩ {{ r }}</span>
             }
             @if (pb?.from && pb?.from === pb?.to) {
               <span class="via">{{ t('innerhalb der Komponente') }}</span>
@@ -129,8 +140,8 @@ const LOOSE_GAP = 22;
     @if (boxes().length === 0) {
       <p class="empty">{{ t('Keine Komponenten mit Code-Änderungen.') }}</p>
     } @else {
-      <div class="scroll" [class.sequence]="!!flowId()" [class.playing]="!!pb" [style.--seq-dur]="player.duration() + 'ms'">
-        <div class="canvas" [style.width.px]="size().w" [style.height.px]="size().h">
+      <div class="scroll" [class.sequence]="!!flowId()" [class.playing]="!!pb" [style.--seq-dur]="player.duration() + 'ms'" (wheel)="wheel($event)">
+        <div class="canvas" [style.width.px]="size().w" [style.height.px]="size().h" [style.zoom]="shownZoom()">
           @for (f of frames(); track f.id) {
             <div class="frame" [style.left.px]="f.x" [style.top.px]="f.y" [style.width.px]="f.w" [style.height.px]="f.h" [style.--area]="areaColor(f.id)">
               <span class="frame-head">{{ t(f.label) }}</span>
@@ -197,7 +208,8 @@ const LOOSE_GAP = 22;
     .legend i { display: inline-block; width: 18px; border-top: 2px solid var(--fg-dim); }
     .legend i.l-http { border-top: 2px dashed var(--fg-dim); }
     .empty { color: var(--fg-muted); padding: 12px; margin: 0; }
-    .scroll { overflow: auto; max-height: 78vh; }
+    /* never taller than the editor below the bars: its scrollbars stay in view with it */
+    .scroll { overflow: auto; max-height: min(78vh, calc(100vh - 190px)); }
     .canvas { position: relative; margin: 14px; }
     .frame { position: absolute; box-sizing: border-box; border: 1px solid color-mix(in srgb, var(--area) 40%, var(--border)); border-radius: 12px;
       background: color-mix(in srgb, var(--area) 6%, transparent); }
@@ -237,10 +249,15 @@ const LOOSE_GAP = 22;
     /* a flow is chosen: the rest of the diagram steps back; playing: what the flow has not reached yet is faded */
     .sequence .node { transition: opacity 0.25s, border-color 0.15s, box-shadow 0.15s; }
     .sequence .seq-off { opacity: 0.22; }
-    .playing .seq-later { opacity: 0.4; }
-    .playing .seq-off { opacity: 0.15; }
-    .node.seq-from { border-color: var(--accent); border-left-color: var(--area); }
-    .node.seq-to { border-color: var(--accent); border-left-color: var(--area); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+    /* playing: the two components of the current call stand out, the rest of the flow steps back */
+    .playing .node:not(.seq-from):not(.seq-to) { opacity: 0.45; }
+    .playing .edge { opacity: 0.4; }
+    .playing .seq-later, .playing .node.seq-later:not(.seq-from):not(.seq-to) { opacity: 0.25; }
+    .playing .seq-off, .playing .node.seq-off:not(.seq-from):not(.seq-to) { opacity: 0.12; }
+    .node.seq-from, .node.seq-to { z-index: 2; border-color: var(--accent); border-left-color: var(--area); outline: 1px solid var(--accent); outline-offset: -2px;
+      background: color-mix(in srgb, var(--accent) 12%, var(--bg-editor)); }
+    .node.seq-from { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
+    .node.seq-to { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 40%, transparent), 0 4px 16px rgba(0, 0, 0, 0.35);
       animation: seq-arrive-a var(--seq-dur) ease-out; }
     /* two names for the same animation: it starts again when the next call arrives at the same component */
     .node.seq-to.seq-even { animation-name: seq-arrive-b; }
@@ -255,6 +272,10 @@ export class ComponentDiagram {
   protected readonly hideIsolated = signal(false);
   protected readonly focus = signal<string | null>(null);
   protected readonly hovered = signal<string | null>(null);
+  private readonly injector = inject(Injector);
+  /** Zoom as chosen (buttons, Ctrl + wheel), and while playing the zoom that shows the current call whole. */
+  protected readonly zoom = signal(1);
+  private readonly playZoom = signal<number | null>(null);
 
   // ------------------------------------------------------------------ Abfolge: a data flow played back
   private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
@@ -279,6 +300,7 @@ export class ComponentDiagram {
   });
   protected readonly player = new SequencePlayer(() => this.sequence().calls.length);
   protected readonly currentCall = computed(() => this.sequence().calls[this.player.index() - 1] ?? null);
+  protected readonly shownZoom = computed(() => (this.player.index() > 0 ? this.playZoom() ?? this.zoom() : this.zoom()));
   private componentOf(segmentId: string): string | null {
     return this.store.componentBySegment().get(segmentId)?.id ?? null;
   }
@@ -398,16 +420,33 @@ export class ComponentDiagram {
       playing();
       untracked(() => this.player.reset());
     });
-    // Playing: a new call brings the component it goes to into view (scrolls the diagram, not the page).
+    // Playing: a new call brings the components it runs between into view - zoomed out as far as needed to see both,
+    // never further in than the zoom chosen - by scrolling the diagram, not the page.
     effect(() => {
-      const call = this.currentCall();
-      const box = call ? untracked(() => this.boxes().find((b) => b.c.id === this.componentOf(call.to))) : undefined;
-      const el = this.host.nativeElement.querySelector<HTMLElement>('.scroll');
-      if (box && el) {
-        const canvas = 14; // margin of the canvas: the components start that much further in
-        el.scrollLeft = scrollToShow(el.scrollLeft, el.clientWidth, box.x + canvas, box.x + canvas + W);
-        el.scrollTop = scrollToShow(el.scrollTop, el.clientHeight, box.y + canvas, box.y + canvas + H);
+      const pb = this.playback();
+      const chosen = this.zoom();
+      const el = untracked(() => this.scroller());
+      if (!pb || !el) {
+        untracked(() => this.playZoom.set(null));
+        return;
       }
+      untracked(() => {
+        const ends = this.boxes().filter((b) => b.c.id === pb.from || b.c.id === pb.to);
+        if (!ends.length) {
+          return;
+        }
+        const span = {
+          x1: Math.min(...ends.map((b) => b.x)), y1: Math.min(...ends.map((b) => b.y)),
+          x2: Math.max(...ends.map((b) => b.x + b.w)), y2: Math.max(...ends.map((b) => b.y)) + H,
+        };
+        const zoom = zoomToShow(span, el.clientWidth, el.clientHeight, chosen);
+        this.playZoom.set(zoom);
+        afterNextRender({ write: () => {
+          const at = (v: number) => (v + CANVAS_MARGIN) * zoom;
+          el.scrollLeft = scrollToShow(el.scrollLeft, el.clientWidth, at(span.x1), at(span.x2));
+          el.scrollTop = scrollToShow(el.scrollTop, el.clientHeight, at(span.y1), at(span.y2));
+        } }, { injector: this.injector });
+      });
     });
     // Let the layout engine place the connected part of the diagram whenever the components or connections shown change.
     effect(() => {
@@ -431,6 +470,49 @@ export class ComponentDiagram {
         });
       });
     });
+  }
+
+  /** The scroll container of the drawing (none while there are no components). */
+  private scroller(): HTMLElement | null {
+    return this.host.nativeElement.querySelector<HTMLElement>('.scroll');
+  }
+
+  protected setZoom(zoom: number): void {
+    this.zoom.set(zoom);
+  }
+
+  /** The whole diagram into the view (at most 100 %). */
+  protected fit(): void {
+    const el = this.scroller();
+    if (el) {
+      const { w, h } = this.size();
+      this.zoom.set(fitZoom(w + 2 * CANVAS_MARGIN, h + 2 * CANVAS_MARGIN, el.clientWidth, el.clientHeight, 1));
+    }
+  }
+
+  /** Ctrl + wheel zooms around the pointer; the wheel alone scrolls. */
+  protected wheel(event: WheelEvent): void {
+    const el = this.scroller();
+    if ((!event.ctrlKey && !event.metaKey) || !el) {
+      return;
+    }
+    event.preventDefault();
+    const from = this.shownZoom();
+    const to = wheelZoom(from, event.deltaY);
+    const box = el.getBoundingClientRect();
+    const left = zoomAround(el.scrollLeft, event.clientX - box.left, from, to);
+    const top = zoomAround(el.scrollTop, event.clientY - box.top, from, to);
+    this.zoom.set(to);
+    this.playZoom.set(null);
+    afterNextRender({ write: () => {
+      el.scrollLeft = left;
+      el.scrollTop = top;
+    } }, { injector: this.injector });
+  }
+
+  /** What a call to this step gives back (its return type); null = nothing. */
+  protected returnOf(segmentId: string): string | null {
+    return returnType(this.store.segments().get(segmentId)?.signature);
   }
 
   /**

@@ -128,10 +128,16 @@ Für den PoC wurden in drei eigenen Repos **Draft-PRs** erstellt. Alle tragen **
 **Detail der Methoden (FR-UI-24, FR-ANA-28)** – an smart-code-review#11, Flow `resolve → resolveThread (+4)`:
 
 * «Signatur», Ebene «Klassen + Methoden»: `resolve(thread: Thread): void`, `resolveThread(pr: PrKey, thread: string, …): Observable<Comment[]>` (gekürzt, der Tooltip zeigt die ganze Deklaration), `loadStatus(): void`.
-* «Daten»: unter `resolve` steht `Thread { root: Comment, replies: Comment[] }`, unter `Api.resolveThread` stehen `PrKey { provider: string, owner: string, repo: string, number: number }` und `Comment { id: number, kind: 'review' | 'issue', path: string | null, +11 }`. `PrKey` und `Comment` sind in `api.ts` deklariert, `Thread` in `code-block.ts`.
-* Ebene «Klassen» mit «Signatur» oder «Daten»: Der Knoten `CodeBlock` listet `resolve(…)` und `toggleThread(…)` zeilenweise, `ReviewStore` seine drei Methoden.
-* «Abfolge» mit «Daten»: Die Zeilen mit Datenstrukturen sind höher, die Liste links bleibt Zeile für Zeile daneben; `CodeBlock` und `Api` stehen weiter auseinander, damit die Signatur Platz hat.
-* Im Backend-Flow `approve → approve → requirePullRequest (+2)` (Java): `ReviewResource.approve(@PathParam("provider") String provider, …)` erscheint als `approve(provider: String, owner: String, …): PrStatus`, darunter die Records `ApprovalRequest { approved: boolean }` und `PrStatus` aus `Model.java` mit ihren Komponenten; `ReviewService.approve(PrRef ref, boolean approved)` gibt `Model.PrStatus` zurück und zeigt `PrRef` und `PrStatus` (der qualifizierte Name wird aufgelöst).
+* Tooltip eines Knotens: unter der Deklaration von `resolve` steht `Thread { root: Comment, replies: Comment[] }`, bei `Api.resolveThread` stehen `PrKey { provider: string, owner: string, repo: string, number: number }` und `Comment` mit seinen Feldern. `PrKey` und `Comment` sind in `api.ts` deklariert, `Thread` in `code-block.ts`.
+* Ebene «Klassen» mit «Signatur»: Der Knoten `CodeBlock` listet `resolve(…)` und `toggleThread(…)` zeilenweise, `ReviewStore` seine drei Methoden.
+* «Abfolge» mit «Signatur»: `CodeBlock` und `Api` stehen weiter auseinander, damit die Signatur Platz hat.
+* Im Backend-Flow `approve → approve → requirePullRequest (+2)` (Java): `ReviewResource.approve(@PathParam("provider") String provider, …)` erscheint als `approve(provider: String, owner: String, …): PrStatus`, im Tooltip die Records `ApprovalRequest { approved: boolean }` und `PrStatus` aus `Model.java` mit ihren Komponenten; `ReviewService.approve(PrRef ref, boolean approved)` gibt `Model.PrStatus` zurück und zeigt `PrRef` und `PrStatus` (der qualifizierte Name wird aufgelöst).
+
+**Rückgaben, Zoom und Hervorhebung beim Abspielen (FR-UI-22, -23, -25)** – an spongecoach#13, Flow `saveJerseyNumber → setJerseyNumber → update → validateJerseyNumber (+2)`:
+
+* Abfolge (Standardansicht): nach `isInRange` und `isJerseyNumberTaken` je eine Zeile «↩ boolean an PlayerResource.validateJerseyNumber», nach dem letzten inneren Aufruf «↩ PlayerDetailDto an PlayerApiService.setJerseyNumber» und «↩ Observable<PlayerDetail> an PlayerView.saveJerseyNumber»; `validateJerseyNumber` (`void`) hat keinen Pfeil zurück.
+* Abspielen bei Aufruf 3 (`update` → `validateJerseyNumber`, innerhalb `PlayerResource`): Das Sequenzdiagramm scrollt so, dass Schleife und Beschriftung ganz im Bild sind; im Aufrufgraph sind `update` und `validateJerseyNumber` hervorgehoben, die anderen Knoten treten zurück.
+* Zoom: Strg + Mausrad und die Knöpfe in allen drei Diagrammen; «Einpassen» zeigt den ganzen Aufrufgraph.
 
 ## Ports & Adapters
 

@@ -5,15 +5,23 @@
 .diagram {
   position: relative;
   margin: 0 0 20px;
-  padding: 16px;
   overflow: auto;
-  /* a big flow keeps the code below in reach: the diagram scrolls inside */
-  max-height: 78vh;
+  /* a big flow keeps the code below in reach: the diagram scrolls inside, never taller than the editor below the
+     bars of the flow, so its scrollbars are in view together with it */
+  max-height: min(78vh, calc(100vh - 210px));
+  min-height: 160px;
   background:
     radial-gradient(circle at 1px 1px, var(--tint-dots) 1px, transparent 0) 0 0 / 16px 16px,
     var(--bg-panel-2);
   border: 1px solid var(--border);
   border-radius: 10px;
+}
+
+/* the drawing at its zoom (CSS zoom: the scroll container keeps its size, its scrollbars follow the drawing) */
+.zoomed {
+  position: relative;
+  width: max-content;
+  padding: 16px;
 
   > svg,
   > .node {
@@ -262,18 +270,13 @@
     margin-top: 3px;
   }
 
-  /* from the signature level on: the methods of a class with their signatures, and (sub) the data structures */
+  /* at the signature level: the methods of a class with their signatures */
   .more {
     color: var(--fg);
     font: 400 10.5px/14px var(--font-code);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-
-    &.sub {
-      padding-left: 12px;
-      color: var(--fg-muted);
-    }
   }
 
   .cnt {
@@ -328,6 +331,12 @@
   overflow-x: auto;
   /* only the editor scrolls vertically: a scrolled-away inside hid the blocks of the next flow */
   overflow-y: hidden;
+  /* its own scrollbar would stand below the last block, out of view: .hbar stands in for it */
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 
   /* a card: one step, or a class with its steps */
   > .unit {
@@ -1000,17 +1009,44 @@
     transition: opacity 0.25s, border-color 0.15s, box-shadow 0.15s;
   }
 
-  .seq-later {
-    opacity: 0.35;
+  /* everything but the two boxes of the current call steps back; what comes only later even more */
+  .node:not(.seq-from):not(.seq-to),
+  .frame:not(.seq-hit) {
+    opacity: 0.5;
+  }
+
+  .edge {
+    opacity: 0.45;
+  }
+
+  .seq-later,
+  .node.seq-later:not(.seq-from):not(.seq-to),
+  .frame.seq-later:not(.seq-hit) {
+    opacity: 0.22;
+  }
+
+  .frame.seq-hit {
+    border-color: color-mix(in srgb, var(--accent) 60%, var(--node-border));
+    border-left-color: var(--area, var(--accent));
+  }
+
+  .node.seq-from,
+  .node.seq-to {
+    z-index: 2;
+    /* a stronger outline without a wider border: nothing inside the box moves */
+    outline: 1px solid var(--accent);
+    outline-offset: -2px;
+    border-color: var(--accent);
+    border-left-color: var(--area, var(--accent));
+    background: color-mix(in srgb, var(--accent) 12%, var(--bg-editor));
   }
 
   .node.seq-from {
-    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
   }
 
   .node.seq-to {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 40%, transparent), 0 4px 16px rgba(0, 0, 0, 0.35);
     animation: seq-arrive-a var(--seq-dur) ease-out;
   }
 
@@ -1028,4 +1064,23 @@
   width: 0;
   height: 0;
   pointer-events: none;
+}
+
+/* the scrollbar of the code sideways: sticks to the bottom of the editor while the code is in view */
+.hbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin: -32px 0 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--bg-editor);
+
+  > div {
+    height: 1px;
+  }
+}
+
+.hbar[hidden] {
+  display: none;
 }

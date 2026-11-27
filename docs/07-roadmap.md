@@ -50,7 +50,7 @@ Mögliche zukünftige Funktionen, grob nach Nutzen geordnet. Verbesserungen am B
 | F-17 | **Weitere Sprachen** | Python (Funktionen, pytest), Rust, PHP, Ruby: Symbole, Testfälle, Aufrufe. | ★★ | M pro Sprache |
 | F-18 | **Abfolge: Bedingungen und Schleifen** | Die Abfolge (FR-UI-22) kennt nur die Reihenfolge der Aufrufzeilen. Aus der Einrückung bzw. den Klammern um die Aufrufstelle erkennen, ob sie in `if`/`else`, `for`/`while`, `try`/`catch` oder einem Callback (`subscribe`, `then`, Lambda) steht, und im Sequenzdiagramm als Rahmen (`alt`, `loop`, `opt`) bzw. als asynchronen Pfeil zeigen. Braucht die Blockstruktur der Funktion (heute nur Zeilen), am besten mit F-14. | ★★ | M |
 | F-19 | **Abfolge exportieren** | Sequenzdiagramm eines Flows als Mermaid (`sequenceDiagram`) oder PlantUML kopieren – für PR-Beschreibung, Kommentar oder Doku (passt zu F-23 und F-07). Die Daten liefert `flow-sequence.ts` bereits. | ★★ | S |
-| F-24 | **Typen aus unveränderten Dateien** | Die Detailstufe «Daten» (FR-UI-24) kennt nur Typen, die eine geänderte Datei deklariert. Die Dateien der übrigen genannten Typen über die Dateiliste des Repos nach Namen auswählen und nachladen (wie die bestehenden Tests, FR-ANA-20, mit Obergrenze), damit auch ein unverändertes DTO seine Felder zeigt; geänderte Felder eines Typs im Diagramm hervorheben. | ★★ | M |
+| F-24 | **Typen aus unveränderten Dateien** | Die Tooltips der Signaturen (FR-UI-24) kennen nur Typen, die eine geänderte Datei deklariert. Die Dateien der übrigen genannten Typen über die Dateiliste des Repos nach Namen auswählen und nachladen (wie die bestehenden Tests, FR-ANA-20, mit Obergrenze), damit auch ein unverändertes DTO seine Felder zeigt; geänderte Felder eines Typs hervorheben. | ★★ | M |
 
 ## Repository-Modus
 

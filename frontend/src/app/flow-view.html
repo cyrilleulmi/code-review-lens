@@ -139,10 +139,12 @@
       </button>
     }
     <span class="hint">{{ t('Knoten und Klassen lassen sich ziehen') }}</span>
+    <app-zoom-controls [zoom]="graphShownZoom()" (zoomChange)="setGraphZoom($event)" (fit)="fitGraph()" />
   } @else {
     <ng-container [ngTemplateOutlet]="methodDetail" />
     <span class="spacer"></span>
     <span class="hint">{{ t('Klick auf einen Aufruf zeigt ihn; die Zeilennummer springt zur Aufrufstelle') }}</span>
+    <app-zoom-controls [zoom]="seqDiagram()?.shownZoom() ?? seqZoom()" (zoomChange)="seqZoom.set($event)" (fit)="seqDiagram()?.fit()" />
   }
 </div>
 
@@ -156,6 +158,9 @@
       <b class="who">{{ stepName(c.to) }}</b>
       @if (c.http) {
         <span class="via">HTTP {{ c.via }}</span>
+      }
+      @if (returnOf(c); as r) {
+        <span class="via ret" [title]="t('Was der Aufruf zurückgibt: am Ende des Aufrufs, nach allen Aufrufen, die er selbst macht')">↩ {{ r }}</span>
       }
       <button type="button" class="ftool" (click)="openTarget({ segmentId: c.from, line: c.line })"
               [title]="c.line != null ? t('Zur Aufrufstelle im Code springen') : t('Zum Code des Aufrufers springen')">
@@ -178,19 +183,20 @@
 
 @if (diagramKind() === 'sequence') {
   <app-sequence-diagram [sequence]="sequence()" [current]="player.index()" [duration]="player.duration()" [stepOf]="stepOf()"
-                        [detail]="store.methodDetail()"
+                        [detail]="store.methodDetail()" [(zoom)]="seqZoom"
                         (pick)="pickCall($event)" (open)="openTarget($event)" />
 }
 
 @let pb = playback();
-<div class="diagram" #graph role="list" [class.dragging]="dragging()" [hidden]="diagramKind() !== 'graph'"
-     [class.playing]="!!pb" [style.--seq-dur]="player.duration() + 'ms'">
+<div class="diagram" #graph [class.dragging]="dragging()" [hidden]="diagramKind() !== 'graph'"
+     [class.playing]="!!pb" [style.--seq-dur]="player.duration() + 'ms'" (wheel)="graphWheel($event)">
+ <div class="zoomed" role="list" [style.zoom]="graphShownZoom()">
   @for (f of frames(); track f.key) {
     @let fp = progressOf(f.ids);
     @let fl = accepted(fp);
     <div class="frame" [style.left.px]="f.x" [style.top.px]="f.y" [style.width.px]="f.w" [style.height.px]="f.h" [style.--area]="areaColor(f.area)"
          [class.done]="fl !== 'open'" [class.acc-all]="fl === 'all'" [class.off]="isOff(f.ids)" [class.root]="focused() === f.key"
-         [class.seq-later]="frameLater(f.ids)">
+         [class.seq-later]="frameLater(f.ids)" [class.seq-hit]="!!pb && (pb.fromFrame === f.key || pb.toFrame === f.key)">
       <div class="frame-head" role="button" tabindex="0" [title]="f.hint"
            (mouseenter)="hover(f.ids)" (mouseleave)="hover(null)" (click)="openBox(f)" (keydown.enter)="openBox(f)"
            (pointerdown)="dragStart($event, f.ids)" (pointermove)="dragMove($event)" (pointerup)="dragEnd($event)" (pointercancel)="dragEnd($event)">
@@ -280,7 +286,7 @@
             {{ b.hint }}</span>
         }
         @for (line of b.lines; track $index) {
-          <span class="more" [class.sub]="line.sub">{{ line.text }}</span>
+          <span class="more">{{ line }}</span>
         }
       </span>
       @if (run) {
@@ -305,6 +311,7 @@
       </span>
     </div>
   }
+ </div>
 </div>
 
 <div class="level-bar">
@@ -332,7 +339,7 @@
   </div>
 </div>
 
-<div class="cards" #cards>
+<div class="cards" #cards (scroll)="cardsScrolled()">
   <svg class="rails" [attr.height]="railHeight()" [attr.width]="railWidth()" aria-hidden="true">
     <defs>
       @for (m of markers; track m) {
@@ -506,4 +513,8 @@
       </div>
     }
   }
+</div>
+<!-- the scrollbar of the code sideways: at the bottom of the editor while the code is in view, not below its last block -->
+<div class="hbar" #hbar [hidden]="!cardsWide()" (scroll)="hbarScrolled()" aria-hidden="true">
+  <div [style.width.px]="cardsWidth()"></div>
 </div>

@@ -100,7 +100,7 @@ export interface FlowPage {
   hiddenAreas: ReadonlySet<string>;
 }
 
-const FLOW_PAGE_DEFAULT: FlowPage = { diagram: 'graph', callsOnly: false, level: 'combined', code: null, hiddenAreas: new Set() };
+const FLOW_PAGE_DEFAULT: FlowPage = { diagram: 'sequence', callsOnly: false, level: 'combined', code: null, hiddenAreas: new Set() };
 
 /** Commit filter value for "new or changed since my last review" (also in the URL: …/c/since-review). */
 export const SINCE_REVIEW = 'since-review';
@@ -171,7 +171,7 @@ export class ReviewStore {
    * code left and new code right. Stored per browser.
    */
   readonly diffMode = signal<DiffMode>(readChoice('scr.diffMode', ['unified', 'split'] as const) ?? 'unified');
-  /** How much of a method the diagrams of the flows show: name, signature, or signature with data structures. Kept per browser. */
+  /** How much of a method the diagrams of the flows show: name or signature. Kept per browser. */
   readonly methodDetail = signal<MethodDetail>(readChoice('scr.methodDetail', METHOD_DETAILS) ?? 'name');
   /** path -> blame at the PR head; 'loading' while fetching, null when not available */
   readonly blames = signal<ReadonlyMap<string, Blame | 'loading' | null>>(new Map());

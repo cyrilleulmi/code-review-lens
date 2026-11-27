@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Signature, TypeInfo } from './api';
-import { dataLines, methodText, methodTooltip, signatureLabel, typeLine } from './method-detail';
+import { methodLabel, methodTooltip, returnType, signatureLabel, typeLine } from './method-detail';
 
 const signature = (params: [string, string | null][], returns: string | null, types: string[] = []): Signature =>
   ({ declaration: 'as written', params: params.map(([name, type]) => ({ name, type })), returns, types });
@@ -51,40 +51,38 @@ describe('typeLine', () => {
   });
 });
 
-describe('dataLines', () => {
-  it('gives a line per type the signature names and the analysis knows', () => {
-    expect(dataLines(update, types)).toEqual([
-      'PlayerUpdate { jerseyNumber: number | null }',
-      'PlayerDetail { id: string, name: string, jerseyNumber: number | null }',
-    ]);
-    expect(dataLines(signature([['a', 'Unknown']], null, ['other.ts#Unknown']), types)).toEqual([]);
+describe('methodLabel', () => {
+  it('shows the name or the signature', () => {
+    expect(methodLabel('update', true, update, 'name')).toBe('update()');
+    expect(methodLabel('update', true, update, 'signature')).toBe('update(id: string, change: PlayerUpdate): Observable<PlayerDetail>');
   });
 
-  it('says how many types are left out when there are too many', () => {
-    const many = known(type('A', []), type('B', []), type('C', []), type('D', []));
-    const s = signature([], null, [...many.keys()]);
-    expect(dataLines(s, many)).toEqual(['A', 'B', '+2 …']);
-    expect(dataLines(signature([], null, [...many.keys()].slice(0, 3)), many)).toEqual(['A', 'B', 'C']);
-  });
-});
-
-describe('methodText', () => {
-  it('shows the name, the signature, or the signature with its data structures', () => {
-    expect(methodText('update', true, update, 'name', types)).toEqual({ label: 'update()', data: [] });
-    expect(methodText('update', true, update, 'signature', types)).toEqual({ label: 'update(id: string, change: PlayerUpdate): Observable<PlayerDetail>', data: [] });
-    expect(methodText('update', true, update, 'data', types).data).toHaveLength(2);
-  });
-
-  it('cuts the texts to the room a diagram has', () => {
-    const tight = methodText('update', true, update, 'data', types, { signature: 40, data: 30 });
-    expect(tight.label).toBe('update(…): Observable<PlayerDetail>');
-    expect(tight.data).toEqual(['PlayerUpdate { jerseyNumber: …', 'PlayerDetail { id: string, +2…']);
-    expect(tight.data.every((line) => line.length <= 30)).toBe(true);
+  it('cuts the signature to the room a diagram has', () => {
+    expect(methodLabel('update', true, update, 'signature', 40)).toBe('update(…): Observable<PlayerDetail>');
   });
 
   it('falls back to the name without a signature', () => {
-    expect(methodText('LIMITS', false, null, 'data', types)).toEqual({ label: 'LIMITS', data: [] });
-    expect(methodText('save', true, undefined, 'signature', types)).toEqual({ label: 'save()', data: [] });
+    expect(methodLabel('LIMITS', false, null, 'signature')).toBe('LIMITS');
+    expect(methodLabel('save', true, undefined, 'signature')).toBe('save()');
+  });
+});
+
+describe('returnType', () => {
+  it('gives the declared return type', () => {
+    expect(returnType(update)).toBe('Observable<PlayerDetail>');
+    expect(returnType(signature([], 'int'))).toBe('int');
+  });
+
+  it('gives nothing for no, an unknown or a void-like return type', () => {
+    expect(returnType(null)).toBeNull();
+    expect(returnType(signature([], null))).toBeNull();
+    for (const nothing of ['void', 'Unit', 'None', 'Promise<void>', 'Mono<Void>', 'CompletableFuture<Void>', 'Observable<void>']) {
+      expect(returnType(signature([], nothing))).toBeNull();
+    }
+  });
+
+  it('cuts a long type', () => {
+    expect(returnType(signature([], 'Map<String, List<VeryLongTypeName>>'), 20)).toBe('Map<String, List<Ve…');
   });
 });
 

@@ -1,47 +1,53 @@
 import { Signature, TypeInfo } from './api';
 
 /**
- * How much of a method the diagrams of a data flow show: its name, its signature (parameters and return type), or
- * the signature with the data structures behind it - the fields of the types it takes and returns. The signatures and
- * types come from the analysis (Segment.signature, Analysis.types); here they are put into the short texts the
- * diagrams have room for.
+ * How much of a method the diagrams of a data flow show: its name, or its signature (parameters and return type).
+ * The signatures come from the analysis (Segment.signature); here they are put into the short texts the diagrams
+ * have room for. The types they name (Analysis.types) show in full in the tooltips.
  */
-export type MethodDetail = 'name' | 'signature' | 'data';
+export type MethodDetail = 'name' | 'signature';
 
-export const METHOD_DETAILS: readonly MethodDetail[] = ['name', 'signature', 'data'];
+export const METHOD_DETAILS: readonly MethodDetail[] = ['name', 'signature'];
 
-/** Longest signature a diagram shows in one line, longest line of a data structure, and how many structures per method. */
+/** Longest signature a diagram shows in one line, and the longest line of a type in a tooltip. */
 export const SIGNATURE_MAX = 72;
-export const DATA_LINE_MAX = 76;
-export const DATA_LINES_MAX = 3;
-
-/** What a diagram writes for a method: its label and, below it, the lines of the data level. */
-export interface MethodText {
-  label: string;
-  /** one line per data structure; empty below the data level and for a method that names no known type */
-  data: string[];
-}
+const TYPE_LINE_MAX = 400;
 
 /**
- * The texts of a method at a level of detail. name: the plain name; callable: it is called (a function or method),
+ * The text of a method at a level of detail. name: the plain name; callable: it is called (a function or method),
  * so the name level writes `name()`. Without a signature (a constant, an older analysis) every level shows the name.
- * room: the longest signature and the longest line of data, in characters (a diagram with less room passes its own).
+ * max: the longest signature, in characters (a diagram with less room passes its own).
  */
-export function methodText(
+export function methodLabel(
   name: string,
   callable: boolean,
   signature: Signature | null | undefined,
   detail: MethodDetail,
-  types: ReadonlyMap<string, TypeInfo>,
-  room: { signature: number; data: number } = { signature: SIGNATURE_MAX, data: DATA_LINE_MAX },
-): MethodText {
+  max = SIGNATURE_MAX,
+): string {
   if (detail === 'name' || !signature) {
-    return { label: callable ? name + '()' : name, data: [] };
+    return callable ? name + '()' : name;
   }
-  return {
-    label: signatureLabel(name, signature, room.signature),
-    data: detail === 'data' ? dataLines(signature, types, room.data) : [],
-  };
+  return signatureLabel(name, signature, max);
+}
+
+/** Return types that give nothing back: no arrow back is drawn for them. A wrapper around one (`Promise<void>`) counts too. */
+const NOTHING = /^(void|Void|Unit|None|undefined|never|nil)$/;
+
+/**
+ * What a call gives back, for the arrow back in the sequence: the return type as declared (`Observable<PlayerDetail>`);
+ * null when the signature has none, it is void-like, or it is not known. Longer than `max`: cut with «…».
+ */
+export function returnType(signature: Signature | null | undefined, max = SIGNATURE_MAX): string | null {
+  const type = signature?.returns?.trim();
+  if (!type) {
+    return null;
+  }
+  const inner = /^[\w.]+<\s*([\w.]+)\s*>$/.exec(type)?.[1];
+  if (NOTHING.test(type) || (inner != null && NOTHING.test(inner))) {
+    return null;
+  }
+  return type.length > max ? type.substring(0, max - 1) + '…' : type;
 }
 
 /**
@@ -64,19 +70,8 @@ export function signatureLabel(name: string, signature: Signature, max = SIGNATU
   return room >= 8 && returns ? `${head}: ${signature.returns!.substring(0, room)}…` : head;
 }
 
-/**
- * The data structures of a signature: per type it names and the analysis knows, one line `Player { id: string,
- * name: string, +2 }` - as many fields as fit into `max` characters, the rest counted. At most `lines` types; one
- * more line says how many are left out.
- */
-export function dataLines(signature: Signature, types: ReadonlyMap<string, TypeInfo>, max = DATA_LINE_MAX, lines = DATA_LINES_MAX): string[] {
-  const known = signature.types.map((id) => types.get(id)).filter((t): t is TypeInfo => !!t);
-  const shown = known.slice(0, known.length > lines ? lines - 1 : lines).map((t) => typeLine(t, max));
-  return known.length > shown.length ? [...shown, `+${known.length - shown.length} …`] : shown;
-}
-
 /** `Player { id: string, name: string, +2 }`; an enum lists its constants, a type without fields is its name. */
-export function typeLine(type: TypeInfo, max = DATA_LINE_MAX): string {
+export function typeLine(type: TypeInfo, max = TYPE_LINE_MAX): string {
   if (type.fields.length === 0) {
     return type.name;
   }
@@ -98,5 +93,5 @@ export function methodTooltip(signature: Signature | null | undefined, types: Re
     return '';
   }
   const known = signature.types.map((id) => types.get(id)).filter((t): t is TypeInfo => !!t);
-  return [signature.declaration, ...known.map((t) => typeLine(t, 400))].join('\n');
+  return [signature.declaration, ...known.map((t) => typeLine(t))].join('\n');
 }
